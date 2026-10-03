@@ -14,6 +14,10 @@ const shareDialog = el("shareDialog");
 const shareUrlInput = el("shareUrl");
 const qrcodeEl = el("qrcode");
 const qrNotice = el("qrNotice");
+const modeInputs = [...document.querySelectorAll('input[name="activityMode"]')];
+const editorPanel = document.querySelector(".editor-panel");
+const templateKicker = el("templateKicker");
+const templateTitle = el("templateTitle");
 const QR_SAFE_MAX_LENGTH = 2800;
 
 function createId() {
@@ -43,7 +47,8 @@ const defaultActivity = {
       correctCards: ["蒐集線索", "解開謎團", "找出犯人"],
       revealTitle: "推理小說",
       keywords: ["謎團", "線索", "推理", "真相"],
-      revealDescription: "故事通常以謎團為核心，角色透過線索與推理逐步找出真相。"
+      revealDescription: "故事通常以謎團為核心，角色透過線索與推理逐步找出真相。",
+      discussionPrompt: ""
     }
   ]
 };
@@ -93,7 +98,8 @@ function newBlankActivity() {
         correctCards: [],
         revealTitle: "",
         keywords: [],
-        revealDescription: ""
+        revealDescription: "",
+        discussionPrompt: ""
       }
     ]
   };
@@ -105,9 +111,10 @@ function renderLibrary() {
   activities.forEach((activity) => {
     const item = document.createElement("div");
     item.className = `activity-item ${activity.id === currentId ? "active" : ""}`;
+    const modeLabel = activity.template === "open-tags" ? "開放式標籤討論" : "探索式揭密";
     item.innerHTML = `
       <strong>${escapeHtml(activity.title || "未命名活動")}</strong>
-      <small>${activity.cases?.length || 0} 個關卡 · 拖曳揭密</small>
+      <small>${activity.cases?.length || 0} 個關卡 · ${modeLabel}</small>
     `;
     item.addEventListener("click", () => {
       saveCurrent(false);
@@ -163,6 +170,7 @@ function addCardRow(caseCard, text = "", isCorrect = false) {
 
   row.append(input, correctLabel, removeButton);
   list.appendChild(row);
+  applyModeUI(getSelectedMode());
 }
 
 function addCase(caseData = {}) {
@@ -175,6 +183,7 @@ function addCase(caseData = {}) {
   card.querySelector(".case-reveal-title").value = caseData.revealTitle || "";
   card.querySelector(".case-keywords").value = (caseData.keywords || []).join("、");
   card.querySelector(".case-reveal-desc").value = caseData.revealDescription || "";
+  card.querySelector(".case-discussion-prompt").value = caseData.discussionPrompt || "";
 
   const cards = Array.isArray(caseData.cards) ? caseData.cards : [];
   const correctCards = new Set(caseData.correctCards || []);
@@ -201,6 +210,47 @@ function addCase(caseData = {}) {
 
   caseEditor.appendChild(fragment);
   refreshCaseNumbers();
+  applyModeUI(getSelectedMode());
+}
+
+
+function getSelectedMode() {
+  return modeInputs.find(input => input.checked)?.value || "drag-reveal";
+}
+
+function setSelectedMode(mode) {
+  const normalized = mode === "open-tags" ? "open-tags" : "drag-reveal";
+  modeInputs.forEach(input => {
+    input.checked = input.value === normalized;
+  });
+  applyModeUI(normalized);
+}
+
+function applyModeUI(mode) {
+  const isOpen = mode === "open-tags";
+  editorPanel?.classList.toggle("open-tags-mode", isOpen);
+
+  if (templateKicker) templateKicker.textContent = isOpen ? "模板 02" : "模板 01";
+  if (templateTitle) templateTitle.textContent = isOpen ? "開放式標籤討論" : "探索式拖曳揭密";
+
+  document.querySelectorAll(".card-builder-label").forEach(label => {
+    label.textContent = isOpen ? "標籤設定" : "字卡設定";
+  });
+  document.querySelectorAll(".card-builder-help").forEach(help => {
+    help.textContent = isOpen
+      ? "輸入可供學生複選的標籤或故事要素；此模式沒有標準答案。按 Enter 可快速新增下一張。"
+      : "輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。";
+  });
+
+  document.querySelectorAll(".reveal-settings").forEach(section => {
+    section.classList.toggle("hidden", isOpen);
+  });
+  document.querySelectorAll(".discussion-settings").forEach(section => {
+    section.classList.toggle("hidden", !isOpen);
+  });
+  document.querySelectorAll(".correct-toggle").forEach(toggle => {
+    toggle.classList.toggle("hidden", isOpen);
+  });
 }
 
 function refreshCaseNumbers() {
@@ -212,10 +262,12 @@ function refreshCaseNumbers() {
 function loadIntoEditor(activity) {
   activityTitle.value = activity.title || "";
   activitySubtitle.value = activity.subtitle || "";
+  setSelectedMode(activity.template || "drag-reveal");
   caseEditor.innerHTML = "";
 
   const cases = activity.cases?.length ? activity.cases : newBlankActivity().cases;
   cases.forEach(addCase);
+  applyModeUI(getSelectedMode());
 }
 
 function readEditor() {
@@ -239,7 +291,8 @@ function readEditor() {
       correctCards,
       revealTitle: card.querySelector(".case-reveal-title").value.trim(),
       keywords: splitKeywords(card.querySelector(".case-keywords").value),
-      revealDescription: card.querySelector(".case-reveal-desc").value.trim()
+      revealDescription: card.querySelector(".case-reveal-desc").value.trim(),
+      discussionPrompt: card.querySelector(".case-discussion-prompt").value.trim()
     };
   });
 
@@ -247,7 +300,7 @@ function readEditor() {
     id: currentId || createId(),
     title: activityTitle.value.trim() || "未命名活動",
     subtitle: activitySubtitle.value.trim(),
-    template: "drag-reveal",
+    template: getSelectedMode(),
     cases
   };
 }
@@ -265,20 +318,26 @@ function validateActivity(activity) {
   for (let i = 0; i < activity.cases.length; i++) {
     const c = activity.cases[i];
     if (!c.title) return `第 ${i + 1} 關尚未填寫作品／情境名稱`;
-    if (!c.cards.length) return `第 ${i + 1} 關尚未填寫字卡`;
-    if (!c.correctCards.length) return `第 ${i + 1} 關尚未填寫正確字卡`;
-    if (!c.revealTitle) return `第 ${i + 1} 關尚未填寫揭露標題`;
+    if (!c.cards.length) return `第 ${i + 1} 關尚未填寫${activity.template === "open-tags" ? "標籤" : "字卡"}`;
+
+    if (activity.template !== "open-tags") {
+      if (!c.correctCards.length) return `第 ${i + 1} 關尚未填寫正確字卡`;
+      if (!c.revealTitle) return `第 ${i + 1} 關尚未填寫揭露標題`;
+    }
 
     if (new Set(c.cards).size !== c.cards.length) {
-      return `第 ${i + 1} 關有重複的字卡文字，請讓每張字卡內容保持唯一`;
-    }
-    if (new Set(c.correctCards).size !== c.correctCards.length) {
-      return `第 ${i + 1} 關的正確字卡有重複內容`;
+      return `第 ${i + 1} 關有重複的${activity.template === "open-tags" ? "標籤" : "字卡"}文字，請讓每個內容保持唯一`;
     }
 
-    const missing = c.correctCards.filter(x => !c.cards.includes(x));
-    if (missing.length) {
-      return `第 ${i + 1} 關的正確字卡「${missing[0]}」不在字卡清單裡`;
+    if (activity.template !== "open-tags") {
+      if (new Set(c.correctCards).size !== c.correctCards.length) {
+        return `第 ${i + 1} 關的正確字卡有重複內容`;
+      }
+
+      const missing = c.correctCards.filter(x => !c.cards.includes(x));
+      if (missing.length) {
+        return `第 ${i + 1} 關的正確字卡「${missing[0]}」不在字卡清單裡`;
+      }
     }
   }
 
@@ -318,16 +377,21 @@ async function encodeActivity(activity) {
   const compact = {
     t: activity.title,
     s: activity.subtitle,
-    c: activity.cases.map((c) => ({
-      t: c.title,
-      i: c.intro,
-      p: c.prompt,
-      a: c.cards,
-      o: c.correctCards.map(card => c.cards.indexOf(card)),
-      r: c.revealTitle,
-      k: c.keywords,
-      d: c.revealDescription
-    }))
+    m: activity.template,
+    c: activity.cases.map((c) => {
+      const isOpen = activity.template === "open-tags";
+      return {
+        t: c.title,
+        i: c.intro,
+        p: c.prompt,
+        a: c.cards,
+        o: isOpen ? [] : c.correctCards.map(card => c.cards.indexOf(card)),
+        r: isOpen ? "" : c.revealTitle,
+        k: isOpen ? [] : c.keywords,
+        d: isOpen ? "" : c.revealDescription,
+        q: isOpen ? c.discussionPrompt : ""
+      };
+    })
   };
 
   const json = JSON.stringify(compact);
@@ -461,6 +525,12 @@ el("deleteBtn").addEventListener("click", () => {
 
 el("previewBtn").addEventListener("click", () => previewOrShare(true));
 el("shareBtn").addEventListener("click", () => previewOrShare(false));
+
+modeInputs.forEach(input => {
+  input.addEventListener("change", () => {
+    if (input.checked) applyModeUI(input.value);
+  });
+});
 
 el("copyUrlBtn").addEventListener("click", async () => {
   try {

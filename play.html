@@ -95,13 +95,36 @@
 
           <button id="nextCaseBtn" class="btn btn-primary">下一關</button>
         </div>
+
+        <div id="discussionPanel" class="discussion-panel hidden">
+          <p class="section-kicker">OPEN DISCUSSION</p>
+          <div class="discussion-heading">
+            <div class="big-icon">💬</div>
+            <div>
+              <h2>沒有唯一答案</h2>
+              <p class="subtle">故事可能同時具有多種要素。先看看自己的選擇，再和同學比較你們的判斷理由。</p>
+            </div>
+          </div>
+
+          <div class="selection-summary">
+            <span class="summary-label">我選擇的標籤</span>
+            <div id="selectedTagCloud" class="keyword-cloud discussion-tag-cloud"></div>
+          </div>
+
+          <div class="discussion-question">
+            <span class="summary-label">討論提示</span>
+            <p id="discussionPromptText"></p>
+          </div>
+
+          <button id="discussionNextBtn" class="btn btn-primary">下一關</button>
+        </div>
       </section>
 
       <section id="completePanel" class="student-card complete-card hidden">
         <div class="big-icon">🏁</div>
         <p class="section-kicker">MISSION COMPLETE</p>
         <h2>活動完成！</h2>
-        <p>你已經完成所有關卡。現在回頭看看：不同作品的主要元素，會如何影響我們對故事類型的判斷？</p>
+        <p id="completeText">你已經完成所有關卡。現在回頭看看：不同作品的主要元素，會如何影響我們對故事類型的判斷？</p>
         <button id="restartBtn" class="btn btn-secondary">重新挑戰</button>
       </section>
     </section>

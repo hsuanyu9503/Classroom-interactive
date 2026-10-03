@@ -45,7 +45,7 @@ async function decodeActivity(encoded) {
     return {
       title: raw.t || "課堂活動",
       subtitle: raw.s || "",
-      template: "drag-reveal",
+      template: raw.m === "open-tags" ? "open-tags" : "drag-reveal",
       cases: raw.c.map((c) => ({
         title: c.t || "",
         intro: c.i || "",
@@ -56,7 +56,8 @@ async function decodeActivity(encoded) {
           : [],
         revealTitle: c.r || "",
         keywords: Array.isArray(c.k) ? c.k : [],
-        revealDescription: c.d || ""
+        revealDescription: c.d || "",
+        discussionPrompt: c.q || ""
       }))
     };
   }
@@ -100,7 +101,12 @@ function renderCase() {
   intro.textContent = introText;
   intro.classList.toggle("hidden", !introText);
 
-  el("studentCasePrompt").textContent = c.prompt || "選出最能代表這個作品／情境的字卡。";
+  const isOpenMode = activity.template === "open-tags";
+  el("studentCasePrompt").textContent = c.prompt || (
+    isOpenMode
+      ? "選出你認為符合這個作品／情境的標籤，可以複選。"
+      : "選出最能代表這個作品／情境的字卡。"
+  );
   el("caseCounter").textContent = `${currentCaseIndex + 1} / ${activity.cases.length}`;
   el("lockBadge").textContent = "分析中";
 
@@ -112,10 +118,27 @@ function renderCase() {
   el("interactionArea").classList.remove("hidden");
   el("feedbackPanel").classList.add("hidden");
   el("revealPanel").classList.add("hidden");
+  el("discussionPanel").classList.add("hidden");
   el("completePanel").classList.add("hidden");
 
   renderCards(c.cards || []);
   updateEmptyHint();
+
+  const poolSection = document.querySelector("#cardPool")?.closest("section");
+  const answerSection = document.querySelector("#answerZone")?.closest("section");
+  if (poolSection) {
+    poolSection.querySelector(".mini-heading span").textContent = isOpenMode ? "可選標籤" : "故事線索";
+    poolSection.querySelector(".mini-heading small").textContent = isOpenMode
+      ? "可選一個或多個你認為符合的標籤"
+      : "點一下或拖曳到右側";
+  }
+  if (answerSection) {
+    answerSection.querySelector(".mini-heading span").textContent = isOpenMode ? "我的選擇" : "我的判斷";
+    answerSection.querySelector(".mini-heading small").textContent = isOpenMode
+      ? "沒有唯一答案，準備說明你的理由"
+      : "放入最能代表作品的字卡";
+  }
+  el("submitCaseBtn").textContent = isOpenMode ? "確認我的選擇" : "送出判斷";
 
   el("revealTitle").textContent = c.revealTitle || "";
   el("revealDescription").textContent = c.revealDescription || "";
@@ -136,7 +159,10 @@ function renderCards(cards) {
   const pool = el("cardPool");
   const answer = el("answerZone");
   pool.innerHTML = "";
-  answer.innerHTML = '<div id="emptyHint" class="empty-hint">把你選中的字卡放到這裡</div>';
+  const emptyText = activity?.template === "open-tags"
+    ? "把你認為符合這部作品的標籤放到這裡"
+    : "把你選中的字卡放到這裡";
+  answer.innerHTML = `<div id="emptyHint" class="empty-hint">${emptyText}</div>`;
 
   cards.forEach((text, index) => {
     const card = document.createElement("button");
@@ -218,13 +244,20 @@ function arraysEqualAsSets(a, b) {
 function submitCase() {
   const c = activity.cases[currentCaseIndex];
   const chosen = [...selected];
-  const correct = c.correctCards || [];
 
   if (!chosen.length) {
-    showToast("先選幾張你認為最重要的字卡");
+    showToast(activity.template === "open-tags"
+      ? "先選至少一個你認為符合的標籤"
+      : "先選幾張你認為最重要的字卡");
     return;
   }
 
+  if (activity.template === "open-tags") {
+    showOpenDiscussion(c, chosen);
+    return;
+  }
+
+  const correct = c.correctCards || [];
   const exact = arraysEqualAsSets(chosen, correct);
   const correctChosen = chosen.filter(x => correct.includes(x)).length;
   const missed = correct.filter(x => !selected.has(x)).length;
@@ -244,6 +277,30 @@ function submitCase() {
     el("feedbackText").textContent =
       `你抓到 ${correctChosen} 張核心字卡；另外還有 ${missed} 張核心線索沒有選到${extra > 0 ? `，並混入了 ${extra} 張干擾字卡` : ""}。先看看揭密，再回頭比較哪些元素真正推動故事。`;
   }
+}
+
+function showOpenDiscussion(c, chosen) {
+  el("interactionArea").classList.add("hidden");
+  el("feedbackPanel").classList.add("hidden");
+  el("revealPanel").classList.add("hidden");
+  el("discussionPanel").classList.remove("hidden");
+  el("lockBadge").textContent = "待討論";
+
+  const cloud = el("selectedTagCloud");
+  cloud.innerHTML = "";
+  chosen.forEach(tag => {
+    const pill = document.createElement("span");
+    pill.className = "keyword-pill discussion-selected-pill";
+    pill.textContent = tag;
+    cloud.appendChild(pill);
+  });
+
+  el("discussionPromptText").textContent =
+    (c.discussionPrompt || "").trim() ||
+    "你為什麼會選這些標籤？和同學比較看看：你們有哪些相同或不同的判斷？如果只能選一個主要類型，你會留下哪一個？";
+
+  el("discussionNextBtn").textContent =
+    currentCaseIndex === activity.cases.length - 1 ? "完成活動" : "下一關";
 }
 
 function revealCase() {
@@ -267,10 +324,18 @@ function showComplete() {
   el("interactionArea").classList.add("hidden");
   el("feedbackPanel").classList.add("hidden");
   el("revealPanel").classList.add("hidden");
+  el("discussionPanel").classList.add("hidden");
   el("completePanel").classList.remove("hidden");
   el("lockBadge").textContent = "完成";
   el("progressBar").style.width = "100%";
   el("progressText").textContent = "100%";
+
+  const completeText = el("completeText");
+  if (completeText) {
+    completeText.textContent = activity.template === "open-tags"
+      ? "你已經完成所有關卡。比較彼此的選擇與理由，看看同一部作品為什麼可能同時具有多種故事要素。"
+      : "你已經完成所有關卡。現在回頭看看：不同作品的主要元素，會如何影響我們對故事類型的判斷？";
+  }
 }
 
 function resetCurrentCase() {
@@ -295,6 +360,7 @@ function showToast(message) {
 el("submitCaseBtn").addEventListener("click", submitCase);
 el("revealBtn").addEventListener("click", revealCase);
 el("nextCaseBtn").addEventListener("click", nextCase);
+el("discussionNextBtn").addEventListener("click", nextCase);
 el("resetCaseBtn").addEventListener("click", resetCurrentCase);
 el("restartBtn").addEventListener("click", restart);
 

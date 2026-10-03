@@ -38,11 +38,31 @@
     <section class="panel editor-panel">
       <div class="panel-heading editor-title-row">
         <div>
-          <span class="section-kicker">模板 01</span>
-          <h2>探索式拖曳揭密</h2>
+          <span id="templateKicker" class="section-kicker">模板 01</span>
+          <h2 id="templateTitle">探索式拖曳揭密</h2>
         </div>
-        <span class="status-chip">V1.1</span>
+        <span class="status-chip">V1.3.1</span>
       </div>
+
+      <section class="mode-selector-wrap">
+        <span class="field-label">活動模式</span>
+        <div class="mode-selector" role="radiogroup" aria-label="活動模式">
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="drag-reveal" checked />
+            <span class="mode-option-body">
+              <strong>🎯 探索式揭密</strong>
+              <small>學生選字卡後判斷對錯，再揭露主要小說類型。</small>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="open-tags" />
+            <span class="mode-option-body">
+              <strong>💬 開放式標籤討論</strong>
+              <small>沒有標準答案，學生可複選多種要素或類型並說明理由。</small>
+            </span>
+          </label>
+        </div>
+      </section>
 
       <div class="form-grid two-col">
         <label class="field">
@@ -138,29 +158,39 @@
       <section class="card-builder">
         <div class="card-builder-header">
           <div>
-            <span class="field-label">字卡設定</span>
-            <p class="field-help">輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。</p>
+            <span class="field-label card-builder-label">字卡設定</span>
+            <p class="field-help card-builder-help">輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。</p>
           </div>
           <button type="button" class="btn btn-secondary add-card-btn">＋ 新增字卡</button>
         </div>
         <div class="card-editor-list"></div>
       </section>
 
-      <div class="form-grid two-col">
-        <label class="field">
-          <span>揭露標題</span>
-          <input class="case-reveal-title" type="text" placeholder="例如：推理小說" />
-        </label>
-        <label class="field">
-          <span>揭露關鍵字（用、分隔）</span>
-          <input class="case-keywords" type="text" placeholder="謎團、線索、推理、真相" />
-        </label>
-      </div>
+      <section class="reveal-settings mode-specific-section">
+        <div class="form-grid two-col">
+          <label class="field">
+            <span>揭露標題</span>
+            <input class="case-reveal-title" type="text" placeholder="例如：推理小說" />
+          </label>
+          <label class="field">
+            <span>揭露關鍵字（用、分隔）</span>
+            <input class="case-keywords" type="text" placeholder="謎團、線索、推理、真相" />
+          </label>
+        </div>
 
-      <label class="field">
-        <span>揭露說明</span>
-        <textarea class="case-reveal-desc" rows="3" placeholder="例如：故事通常以謎團為核心，角色透過線索與推理逐步找出真相。"></textarea>
-      </label>
+        <label class="field">
+          <span>揭露說明</span>
+          <textarea class="case-reveal-desc" rows="3" placeholder="例如：故事通常以謎團為核心，角色透過線索與推理逐步找出真相。"></textarea>
+        </label>
+      </section>
+
+      <section class="discussion-settings mode-specific-section hidden">
+        <label class="field">
+          <span>討論提示 <span class="optional-tag">選填</span></span>
+          <textarea class="case-discussion-prompt" rows="3" maxlength="500" placeholder="例如：你為什麼會選這些類型？如果只能挑一個主要類型，你會保留哪一個？和同學的選擇有什麼不同？"></textarea>
+          <small class="field-help">學生送出後會看到自己選擇的標籤與這段提示，不會出現正確／錯誤判定。</small>
+        </label>
+      </section>
     </article>
   </template>
 
