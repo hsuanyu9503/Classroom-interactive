@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>加入課堂活動</title>
+  <link rel="stylesheet" href="app.css" />
+  <script src="session-api.js" defer></script>
+  <script src="join.js" defer></script>
+</head>
+<body class="student-page join-page">
+  <main class="join-shell">
+    <section class="join-card">
+      <div class="join-icon">📡</div>
+      <p class="eyebrow">加入課堂 Session</p>
+      <h1>準備開始今天的活動</h1>
+      <p class="subtle">輸入老師提供的課堂代碼與你的座號，就可以進入活動。</p>
+
+      <form id="joinForm" class="join-form">
+        <label class="field">
+          <span>課堂代碼</span>
+          <input id="joinCode" type="text" maxlength="5" inputmode="text" autocomplete="off" placeholder="ABCDE" required />
+        </label>
+        <label class="field">
+          <span>座號</span>
+          <input id="studentCode" type="text" maxlength="12" inputmode="numeric" autocomplete="off" placeholder="例如：08" required />
+          <small class="field-help">這一版先以座號辨識學生，不需要建立帳號。</small>
+        </label>
+        <button id="joinSubmitBtn" class="btn btn-primary join-submit" type="submit">加入課堂</button>
+      </form>
+
+      <div id="joinModeNotice" class="join-mode-notice"></div>
+      <div id="joinError" class="join-error hidden"></div>
+    </section>
+  </main>
+</body>
+</html>

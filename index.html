@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>課堂互動工具｜課程設計工作台</title>
+  <link rel="stylesheet" href="app.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
+  <script src="session-api.js" defer></script>
+  <script src="teacher.js" defer></script>
+</head>
+<body class="teacher-page v15-page">
+  <header class="topbar v15-topbar">
+    <div>
+      <p class="eyebrow">課程設計工作台</p>
+      <h1>課堂互動工具</h1>
+      <p class="subtle">先整理共用教材，再把展示、互動與收束串成完整的一堂課。</p>
+    </div>
+    <span class="workspace-version">V1.9.2</span>
+  </header>
+
+  <nav class="workspace-tabs" aria-label="工作區切換">
+    <button class="workspace-tab active" data-view="courses">🧭 課程編排</button>
+    <button class="workspace-tab" data-view="types">🧰 類型工具箱</button>
+    <button class="workspace-tab" data-view="works">🗂️ 作品庫</button>
+    <button class="workspace-tab" data-view="activities">🧩 活動模板</button>
+    <button class="workspace-tab" data-view="sessions">📡 課堂 Session</button>
+  </nav>
+
+  <section class="workspace-view active" data-workspace-view="courses">
+    <main class="v15-layout">
+      <aside class="panel v15-sidebar">
+        <div class="panel-heading">
+          <div>
+            <span class="section-kicker">COURSES</span>
+            <h2>我的課程</h2>
+          </div>
+          <button id="newCourseBtn" class="btn btn-secondary compact-btn">＋</button>
+        </div>
+        <div id="courseList" class="v15-list"></div>
+        <div class="tip-box">
+          <strong>新版架構</strong>
+          <p>一個課程可以包含多個節次；每一節再依序加入作品牆、工具箱、互動活動與收束頁。</p>
+        </div>
+      </aside>
+
+      <section class="panel v15-editor">
+        <div class="v15-editor-head">
+          <div>
+            <span class="section-kicker">課程流程</span>
+            <h2 id="courseEditorHeading">課程編排</h2>
+          </div>
+          <div class="v15-head-actions">
+            <button id="duplicateCourseBtn" class="btn btn-secondary">複製課程</button>
+            <button id="deleteCourseBtn" class="btn btn-danger-soft">刪除</button>
+          </div>
+        </div>
+
+        <div class="form-grid two-col">
+          <label class="field">
+            <span>課程名稱</span>
+            <input id="courseTitle" type="text" placeholder="例如：小說類型大解密" />
+          </label>
+          <label class="field">
+            <span>課程副標／學習任務</span>
+            <input id="courseSubtitle" type="text" placeholder="例如：從故事要素建立小說分類工具" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>課程說明 <span class="optional-tag">選填</span></span>
+          <textarea id="courseDescription" rows="3" placeholder="簡短記錄這堂課的核心概念或教師備課重點。"></textarea>
+        </label>
+
+        <div class="v15-section-toolbar">
+          <div>
+            <span class="section-kicker">LESSONS</span>
+            <h3>節次與教學節點</h3>
+          </div>
+          <button id="addLessonBtn" class="btn btn-secondary">＋ 新增節次</button>
+        </div>
+
+        <div id="lessonEditor" class="lesson-editor"></div>
+
+        <div class="v15-savebar">
+          <div class="save-state">
+            <span class="save-dot"></span>
+            <span id="courseSaveState">尚未修改</span>
+          </div>
+          <button id="saveCourseBtn" class="btn btn-primary">儲存課程架構</button>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <section class="workspace-view" data-workspace-view="types">
+    <main class="v15-layout">
+      <aside class="panel v15-sidebar">
+        <div class="panel-heading">
+          <div>
+            <span class="section-kicker">TYPE LIBRARY</span>
+            <h2>類型工具箱</h2>
+          </div>
+          <button id="newTypeBtn" class="btn btn-secondary compact-btn">＋</button>
+        </div>
+        <div id="typeList" class="v15-list"></div>
+        <div class="tip-box">
+          <strong>共用資料</strong>
+          <p>類型與要素只需要設定一次，之後各種練習與作品分類活動都能直接引用。</p>
+        </div>
+      </aside>
+
+      <section class="panel v15-editor">
+        <div class="v15-editor-head">
+          <div>
+            <span class="section-kicker">類型設定</span>
+            <h2 id="typeEditorHeading">建立小說類型</h2>
+          </div>
+          <button id="deleteTypeBtn" class="btn btn-danger-soft">刪除類型</button>
+        </div>
+
+        <div class="type-identity-grid">
+          <label class="field">
+            <span>類型名稱</span>
+            <input id="typeName" type="text" placeholder="例如：奇幻" />
+          </label>
+          <label class="field">
+            <span>圖示</span>
+            <input id="typeIcon" type="text" maxlength="4" placeholder="✨" />
+          </label>
+          <label class="field">
+            <span>代表顏色</span>
+            <input id="typeColor" type="color" value="#7057d9" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>類型說明</span>
+          <textarea id="typeDescription" rows="4" placeholder="用學生容易理解的文字說明這一類故事的特色。"></textarea>
+        </label>
+
+        <section class="element-builder">
+          <div class="v15-section-toolbar inner-toolbar">
+            <div>
+              <span class="section-kicker">ELEMENTS</span>
+              <h3>分類要素卡</h3>
+            </div>
+            <button id="addTypeElementBtn" class="btn btn-secondary">＋ 新增要素</button>
+          </div>
+          <div id="typeElementList" class="element-list"></div>
+        </section>
+
+        <div class="v15-savebar">
+          <div class="type-preview" id="typePreview"></div>
+          <button id="saveTypeBtn" class="btn btn-primary">儲存類型</button>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <section class="workspace-view" data-workspace-view="works">
+    <main class="v15-layout">
+      <aside class="panel v15-sidebar">
+        <div class="panel-heading">
+          <div>
+            <span class="section-kicker">WORK LIBRARY</span>
+            <h2>作品庫</h2>
+          </div>
+          <button id="newWorkBtn" class="btn btn-secondary compact-btn">＋</button>
+        </div>
+        <div id="workList" class="v15-list"></div>
+        <div class="tip-box">
+          <strong>重複利用</strong>
+          <p>同一部作品可以同時出現在作品牆、典型分類、逐層揭露與開放討論中，不需要重複輸入資料。</p>
+        </div>
+      </aside>
+
+      <section class="panel v15-editor">
+        <div class="v15-editor-head">
+          <div>
+            <span class="section-kicker">作品資料</span>
+            <h2 id="workEditorHeading">作品設定</h2>
+          </div>
+          <button id="deleteWorkBtn" class="btn btn-danger-soft">刪除作品</button>
+        </div>
+
+        <div class="form-grid two-col">
+          <label class="field">
+            <span>作品名稱</span>
+            <input id="workName" type="text" placeholder="例如：名偵探柯南" />
+          </label>
+          <label class="field">
+            <span>圖片網址 <span class="optional-tag">選填</span></span>
+            <input id="workImage" type="url" placeholder="https://..." />
+          </label>
+        </div>
+
+        <label class="toggle-field">
+          <input id="workShowName" type="checkbox" checked />
+          <span>學生端顯示作品名稱</span>
+        </label>
+
+        <label class="field">
+          <span>學生看到的作品介紹</span>
+          <textarea id="workIntro" rows="4" placeholder="提供足夠的故事背景，但不要直接透露分類答案。"></textarea>
+        </label>
+
+        <label class="field">
+          <span>教師備註 <span class="optional-tag">學生不會看到</span></span>
+          <textarea id="workTeacherNote" rows="3" placeholder="記錄課堂提問、可能爭點、補充背景等。"></textarea>
+        </label>
+
+        <section class="element-builder">
+          <div class="v15-section-toolbar inner-toolbar">
+            <div>
+              <span class="section-kicker">CLUES</span>
+              <h3>逐層線索</h3>
+            </div>
+            <button id="addWorkClueBtn" class="btn btn-secondary">＋ 新增線索</button>
+          </div>
+          <div id="workClueList" class="element-list"></div>
+        </section>
+
+        <section class="element-builder">
+          <div class="v15-section-toolbar inner-toolbar">
+            <div>
+              <span class="section-kicker">RELATED ELEMENTS</span>
+              <h3>可對應的分類要素</h3>
+            </div>
+          </div>
+          <div id="workElementChoices" class="element-choice-grid"></div>
+        </section>
+
+        <div class="v15-savebar">
+          <div class="work-mini-preview" id="workPreview"></div>
+          <button id="saveWorkBtn" class="btn btn-primary">儲存作品</button>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <section class="workspace-view" data-workspace-view="activities">
+    <div class="activity-template-toolbar">
+      <div>
+        <span class="section-kicker">INTERACTION TEMPLATES</span>
+        <h2>活動模板</h2>
+        <p>建立可重複使用的互動活動，並由課程中的「互動活動」節點直接引用。</p>
+      </div>
+      <button id="newActivityVisibleBtn" class="btn btn-primary">＋ 建立活動</button>
+    </div>
+    <main class="layout">
+    <aside class="panel library-panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-kicker">活動庫</span>
+          <h2>我的活動</h2>
+        </div>
+      </div>
+
+      <div id="activityList" class="activity-list"></div>
+
+      <div class="tip-box">
+        <strong>資料儲存提醒</strong>
+        <p>活動草稿會保存在這台裝置的瀏覽器中。完成設定後，可直接產生學生連結與 QR Code。</p>
+      </div>
+    </aside>
+
+    <section class="panel editor-panel">
+      <div class="panel-heading editor-title-row">
+        <div>
+          <span id="templateKicker" class="section-kicker">模板 01</span>
+          <h2 id="templateTitle">探索式拖曳揭密</h2>
+        </div>
+        <span class="status-chip">活動模板</span>
+      </div>
+
+      <section class="mode-selector-wrap">
+        <span class="field-label">活動模式</span>
+        <div class="mode-selector" role="radiogroup" aria-label="活動模式">
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="drag-reveal" checked />
+            <span class="mode-option-body">
+              <strong>🎯 探索式揭密</strong>
+              <small>學生選字卡後判斷對錯，再揭露主要小說類型。</small>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="open-tags" />
+            <span class="mode-option-body">
+              <strong>💬 開放式標籤討論</strong>
+              <small>沒有標準答案，學生可複選多種要素或類型並說明理由。</small>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="element-type" />
+            <span class="mode-option-body">
+              <strong>🧠 要素 → 類型分類</strong>
+              <small>先從故事找出重要要素，再根據證據選擇小說類型。</small>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="progressive-reveal" />
+            <span class="mode-option-body">
+              <strong>🪄 逐層揭露</strong>
+              <small>由老師逐步公開線索，學生每一層重新判斷並留下答案變化。</small>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="open-classification" />
+            <span class="mode-option-body">
+              <strong>🗣️ 開放分類</strong>
+              <small>選主要類型與故事證據，全班比較後由老師開放第二次判斷。</small>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <div class="form-grid two-col">
+        <label class="field">
+          <span>活動名稱</span>
+          <input id="activityTitle" type="text" placeholder="例如：故事鑑定所" />
+        </label>
+
+        <label class="field">
+          <span>活動說明</span>
+          <input id="activitySubtitle" type="text" placeholder="例如：找出作品裡真正重要的故事線索" />
+        </label>
+      </div>
+
+      <div id="standardTaskToolbar" class="editor-toolbar">
+        <div>
+          <span class="section-kicker">任務設計</span>
+          <h3>活動關卡</h3>
+        </div>
+        <button id="addCaseBtn" class="btn btn-secondary">＋ 新增任務</button>
+      </div>
+
+      <div id="caseEditor"></div>
+
+      <section id="elementTypeEditorSection" class="element-type-editor-section hidden">
+        <div class="editor-toolbar element-type-toolbar">
+          <div>
+            <span class="section-kicker">兩階段分類</span>
+            <h3>要素 → 類型任務</h3>
+            <p class="field-help">活動內容直接引用「作品庫」與「類型工具箱」，不會另外複製一份教材資料。</p>
+          </div>
+          <button id="addElementTypeTaskBtn" class="btn btn-secondary">＋ 新增分類任務</button>
+        </div>
+        <div id="elementTypeTaskEditor" class="element-type-task-editor"></div>
+      </section>
+
+      <section id="progressiveEditorSection" class="progressive-editor-section hidden">
+        <div class="editor-toolbar progressive-toolbar">
+          <div>
+            <span class="section-kicker">教師同步活動</span>
+            <h3>逐層揭露任務</h3>
+            <p class="field-help">引用作品庫中的逐層線索；Session 進行時由教師控制目前公開到哪一層。</p>
+          </div>
+        </div>
+        <div id="progressiveTaskEditor"></div>
+      </section>
+
+      <section id="openClassificationEditorSection" class="open-classification-editor-section hidden">
+        <div class="editor-toolbar open-classification-toolbar">
+          <div>
+            <span class="section-kicker">證據式開放分類</span>
+            <h3>主要類型＋故事證據</h3>
+            <p class="field-help">沒有唯一標準答案；學生先提交初次判斷，全班討論後再由教師開放重新判斷。</p>
+          </div>
+        </div>
+        <div id="openClassificationTaskEditor"></div>
+      </section>
+
+      <div class="sticky-actions">
+        <div class="action-left">
+          <button id="saveBtn" class="btn btn-primary">儲存活動</button>
+          <button id="duplicateBtn" class="btn btn-secondary">複製活動</button>
+          <button id="deleteBtn" class="btn btn-danger-soft">刪除</button>
+        </div>
+        <div class="action-right">
+          <button id="previewBtn" class="btn btn-secondary">預覽學生畫面</button>
+          <button id="shareBtn" class="btn btn-accent">分享給學生</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  </section>
+
+
+  <section class="workspace-view" data-workspace-view="sessions">
+    <main class="session-workspace">
+      <section class="panel session-config-card">
+        <div class="v15-editor-head session-head">
+          <div>
+            <span class="section-kicker">CLASSROOM SESSION</span>
+            <h2>課堂連線與學生加入</h2>
+            <p class="subtle">建立課堂代碼，讓學生掃 QR Code、輸入座號後進入活動；作答資料會綁定這次 Session。</p>
+          </div>
+          <span id="cloudModeBadge" class="cloud-mode-badge local">本機測試模式</span>
+        </div>
+
+        <details id="cloudSettingsPanel" class="cloud-settings">
+          <summary>
+            <span>☁️ 雲端連線設定</span>
+            <small id="cloudSettingsSummary">尚未設定 Supabase</small>
+          </summary>
+          <div class="cloud-settings-body">
+            <div class="cloud-warning">
+              <strong>只使用 Publishable key</strong>
+              <p>不要把 Supabase secret key 或 service-role key 放進前端。雲端模式需要先執行專案內的 <code>supabase-setup.sql</code>。</p>
+            </div>
+            <div class="form-grid two-col">
+              <label class="field">
+                <span>Supabase Project URL</span>
+                <input id="supabaseUrlInput" type="url" placeholder="https://xxxx.supabase.co" />
+              </label>
+              <label class="field">
+                <span>Publishable key</span>
+                <input id="supabaseKeyInput" type="password" autocomplete="off" placeholder="sb_publishable_..." />
+              </label>
+            </div>
+            <div class="cloud-settings-actions">
+              <span id="cloudTestResult" class="subtle">尚未測試連線</span>
+              <button id="clearCloudConfigBtn" class="btn btn-secondary" type="button">清除設定</button>
+              <button id="saveCloudConfigBtn" class="btn btn-primary" type="button">儲存並測試</button>
+            </div>
+          </div>
+        </details>
+
+        <div class="session-create-grid">
+          <label class="field">
+            <span>要進行的活動</span>
+            <select id="sessionActivitySelect"></select>
+          </label>
+          <label class="field">
+            <span>Session 顯示名稱</span>
+            <input id="sessionTitleInput" type="text" placeholder="例如：第二節｜動畫類型鑑定所" />
+          </label>
+        </div>
+
+        <div id="sessionActivityPreview" class="session-activity-preview"></div>
+
+        <div class="session-create-actions">
+          <div>
+            <strong>建立後會產生 5 碼課堂代碼與加入 QR Code。</strong>
+            <small id="sessionCreateHint">尚未設定雲端時，Session 僅能在同一個瀏覽器中測試。</small>
+          </div>
+          <button id="createSessionBtn" class="btn btn-primary" type="button">＋ 建立課堂 Session</button>
+        </div>
+      </section>
+
+      <section id="activeSessionCard" class="panel active-session-card hidden">
+        <div class="active-session-top">
+          <div>
+            <span class="section-kicker">ACTIVE SESSION</span>
+            <h2 id="activeSessionTitle">課堂 Session</h2>
+            <div class="session-status-row">
+              <span id="activeSessionStatus" class="session-status active">進行中</span>
+              <span id="activeSessionMode" class="subtle">本機測試</span>
+            </div>
+          </div>
+          <button id="refreshSessionBtn" class="btn btn-secondary" type="button">↻ 更新資料</button>
+        </div>
+
+        <div class="session-live-grid">
+          <section class="session-code-panel">
+            <span class="summary-label">課堂代碼</span>
+            <div id="activeSessionCode" class="session-code">ABCDE</div>
+            <p>學生可掃描右側 QR Code，或開啟加入連結後輸入這組代碼。</p>
+            <div class="copy-row">
+              <input id="sessionJoinUrl" type="text" readonly />
+              <button id="copySessionUrlBtn" class="btn btn-secondary" type="button">複製連結</button>
+            </div>
+          </section>
+          <section class="session-qr-panel">
+            <div id="sessionQrCode" class="session-qr-code"></div>
+            <small id="sessionQrNotice" class="subtle"></small>
+          </section>
+        </div>
+
+        <div class="session-metrics">
+          <div class="session-metric">
+            <span>已加入學生</span>
+            <strong id="sessionParticipantCount">0</strong>
+          </div>
+          <div class="session-metric">
+            <span>已記錄作答</span>
+            <strong id="sessionResponseCount">0</strong>
+          </div>
+          <div class="session-metric">
+            <span>活動模式</span>
+            <strong id="sessionActivityMode">—</strong>
+          </div>
+        </div>
+
+        <section id="progressiveSessionControl" class="progressive-session-control hidden">
+          <div class="session-section-head">
+            <div>
+              <span class="section-kicker">LIVE CLUE CONTROL</span>
+              <h3>逐層揭露控制台</h3>
+            </div>
+            <span id="progressiveStageBadge" class="stage-badge">線索 1 / 1</span>
+          </div>
+
+          <div class="progressive-control-grid">
+            <div class="progressive-current-clue">
+              <span class="summary-label">目前公開線索</span>
+              <strong id="teacherCurrentClueText">—</strong>
+              <p id="teacherStageSubmissionText">本層已提交 0 / 0</p>
+              <div class="progressive-control-actions">
+                <button id="previousStageBtn" class="btn btn-secondary" type="button">← 上一層</button>
+                <button id="nextStageBtn" class="btn btn-primary" type="button">公開下一條線索 →</button>
+              </div>
+            </div>
+            <div class="progressive-distribution">
+              <span class="summary-label">本層分類分布</span>
+              <div id="teacherStageDistribution" class="stage-distribution-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="openClassificationSessionControl" class="open-classification-session-control hidden">
+          <div class="session-section-head">
+            <div>
+              <span class="section-kicker">OPEN CLASSIFICATION</span>
+              <h3>開放分類控制台</h3>
+            </div>
+            <span id="openClassificationPhaseBadge" class="stage-badge">初次判斷</span>
+          </div>
+
+          <div class="open-session-grid">
+            <div class="open-phase-control">
+              <span class="summary-label">目前階段</span>
+              <strong id="openClassificationPhaseText">學生正在進行初次判斷</strong>
+              <p id="openClassificationSubmissionText">本階段已提交 0 / 0</p>
+              <div class="progressive-control-actions">
+                <button id="openPreviousPhaseBtn" class="btn btn-secondary" type="button">← 回到初次判斷</button>
+                <button id="openNextPhaseBtn" class="btn btn-primary" type="button">開放重新判斷 →</button>
+              </div>
+            </div>
+
+            <div class="open-distribution-panel">
+              <span class="summary-label">目前類型分布</span>
+              <div id="openClassificationDistribution" class="stage-distribution-list"></div>
+            </div>
+          </div>
+
+          <div id="openChangeSummary" class="open-change-summary hidden">
+            <div><span>改變判斷</span><strong id="openChangedCount">0</strong></div>
+            <div><span>維持原判斷</span><strong id="openUnchangedCount">0</strong></div>
+          </div>
+        </section>
+
+        <section class="session-participants-section">
+          <div class="session-section-head">
+            <div>
+              <span class="section-kicker">PARTICIPANTS</span>
+              <h3>學生加入狀態</h3>
+            </div>
+            <small>依目前活動階段即時顯示作答分布，並保留每位學生的判斷歷程。</small>
+          </div>
+          <div id="sessionParticipantList" class="session-participant-list">
+            <div class="empty-v15">還沒有學生加入。</div>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel session-history-card">
+        <div class="session-section-head">
+          <div>
+            <span class="section-kicker">RECENT SESSIONS</span>
+            <h2>最近建立的 Session</h2>
+          </div>
+        </div>
+        <div id="sessionHistoryList" class="session-history-list"></div>
+      </section>
+    </main>
+  </section>
+
+  <dialog id="shareDialog" class="share-dialog">
+    <form method="dialog" class="share-card">
+      <button class="dialog-close" aria-label="關閉">×</button>
+      <span class="section-kicker">分享活動</span>
+      <h2 id="shareActivityName">活動名稱</h2>
+      <p class="subtle">投影 QR Code 讓學生掃描，或複製連結分享給學生。</p>
+
+      <div id="qrcode" class="qr-wrap" aria-label="QR Code"></div>
+      <p id="qrNotice" class="small-note qr-notice hidden"></p>
+
+      <label class="field">
+        <span>學生連結</span>
+        <div class="copy-row">
+          <input id="shareUrl" type="text" readonly />
+          <button id="copyUrlBtn" type="button" class="btn btn-secondary">複製</button>
+        </div>
+      </label>
+
+      <div class="dialog-actions">
+        <a id="openStudentLink" class="btn btn-primary" target="_blank" rel="noopener">開啟學生畫面</a>
+      </div>
+
+      <p class="small-note">
+        活動內容會隨分享連結傳送；若內容較多，系統會自動壓縮以縮短網址。
+      </p>
+    </form>
+  </dialog>
+  <template id="caseTemplate">
+    <article class="case-card">
+      <div class="case-card-header">
+        <div>
+          <span class="case-index">任務 01</span>
+          <h3>任務內容</h3>
+        </div>
+        <button type="button" class="icon-btn remove-case" title="刪除關卡">🗑</button>
+      </div>
+
+      <div class="form-grid two-col">
+        <label class="field">
+          <span>作品或情境名稱</span>
+          <input class="case-title" type="text" placeholder="例如：名偵探柯南" />
+        </label>
+        <label class="field">
+          <span>本關任務提示</span>
+          <input class="case-prompt" type="text" placeholder="例如：請選出最能代表這個故事的元素。" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>作品介紹 <span class="optional-tag">選填</span></span>
+        <textarea class="case-intro" rows="4" maxlength="600" placeholder="給沒看過這部作品的學生一段簡短介紹。例如：高中生偵探工藤新一因意外變成小學生模樣，化名江戶川柯南，一邊隱藏身分，一邊運用觀察與推理破解各種案件。"></textarea>
+        <small class="field-help">建議 50～150 字，只提供理解作品需要的背景，不要直接透露本關答案。</small>
+      </label>
+
+      <section class="card-builder">
+        <div class="card-builder-header">
+          <div>
+            <span class="field-label card-builder-label">字卡設定</span>
+            <p class="field-help card-builder-help">輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。</p>
+          </div>
+          <button type="button" class="btn btn-secondary add-card-btn">＋ 新增字卡</button>
+        </div>
+        <div class="card-editor-list"></div>
+      </section>
+
+      <section class="reveal-settings mode-specific-section">
+        <div class="form-grid two-col">
+          <label class="field">
+            <span>最後揭露的類型</span>
+            <input class="case-reveal-title" type="text" placeholder="例如：推理小說" />
+          </label>
+          <label class="field">
+            <span>核心關鍵字（用、分隔）</span>
+            <input class="case-keywords" type="text" placeholder="謎團、線索、推理、真相" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>類型說明</span>
+          <textarea class="case-reveal-desc" rows="3" placeholder="例如：故事通常以謎團為核心，角色透過線索與推理逐步找出真相。"></textarea>
+        </label>
+      </section>
+
+      <section class="discussion-settings mode-specific-section hidden">
+        <label class="field">
+          <span>討論引導 <span class="optional-tag">選填</span></span>
+          <textarea class="case-discussion-prompt" rows="3" maxlength="500" placeholder="例如：你為什麼會選這些類型？如果只能挑一個主要類型，你會保留哪一個？和同學的選擇有什麼不同？"></textarea>
+          <small class="field-help">學生送出後會看到自己選擇的標籤與這段提示，不會出現正確／錯誤判定。</small>
+        </label>
+      </section>
+    </article>
+  </template>
+
+  <template id="elementTypeTaskTemplate">
+    <article class="case-card element-type-task-card">
+      <div class="case-card-header">
+        <div>
+          <span class="mode-a-task-index case-index">分類任務 01</span>
+          <h3>先找要素，再判斷類型</h3>
+        </div>
+        <button type="button" class="icon-btn mode-a-remove-task" title="刪除任務">🗑</button>
+      </div>
+
+      <div class="form-grid two-col">
+        <label class="field">
+          <span>引用作品庫</span>
+          <select class="mode-a-work-select"></select>
+        </label>
+        <label class="field">
+          <span>至少選擇幾個要素</span>
+          <input class="mode-a-min-elements" type="number" min="1" max="10" value="2" />
+        </label>
+      </div>
+
+      <div class="mode-a-work-preview"></div>
+
+      <label class="field">
+        <span>本關任務提示 <span class="optional-tag">選填</span></span>
+        <input class="mode-a-prompt" type="text" placeholder="例如：先找出故事裡的重要要素，再判斷最符合的小說類型。" />
+      </label>
+
+      <section class="mode-a-config-block">
+        <div class="mode-a-config-head">
+          <div>
+            <span class="section-kicker">STEP 1</span>
+            <h4>學生可選的故事要素</h4>
+          </div>
+          <button type="button" class="btn btn-secondary mode-a-select-all-elements">全部選取</button>
+        </div>
+        <p class="field-help">「提供」代表學生會看到；「參考」代表教師設定的參考答案。</p>
+        <div class="mode-a-element-grid"></div>
+      </section>
+
+      <section class="mode-a-config-block">
+        <div class="mode-a-config-head">
+          <div>
+            <span class="section-kicker">STEP 2</span>
+            <h4>學生可選的小說類型</h4>
+          </div>
+          <button type="button" class="btn btn-secondary mode-a-select-all-types">全部選取</button>
+        </div>
+        <div class="mode-a-type-grid"></div>
+
+        <label class="field mode-a-reference-type-field">
+          <span>參考類型</span>
+          <select class="mode-a-reference-type"></select>
+          <small class="field-help">學生提交後會看到自己的判斷與這個參考判斷進行比較。</small>
+        </label>
+      </section>
+    </article>
+  </template>
+
+  <template id="progressiveTaskTemplate">
+    <article class="case-card progressive-task-card">
+      <div class="case-card-header">
+        <div>
+          <span class="case-index">逐層任務</span>
+          <h3>每一條新線索，都重新做一次判斷</h3>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>引用作品庫</span>
+        <select class="progressive-work-select"></select>
+      </label>
+
+      <div class="progressive-work-preview"></div>
+
+      <label class="field">
+        <span>任務提示 <span class="optional-tag">選填</span></span>
+        <input class="progressive-prompt" type="text" placeholder="例如：每看到一條新線索，就重新判斷這部作品最接近哪一種類型。" />
+      </label>
+
+      <section class="mode-a-config-block">
+        <div class="mode-a-config-head">
+          <div>
+            <span class="section-kicker">CLUES</span>
+            <h4>要使用的逐層線索</h4>
+          </div>
+        </div>
+        <p class="field-help">順序沿用作品庫；至少選 2 層。Session 中學生只能看到老師目前公開到的線索。</p>
+        <div class="progressive-clue-grid"></div>
+      </section>
+
+      <section class="mode-a-config-block">
+        <div class="mode-a-config-head">
+          <div>
+            <span class="section-kicker">CLASSIFY</span>
+            <h4>每一層可選的小說類型</h4>
+          </div>
+          <button type="button" class="btn btn-secondary progressive-select-all-types">全部選取</button>
+        </div>
+        <div class="progressive-type-grid mode-a-type-grid"></div>
+        <label class="field">
+          <span>最終參考類型 <span class="optional-tag">選填</span></span>
+          <select class="progressive-reference-type"></select>
+          <small class="field-help">最後一層完成後才會顯示；若這題想保留討論空間，可以不設定。</small>
+        </label>
+      </section>
+    </article>
+  </template>
+
+  <template id="openClassificationTaskTemplate">
+    <article class="case-card open-classification-task-card">
+      <div class="case-card-header">
+        <div>
+          <span class="case-index">開放分類任務</span>
+          <h3>選主要類型，並用故事要素提出證據</h3>
+        </div>
+      </div>
+
+      <div class="form-grid two-col">
+        <label class="field">
+          <span>引用作品庫</span>
+          <select class="open-classification-work-select"></select>
+        </label>
+        <label class="field">
+          <span>至少選擇幾個證據</span>
+          <input class="open-classification-min-evidence" type="number" min="1" max="6" value="2" />
+        </label>
+      </div>
+
+      <div class="open-classification-work-preview"></div>
+
+      <label class="field">
+        <span>任務提示 <span class="optional-tag">選填</span></span>
+        <input class="open-classification-prompt" type="text" placeholder="例如：選出最能代表這部作品的主要類型，並至少選兩個故事要素作為證據。" />
+      </label>
+
+      <section class="mode-a-config-block">
+        <div class="mode-a-config-head">
+          <div>
+            <span class="section-kicker">EVIDENCE</span>
+            <h4>學生可選的故事證據</h4>
+          </div>
+          <button type="button" class="btn btn-secondary open-classification-select-all-elements">全部選取</button>
+        </div>
+        <p class="field-help">這裡沒有「正確答案」；只決定學生可以使用哪些故事要素來支持自己的判斷。</p>
+        <div class="open-classification-element-grid mode-a-element-grid"></div>
+      </section>
+
+      <section class="mode-a-config-block">
+        <div class="mode-a-config-head">
+          <div>
+            <span class="section-kicker">MAIN TYPE</span>
+            <h4>學生可選的主要類型</h4>
+          </div>
+          <button type="button" class="btn btn-secondary open-classification-select-all-types">全部選取</button>
+        </div>
+        <div class="open-classification-type-grid mode-a-type-grid"></div>
+      </section>
+
+      <label class="field">
+        <span>全班討論提示 <span class="optional-tag">選填</span></span>
+        <textarea class="open-classification-discussion-prompt" rows="3" placeholder="例如：你為什麼選這個主要類型？哪兩個作品要素最能支持你的判斷？"></textarea>
+      </label>
+
+      <label class="mode-option open-rejudge-toggle">
+        <input class="open-classification-allow-rejudge" type="checkbox" checked />
+        <span class="mode-option-body">
+          <strong>🔄 全班討論後開放重新判斷</strong>
+          <small>Session 會分成「初次判斷」與「重新判斷」兩階段，並保留答案改變原因。</small>
+        </span>
+      </label>
+    </article>
+  </template>
+
+  <template id="lessonTemplate">
+    <article class="lesson-card">
+      <div class="lesson-card-head">
+        <div class="lesson-title-group">
+          <span class="lesson-number">第 1 節</span>
+          <input class="lesson-title-input" type="text" placeholder="例如：小說類型拆解所" />
+        </div>
+        <div class="lesson-head-actions">
+          <button type="button" class="icon-btn lesson-move-up" title="往上">↑</button>
+          <button type="button" class="icon-btn lesson-move-down" title="往下">↓</button>
+          <button type="button" class="icon-btn lesson-remove" title="刪除節次">🗑</button>
+        </div>
+      </div>
+      <div class="lesson-node-list"></div>
+      <button type="button" class="btn btn-secondary add-node-btn">＋ 加入教學節點</button>
+    </article>
+  </template>
+
+  <template id="nodeTemplate">
+    <div class="lesson-node">
+      <div class="node-grip">⋮⋮</div>
+      <div class="node-main">
+        <select class="node-type">
+          <option value="showcase">🖼️ 作品牆</option>
+          <option value="toolbox">🧰 類型工具箱</option>
+          <option value="activity">🧩 互動活動</option>
+          <option value="summary">🧭 收束／指南</option>
+          <option value="content">📝 教學內容頁</option>
+        </select>
+        <input class="node-title" type="text" placeholder="節點名稱，例如：作品有什麼不一樣？" />
+        <select class="node-activity-ref hidden" aria-label="引用活動"></select>
+        <textarea class="node-note" rows="2" placeholder="教師備註或此節點要呈現的重點（選填）"></textarea>
+      </div>
+      <div class="node-actions">
+        <button type="button" class="icon-btn node-up" title="往上">↑</button>
+        <button type="button" class="icon-btn node-down" title="往下">↓</button>
+        <button type="button" class="icon-btn node-remove" title="刪除">×</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="simpleRowTemplate">
+    <div class="simple-row">
+      <input class="simple-row-input" type="text" />
+      <button type="button" class="icon-btn simple-row-remove" title="刪除">×</button>
+    </div>
+  </template>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
