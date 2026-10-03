@@ -519,7 +519,7 @@ const modeInputs = [...document.querySelectorAll('input[name="activityMode"]')];
 const editorPanel = document.querySelector(".editor-panel");
 const templateKicker = el("templateKicker");
 const templateTitle = el("templateTitle");
-const QR_SAFE_MAX_LENGTH = 2800;
+const QR_SAFE_MAX_LENGTH = 1300;
 
 function createId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -1557,13 +1557,13 @@ function buildElementTypeSnapshot(activity) {
         img: work?.image || ""
       },
       p: task.prompt,
-      e: elementOptions.map(element => ({
-        i: element.id,
+      e: elementOptions.map((element, index) => ({
+        i: String(index),
         n: element.name
       })),
       ce: task.correctElementRefs.map(id => elementOptions.findIndex(element => element.id === id)).filter(index => index >= 0),
-      y: typeOptions.map(type => ({
-        i: type.id,
+      y: typeOptions.map((type, index) => ({
+        i: String(index),
         n: type.name,
         ic: type.icon || "◼",
         c: type.color || "#667085",
@@ -1584,8 +1584,8 @@ function buildProgressiveSnapshot(activity) {
   return {
     w:{n:work?.name||"未命名作品",sh:work?.showName!==false,i:work?.intro||"",img:work?.image||""},
     p:task.prompt||"",
-    l:task.clueRefs.map(id=>clueMap.get(id)).filter(Boolean).map(clue=>({i:clue.id,t:clue.text})),
-    y:types.map(type=>({i:type.id,n:type.name,ic:type.icon||"◼",c:type.color||"#667085",d:type.description||""})),
+    l:task.clueRefs.map(id=>clueMap.get(id)).filter(Boolean).map((clue,index)=>({i:String(index),t:clue.text})),
+    y:types.map((type,index)=>({i:String(index),n:type.name,ic:type.icon||"◼",c:type.color||"#667085",d:type.description||""})),
     ry:types.findIndex(type=>type.id===task.referenceTypeRef)
   };
 }
@@ -1601,8 +1601,8 @@ function buildOpenClassificationSnapshot(activity) {
   return {
     w:{n:work?.name||"未命名作品",sh:work?.showName!==false,i:work?.intro||"",img:work?.image||""},
     p:task.prompt||"",
-    e:elements.map(element=>({i:element.id,n:element.name})),
-    y:types.map(type=>({i:type.id,n:type.name,ic:type.icon||"◼",c:type.color||"#667085",d:type.description||""})),
+    e:elements.map((element,index)=>({i:String(index),n:element.name})),
+    y:types.map((type,index)=>({i:String(index),n:type.name,ic:type.icon||"◼",c:type.color||"#667085",d:type.description||""})),
     min:Math.max(1,Number(task.minEvidence)||2),
     q:task.discussionPrompt||"",
     r:task.allowRejudge!==false
@@ -1660,6 +1660,39 @@ async function buildShareUrl(activity) {
   return path.toString();
 }
 
+function getQrRenderSize(urlLength) {
+  if (urlLength <= 700) return 400;
+  return 560;
+}
+
+function getQrQualityLabel(urlLength) {
+  if (urlLength <= 700) return "掃描品質：佳";
+  return "掃描品質：較密，已自動放大；投影時建議維持完整白邊";
+}
+
+function getShareOriginWarning() {
+  const protocol = window.location.protocol;
+  const host = window.location.hostname;
+
+  if (protocol === "file:") {
+    return "目前是直接開啟電腦裡的 HTML 檔案（file://）。手機無法存取這個本機路徑；請先把網站開在 GitHub Pages，再從 GitHub Pages 的教師端產生 QR Code。";
+  }
+
+  if (["localhost","127.0.0.1","::1"].includes(host)) {
+    return "目前網站使用 localhost。QR Code 裡的 localhost 會指向學生自己的裝置，因此無法跨裝置開啟；正式分享請使用 GitHub Pages 網址。";
+  }
+
+  if (host === "github.com" || host === "raw.githubusercontent.com") {
+    return "目前不是 GitHub Pages 網址。請從 GitHub Pages（通常是 username.github.io/...）開啟教師端後再產生 QR Code。";
+  }
+
+  if (!["http:","https:"].includes(protocol)) {
+    return "目前網址無法供其他裝置直接存取；請從 GitHub Pages 或其他 HTTPS 網站開啟教師端後再分享。";
+  }
+
+  return "";
+}
+
 async function previewOrShare(openPreview = false) {
   const activity = saveCurrent(false);
   const validation = validateActivity(activity);
@@ -1668,9 +1701,24 @@ async function previewOrShare(openPreview = false) {
     return;
   }
 
-  const url = await buildShareUrl(activity);
+  const originWarning = getShareOriginWarning();
+  let url = "";
+
+  try {
+    url = await buildShareUrl(activity);
+  } catch (error) {
+    console.error("分享網址建立失敗", error);
+    if (openPreview) {
+      showToast("目前頁面網址無法建立學生預覽連結");
+      return;
+    }
+  }
 
   if (openPreview) {
+    if (!url) {
+      showToast("目前頁面網址無法建立學生預覽連結");
+      return;
+    }
     window.open(url, "_blank", "noopener");
     return;
   }
@@ -1682,21 +1730,33 @@ async function previewOrShare(openPreview = false) {
   qrNotice.classList.add("hidden");
   qrNotice.textContent = "";
 
-  if (url.length > QR_SAFE_MAX_LENGTH) {
-    qrcodeEl.innerHTML = "<p class='subtle'>活動內容較多，已超過目前 QR Code 的安全容量。</p>";
-    qrNotice.textContent = "學生連結仍可使用；建議精簡作品介紹或減少一次分享的任務數。";
+  if (originWarning || !url) {
+    qrcodeEl.classList.remove("qr-size-medium","qr-size-large");
+    qrcodeEl.innerHTML = "<div class='qr-environment-warning'><span>⚠️</span><strong>目前網址不能跨裝置掃描</strong></div>";
+    qrNotice.textContent = originWarning || "目前頁面網址無法建立可分享的學生連結；請從 GitHub Pages 或其他 HTTP/HTTPS 網址開啟教師端。";
+    qrNotice.classList.remove("hidden");
+  } else if (url.length > QR_SAFE_MAX_LENGTH) {
+    qrcodeEl.classList.remove("qr-size-medium","qr-size-large");
+    qrcodeEl.innerHTML = "<p class='subtle'>活動內容較多，若直接塞進 QR Code 會過度密集而難以掃描。</p>";
+    qrNotice.textContent = `目前分享網址 ${url.length} 字元，已超過教室投影建議上限。學生連結仍可使用；請優先改用課堂 Session QR，或精簡作品介紹／圖片網址。`;
     qrNotice.classList.remove("hidden");
   } else if (window.QRCode) {
     try {
+      const qrSize = getQrRenderSize(url.length);
+      qrcodeEl.classList.toggle("qr-size-medium", qrSize === 560);
+      qrcodeEl.classList.remove("qr-size-large");
       new QRCode(qrcodeEl, {
         text: url,
-        width: 200,
-        height: 200,
+        width: qrSize,
+        height: qrSize,
         correctLevel: QRCode.CorrectLevel.L
       });
+      qrNotice.textContent = `${getQrQualityLabel(url.length)} · 分享網址 ${url.length} 字元`;
+      qrNotice.classList.remove("hidden");
     } catch (error) {
       console.error("QR Code 產生失敗", error);
       qrcodeEl.innerHTML = "<p class='subtle'>QR Code 產生失敗，請使用下方學生連結。</p>";
+      qrNotice.textContent = "可改用複製學生連結或課堂 Session QR。";
       qrNotice.classList.remove("hidden");
     }
   } else {
