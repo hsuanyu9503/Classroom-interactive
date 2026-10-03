@@ -1,4 +1,7 @@
 const STORAGE_KEY = "interactive-classroom-v1";
+const TYPE_STORAGE_KEY = "interactive-classroom-v15-types";
+const WORK_STORAGE_KEY = "interactive-classroom-v15-works";
+
 let activities = [];
 let currentId = null;
 let toastTimer = null;
@@ -10,6 +13,13 @@ const activitySubtitle = el("activitySubtitle");
 const caseEditor = el("caseEditor");
 const activityList = el("activityList");
 const caseTemplate = el("caseTemplate");
+const elementTypeTaskTemplate = el("elementTypeTaskTemplate");
+const elementTypeTaskEditor = el("elementTypeTaskEditor");
+const elementTypeEditorSection = el("elementTypeEditorSection");
+const progressiveEditorSection = el("progressiveEditorSection");
+const progressiveTaskTemplate = el("progressiveTaskTemplate");
+const progressiveTaskEditor = el("progressiveTaskEditor");
+const standardTaskToolbar = el("standardTaskToolbar");
 const shareDialog = el("shareDialog");
 const shareUrlInput = el("shareUrl");
 const qrcodeEl = el("qrcode");
@@ -33,6 +43,96 @@ function cloneData(value) {
     : JSON.parse(JSON.stringify(value));
 }
 
+function readJsonStorage(key, fallback = []) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "null");
+    return Array.isArray(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getTypeLibrary() {
+  return readJsonStorage(TYPE_STORAGE_KEY, []).map(type => ({
+    ...type,
+    elements: (type.elements || []).map(element =>
+      typeof element === "string"
+        ? { id: `${type.id}-${element}`, name: element }
+        : { id: element.id, name: element.name }
+    )
+  }));
+}
+
+function getWorkLibrary() {
+  return readJsonStorage(WORK_STORAGE_KEY, []).map(work => ({
+    ...work,
+    clues: (work.clues || []).map(clue =>
+      typeof clue === "string"
+        ? {id:`${work.id}-${clue}`, text:clue}
+        : {id:clue.id, text:clue.text}
+    )
+  }));
+}
+
+function getAllLibraryElements() {
+  return getTypeLibrary().flatMap(type =>
+    (type.elements || []).map(element => ({
+      id: element.id,
+      name: element.name,
+      typeId: type.id,
+      typeName: type.name,
+      typeIcon: type.icon || "◼",
+      typeColor: type.color || "#667085"
+    }))
+  );
+}
+
+function getLibraryElementMap() {
+  return new Map(getAllLibraryElements().map(element => [element.id, element]));
+}
+
+function getTypeMap() {
+  return new Map(getTypeLibrary().map(type => [type.id, type]));
+}
+
+function getWorkMap() {
+  return new Map(getWorkLibrary().map(work => [work.id, work]));
+}
+
+function newModeATask() {
+  const works = getWorkLibrary();
+  const types = getTypeLibrary();
+  const allElements = getAllLibraryElements();
+  const firstWork = works[0];
+  const initialElements = firstWork?.elementRefs?.length
+    ? firstWork.elementRefs.filter(id => allElements.some(element => element.id === id))
+    : [];
+
+  return {
+    id: createId(),
+    workRef: firstWork?.id || "",
+    prompt: "",
+    elementRefs: initialElements,
+    correctElementRefs: firstWork?.elementRefs?.filter(id => initialElements.includes(id)) || [],
+    typeRefs: types.map(type => type.id),
+    correctTypeRef: "",
+    minElements: 2
+  };
+}
+
+function newProgressiveTask() {
+  const works = getWorkLibrary();
+  const firstWork = works.find(work => (work.clues || []).length >= 2) || works[0];
+  const types = getTypeLibrary();
+  return {
+    workRef:firstWork?.id || "",
+    prompt:"",
+    clueRefs:(firstWork?.clues || []).map(clue => clue.id),
+    typeRefs:types.map(type => type.id),
+    referenceTypeRef:""
+  };
+}
+
 const defaultActivity = {
   id: createId(),
   title: "故事鑑定所",
@@ -50,7 +150,9 @@ const defaultActivity = {
       revealDescription: "故事通常以謎團為核心，角色透過線索與推理逐步找出真相。",
       discussionPrompt: ""
     }
-  ]
+  ],
+  tasks: [],
+  progressive: null
 };
 
 function showToast(message) {
@@ -78,6 +180,28 @@ function loadActivities() {
     persist();
   }
 
+  activities = activities.map(activity => {
+    const allowed = new Set(["drag-reveal","open-tags","element-type","progressive-reveal"]);
+    const template = allowed.has(activity.template) ? activity.template : "drag-reveal";
+
+    return {
+      ...activity,
+      template,
+      cases: ["drag-reveal","open-tags"].includes(template)
+        ? (Array.isArray(activity.cases) ? activity.cases : [])
+        : [],
+      tasks: template === "element-type"
+        ? (Array.isArray(activity.tasks) ? activity.tasks : [])
+        : [],
+      progressive: template === "progressive-reveal"
+        ? (activity.progressive || null)
+        : null
+    };
+  });
+
+  // V1.6.2：移除各模式不會使用的舊資料分支，讓 localStorage 也保持乾淨。
+  persist();
+
   currentId = activities[0].id;
   renderLibrary();
   loadIntoEditor(activities[0]);
@@ -89,20 +213,27 @@ function newBlankActivity() {
     title: "未命名活動",
     subtitle: "",
     template: "drag-reveal",
-    cases: [
-      {
-        title: "",
-        intro: "",
-        prompt: "",
-        cards: [],
-        correctCards: [],
-        revealTitle: "",
-        keywords: [],
-        revealDescription: "",
-        discussionPrompt: ""
-      }
-    ]
+    cases: [{
+      title: "",
+      intro: "",
+      prompt: "",
+      cards: [],
+      correctCards: [],
+      revealTitle: "",
+      keywords: [],
+      revealDescription: "",
+      discussionPrompt: ""
+    }],
+    tasks: [],
+    progressive: null
   };
+}
+
+function getModeLabel(template) {
+  if (template === "open-tags") return "開放式標籤討論";
+  if (template === "element-type") return "要素 → 類型分類";
+  if (template === "progressive-reveal") return "逐層揭露";
+  return "探索式揭密";
 }
 
 function renderLibrary() {
@@ -111,10 +242,14 @@ function renderLibrary() {
   activities.forEach((activity) => {
     const item = document.createElement("div");
     item.className = `activity-item ${activity.id === currentId ? "active" : ""}`;
-    const modeLabel = activity.template === "open-tags" ? "開放式標籤討論" : "探索式揭密";
+    const count = activity.template === "element-type"
+      ? activity.tasks?.length || 0
+      : activity.template === "progressive-reveal"
+        ? activity.progressive?.clueRefs?.length || 0
+        : activity.cases?.length || 0;
     item.innerHTML = `
       <strong>${escapeHtml(activity.title || "未命名活動")}</strong>
-      <small>${activity.cases?.length || 0} 個關卡 · ${modeLabel}</small>
+      <small>${count} 個任務 · ${getModeLabel(activity.template)}</small>
     `;
     item.addEventListener("click", () => {
       saveCurrent(false);
@@ -126,6 +261,7 @@ function renderLibrary() {
   });
 }
 
+// ---------- 舊兩種活動模板 ----------
 function addCardRow(caseCard, text = "", isCorrect = false) {
   const list = caseCard.querySelector(".card-editor-list");
   const row = document.createElement("div");
@@ -187,11 +323,8 @@ function addCase(caseData = {}) {
 
   const cards = Array.isArray(caseData.cards) ? caseData.cards : [];
   const correctCards = new Set(caseData.correctCards || []);
-  if (cards.length) {
-    cards.forEach((text) => addCardRow(card, text, correctCards.has(text)));
-  } else {
-    addCardRow(card);
-  }
+  if (cards.length) cards.forEach(text => addCardRow(card, text, correctCards.has(text)));
+  else addCardRow(card);
 
   card.querySelector(".add-card-btn").addEventListener("click", () => {
     addCardRow(card);
@@ -213,70 +346,12 @@ function addCase(caseData = {}) {
   applyModeUI(getSelectedMode());
 }
 
-
-function getSelectedMode() {
-  return modeInputs.find(input => input.checked)?.value || "drag-reveal";
-}
-
-function setSelectedMode(mode) {
-  const normalized = mode === "open-tags" ? "open-tags" : "drag-reveal";
-  modeInputs.forEach(input => {
-    input.checked = input.value === normalized;
-  });
-  applyModeUI(normalized);
-}
-
-function applyModeUI(mode) {
-  const isOpen = mode === "open-tags";
-  editorPanel?.classList.toggle("open-tags-mode", isOpen);
-
-  if (templateKicker) templateKicker.textContent = isOpen ? "模板 02" : "模板 01";
-  if (templateTitle) templateTitle.textContent = isOpen ? "開放式標籤討論" : "探索式拖曳揭密";
-
-  document.querySelectorAll(".card-builder-label").forEach(label => {
-    label.textContent = isOpen ? "標籤設定" : "字卡設定";
-  });
-  document.querySelectorAll(".card-builder-help").forEach(help => {
-    help.textContent = isOpen
-      ? "輸入可供學生複選的標籤或故事要素；此模式沒有標準答案。按 Enter 可快速新增下一張。"
-      : "輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。";
-  });
-
-  document.querySelectorAll(".reveal-settings").forEach(section => {
-    section.classList.toggle("hidden", isOpen);
-  });
-  document.querySelectorAll(".discussion-settings").forEach(section => {
-    section.classList.toggle("hidden", !isOpen);
-  });
-  document.querySelectorAll(".correct-toggle").forEach(toggle => {
-    toggle.classList.toggle("hidden", isOpen);
-  });
-}
-
-function refreshCaseNumbers() {
-  [...caseEditor.querySelectorAll(".case-card")].forEach((card, index) => {
-    card.querySelector(".case-index").textContent = `CASE ${String(index + 1).padStart(2, "0")}`;
-  });
-}
-
-function loadIntoEditor(activity) {
-  activityTitle.value = activity.title || "";
-  activitySubtitle.value = activity.subtitle || "";
-  setSelectedMode(activity.template || "drag-reveal");
-  caseEditor.innerHTML = "";
-
-  const cases = activity.cases?.length ? activity.cases : newBlankActivity().cases;
-  cases.forEach(addCase);
-  applyModeUI(getSelectedMode());
-}
-
-function readEditor() {
-  const cases = [...caseEditor.querySelectorAll(".case-card")].map((card) => {
+function readCases() {
+  return [...caseEditor.querySelectorAll(".case-card")].map(card => {
     const rows = [...card.querySelectorAll(".card-editor-row")];
     const cards = [];
     const correctCards = [];
-
-    rows.forEach((row) => {
+    rows.forEach(row => {
       const text = row.querySelector(".card-text").value.trim();
       if (!text) return;
       cards.push(text);
@@ -295,24 +370,474 @@ function readEditor() {
       discussionPrompt: card.querySelector(".case-discussion-prompt").value.trim()
     };
   });
+}
+
+// ---------- V1.6 要素 → 類型 ----------
+function populateWorkSelect(select, selectedId = "") {
+  const works = getWorkLibrary();
+  select.innerHTML = '<option value="">— 選擇作品庫中的作品 —</option>';
+  works.forEach(work => {
+    const option = document.createElement("option");
+    option.value = work.id;
+    option.textContent = work.name || "未命名作品";
+    option.selected = work.id === selectedId;
+    select.appendChild(option);
+  });
+  if (selectedId && !works.some(work => work.id === selectedId)) {
+    const missing = document.createElement("option");
+    missing.value = selectedId;
+    missing.textContent = "⚠ 引用的作品已不存在";
+    missing.selected = true;
+    select.appendChild(missing);
+  }
+}
+
+function renderModeAWorkPreview(card) {
+  const workId = card.querySelector(".mode-a-work-select").value;
+  const work = getWorkMap().get(workId);
+  const preview = card.querySelector(".mode-a-work-preview");
+  if (!work) {
+    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇作品；若作品庫是空的，請先到「作品庫」建立作品。</div>';
+    return;
+  }
+  const image = work.image
+    ? `<div class="mode-a-preview-image"><img src="${escapeHtml(work.image)}" alt=""></div>`
+    : `<div class="mode-a-preview-image placeholder">🎬</div>`;
+  preview.innerHTML = `
+    ${image}
+    <div>
+      <span class="section-kicker">引用作品</span>
+      <h4>${escapeHtml(work.name || "未命名作品")}</h4>
+      <p>${escapeHtml(work.intro || "尚未設定學生版作品介紹。")}</p>
+    </div>
+  `;
+}
+
+function renderModeAElementGrid(card, task) {
+  const grid = card.querySelector(".mode-a-element-grid");
+  const allElements = getAllLibraryElements();
+  const provided = new Set(task.elementRefs || []);
+  const correct = new Set(task.correctElementRefs || []);
+
+  grid.innerHTML = "";
+  if (!allElements.length) {
+    grid.innerHTML = '<div class="mode-a-missing-data">類型工具箱目前沒有要素，請先建立分類要素。</div>';
+    return;
+  }
+
+  allElements.forEach(element => {
+    const row = document.createElement("div");
+    row.className = "mode-a-element-row";
+    row.dataset.elementId = element.id;
+    row.innerHTML = `
+      <div class="mode-a-element-name">
+        <span class="mode-a-type-dot" style="background:${escapeHtml(element.typeColor)}"></span>
+        <strong>${escapeHtml(element.name)}</strong>
+        <small>${escapeHtml(element.typeIcon)} ${escapeHtml(element.typeName)}</small>
+      </div>
+      <label class="mini-check">
+        <input class="mode-a-element-provided" type="checkbox" ${provided.has(element.id) ? "checked" : ""}>
+        <span>提供</span>
+      </label>
+      <label class="mini-check reference-check">
+        <input class="mode-a-element-correct" type="checkbox" ${correct.has(element.id) ? "checked" : ""}>
+        <span>參考</span>
+      </label>
+    `;
+    const providedInput = row.querySelector(".mode-a-element-provided");
+    const correctInput = row.querySelector(".mode-a-element-correct");
+    providedInput.addEventListener("change", () => {
+      if (!providedInput.checked) correctInput.checked = false;
+    });
+    correctInput.addEventListener("change", () => {
+      if (correctInput.checked) providedInput.checked = true;
+    });
+    grid.appendChild(row);
+  });
+}
+
+function renderModeATypeGrid(card, task) {
+  const grid = card.querySelector(".mode-a-type-grid");
+  const reference = card.querySelector(".mode-a-reference-type");
+  const types = getTypeLibrary();
+  const provided = new Set(task.typeRefs || []);
+
+  grid.innerHTML = "";
+  reference.innerHTML = '<option value="">— 選擇參考類型 —</option>';
+
+  if (!types.length) {
+    grid.innerHTML = '<div class="mode-a-missing-data">類型工具箱目前沒有類型。</div>';
+    return;
+  }
+
+  types.forEach(type => {
+    const label = document.createElement("label");
+    label.className = "mode-a-type-option";
+    label.innerHTML = `
+      <input class="mode-a-type-provided" type="checkbox" value="${escapeHtml(type.id)}" ${provided.has(type.id) ? "checked" : ""}>
+      <span class="mode-a-type-icon">${escapeHtml(type.icon || "◼")}</span>
+      <span>
+        <strong>${escapeHtml(type.name || "未命名類型")}</strong>
+        <small>${escapeHtml(type.description || "")}</small>
+      </span>
+    `;
+    grid.appendChild(label);
+
+    const option = document.createElement("option");
+    option.value = type.id;
+    option.textContent = `${type.icon || "◼"} ${type.name || "未命名類型"}`;
+    option.selected = task.correctTypeRef === type.id;
+    reference.appendChild(option);
+  });
+}
+
+function refreshModeAChoices(card, taskOverride = null) {
+  const task = taskOverride || readModeATaskCard(card);
+  renderModeAWorkPreview(card);
+  renderModeAElementGrid(card, task);
+  renderModeATypeGrid(card, task);
+}
+
+function addModeATask(taskData = null) {
+  const task = taskData || newModeATask();
+  const fragment = elementTypeTaskTemplate.content.cloneNode(true);
+  const card = fragment.querySelector(".element-type-task-card");
+  card.dataset.taskId = task.id || createId();
+
+  const workSelect = card.querySelector(".mode-a-work-select");
+  populateWorkSelect(workSelect, task.workRef || "");
+  card.querySelector(".mode-a-min-elements").value = Math.max(1, Number(task.minElements) || 2);
+  card.querySelector(".mode-a-prompt").value = task.prompt || "";
+
+  workSelect.addEventListener("change", () => {
+    const work = getWorkMap().get(workSelect.value);
+    const snapshot = readModeATaskCard(card);
+    snapshot.workRef = workSelect.value;
+    if (work?.elementRefs?.length) {
+      const valid = new Set(getAllLibraryElements().map(element => element.id));
+      const workRefs = work.elementRefs.filter(id => valid.has(id));
+      if (workRefs.length && !snapshot.correctElementRefs.length) {
+        snapshot.correctElementRefs = workRefs;
+        snapshot.elementRefs = [...new Set([...snapshot.elementRefs, ...workRefs])];
+      }
+    }
+    refreshModeAChoices(card, snapshot);
+  });
+
+  card.querySelector(".mode-a-select-all-elements").addEventListener("click", () => {
+    card.querySelectorAll(".mode-a-element-provided").forEach(input => input.checked = true);
+  });
+  card.querySelector(".mode-a-select-all-types").addEventListener("click", () => {
+    card.querySelectorAll(".mode-a-type-provided").forEach(input => input.checked = true);
+  });
+  card.querySelector(".mode-a-remove-task").addEventListener("click", () => {
+    if (elementTypeTaskEditor.children.length <= 1) {
+      showToast("至少要保留一個分類任務");
+      return;
+    }
+    card.remove();
+    refreshModeATaskNumbers();
+  });
+
+  elementTypeTaskEditor.appendChild(fragment);
+  const inserted = elementTypeTaskEditor.lastElementChild;
+  refreshModeAChoices(inserted, task);
+  refreshModeATaskNumbers();
+}
+
+function readModeATaskCard(card) {
+  const elementRefs = [];
+  const correctElementRefs = [];
+  card.querySelectorAll(".mode-a-element-row").forEach(row => {
+    const id = row.dataset.elementId;
+    if (row.querySelector(".mode-a-element-provided")?.checked) elementRefs.push(id);
+    if (row.querySelector(".mode-a-element-correct")?.checked) correctElementRefs.push(id);
+  });
+
+  const typeRefs = [...card.querySelectorAll(".mode-a-type-provided:checked")].map(input => input.value);
+
+  return {
+    id: card.dataset.taskId || createId(),
+    workRef: card.querySelector(".mode-a-work-select").value,
+    prompt: card.querySelector(".mode-a-prompt").value.trim(),
+    elementRefs,
+    correctElementRefs,
+    typeRefs,
+    correctTypeRef: card.querySelector(".mode-a-reference-type").value,
+    minElements: Math.max(1, Number(card.querySelector(".mode-a-min-elements").value) || 1)
+  };
+}
+
+function readModeATasks() {
+  return [...elementTypeTaskEditor.querySelectorAll(".element-type-task-card")].map(readModeATaskCard);
+}
+
+function refreshModeATaskNumbers() {
+  [...elementTypeTaskEditor.querySelectorAll(".element-type-task-card")].forEach((card, index) => {
+    card.querySelector(".mode-a-task-index").textContent = `分類任務 ${String(index + 1).padStart(2, "0")}`;
+  });
+}
+
+function refreshModeALibraryReferences() {
+  const snapshots = readModeATasks();
+  elementTypeTaskEditor.innerHTML = "";
+  snapshots.forEach(addModeATask);
+}
+
+// ---------- V1.8 逐層揭露 ----------
+function renderProgressiveWorkPreview() {
+  const workId = progressiveTaskEditor.querySelector(".progressive-work-select")?.value;
+  const work = getWorkMap().get(workId);
+  const preview = progressiveTaskEditor.querySelector(".progressive-work-preview");
+  if (!preview) return;
+  if (!work) {
+    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇一部有逐層線索的作品。</div>';
+    return;
+  }
+  preview.innerHTML = `
+    <div class="mode-a-preview-image ${work.image ? "" : "placeholder"}">${work.image ? `<img src="${escapeHtml(work.image)}" alt="">` : "🪄"}</div>
+    <div><span class="section-kicker">引用作品</span><h4>${escapeHtml(work.name || "未命名作品")}</h4><p>${escapeHtml(work.intro || "尚未設定作品介紹。")}</p></div>
+  `;
+}
+
+function renderProgressiveClues(task) {
+  const work = getWorkMap().get(task.workRef);
+  const grid = progressiveTaskEditor.querySelector(".progressive-clue-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  if (!work?.clues?.length) {
+    grid.innerHTML = '<div class="mode-a-missing-data">這部作品還沒有逐層線索，請先到作品庫新增。</div>';
+    return;
+  }
+  const selected = new Set(task.clueRefs || []);
+  work.clues.forEach((clue,index) => {
+    const label = document.createElement("label");
+    label.className = "progressive-clue-option";
+    label.innerHTML = `<input type="checkbox" value="${escapeHtml(clue.id)}" ${selected.has(clue.id) ? "checked" : ""}><span class="clue-order">${index+1}</span><span>${escapeHtml(clue.text)}</span>`;
+    grid.appendChild(label);
+  });
+}
+
+function renderProgressiveTypes(task) {
+  const grid = progressiveTaskEditor.querySelector(".progressive-type-grid");
+  const reference = progressiveTaskEditor.querySelector(".progressive-reference-type");
+  if (!grid || !reference) return;
+  const selected = new Set(task.typeRefs || []);
+  const types = getTypeLibrary();
+  grid.innerHTML = "";
+  reference.innerHTML = '<option value="">— 不設定唯一參考類型 —</option>';
+  types.forEach(type => {
+    const label = document.createElement("label");
+    label.className = "mode-a-type-option";
+    label.innerHTML = `<input class="progressive-type-provided" type="checkbox" value="${escapeHtml(type.id)}" ${selected.has(type.id)?"checked":""}><span class="mode-a-type-icon">${escapeHtml(type.icon||"◼")}</span><span><strong>${escapeHtml(type.name)}</strong><small>${escapeHtml(type.description||"")}</small></span>`;
+    grid.appendChild(label);
+    const option = document.createElement("option");
+    option.value = type.id;
+    option.textContent = `${type.icon||"◼"} ${type.name}`;
+    option.selected = task.referenceTypeRef === type.id;
+    reference.appendChild(option);
+  });
+}
+
+function addProgressiveTask(taskData = null) {
+  const task = taskData || newProgressiveTask();
+  progressiveTaskEditor.innerHTML = "";
+  const fragment = progressiveTaskTemplate.content.cloneNode(true);
+  const card = fragment.querySelector(".progressive-task-card");
+  const workSelect = card.querySelector(".progressive-work-select");
+  populateWorkSelect(workSelect, task.workRef || "");
+  card.querySelector(".progressive-prompt").value = task.prompt || "";
+  progressiveTaskEditor.appendChild(fragment);
+
+  workSelect.addEventListener("change", () => {
+    const work = getWorkMap().get(workSelect.value);
+    const current = readProgressiveTask();
+    current.workRef = workSelect.value;
+    current.clueRefs = (work?.clues || []).map(clue => clue.id);
+    renderProgressiveWorkPreview();
+    renderProgressiveClues(current);
+  });
+  progressiveTaskEditor.querySelector(".progressive-select-all-types").addEventListener("click", () => {
+    progressiveTaskEditor.querySelectorAll(".progressive-type-provided").forEach(input => input.checked = true);
+  });
+  renderProgressiveWorkPreview();
+  renderProgressiveClues(task);
+  renderProgressiveTypes(task);
+}
+
+function readProgressiveTask() {
+  const card = progressiveTaskEditor.querySelector(".progressive-task-card");
+  if (!card) return null;
+  return {
+    workRef: card.querySelector(".progressive-work-select").value,
+    prompt: card.querySelector(".progressive-prompt").value.trim(),
+    clueRefs: [...card.querySelectorAll(".progressive-clue-option input:checked")].map(input => input.value),
+    typeRefs: [...card.querySelectorAll(".progressive-type-provided:checked")].map(input => input.value),
+    referenceTypeRef: card.querySelector(".progressive-reference-type").value
+  };
+}
+
+function refreshProgressiveLibraryReferences() {
+  if (!progressiveTaskEditor.children.length) return;
+  const snapshot = readProgressiveTask();
+  addProgressiveTask(snapshot);
+}
+
+// ---------- 模式切換 ----------
+function getSelectedMode() {
+  return modeInputs.find(input => input.checked)?.value || "drag-reveal";
+}
+
+function setSelectedMode(mode) {
+  const allowed = new Set(["drag-reveal", "open-tags", "element-type", "progressive-reveal"]);
+  const normalized = allowed.has(mode) ? mode : "drag-reveal";
+  modeInputs.forEach(input => {
+    input.checked = input.value === normalized;
+  });
+  applyModeUI(normalized);
+  ensureEditorForMode(normalized);
+}
+
+function applyModeUI(mode) {
+  const isOpen = mode === "open-tags";
+  const isElementType = mode === "element-type";
+  const isProgressive = mode === "progressive-reveal";
+
+  editorPanel?.classList.toggle("open-tags-mode", isOpen);
+  editorPanel?.classList.toggle("element-type-mode", isElementType);
+  editorPanel?.classList.toggle("progressive-reveal-mode", isProgressive);
+
+  if (templateKicker) {
+    templateKicker.textContent = isProgressive ? "模板 04" : isElementType ? "模板 03" : isOpen ? "模板 02" : "模板 01";
+  }
+  if (templateTitle) {
+    templateTitle.textContent = isProgressive
+      ? "逐層揭露"
+      : isElementType ? "要素 → 類型分類"
+      : isOpen ? "開放式標籤討論" : "探索式拖曳揭密";
+  }
+
+  const isSpecial = isElementType || isProgressive;
+  standardTaskToolbar?.classList.toggle("hidden", isSpecial);
+  caseEditor?.classList.toggle("hidden", isSpecial);
+  elementTypeEditorSection?.classList.toggle("hidden", !isElementType);
+  progressiveEditorSection?.classList.toggle("hidden", !isProgressive);
+
+  document.querySelectorAll(".card-builder-label").forEach(label => {
+    label.textContent = isOpen ? "標籤設定" : "字卡設定";
+  });
+  document.querySelectorAll(".card-builder-help").forEach(help => {
+    help.textContent = isOpen
+      ? "輸入可供學生複選的標籤或故事要素；此模式沒有標準答案。按 Enter 可快速新增下一張。"
+      : "輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。";
+  });
+  document.querySelectorAll(".reveal-settings").forEach(section => {
+    section.classList.toggle("hidden", isOpen);
+  });
+  document.querySelectorAll(".discussion-settings").forEach(section => {
+    section.classList.toggle("hidden", !isOpen);
+  });
+  document.querySelectorAll(".correct-toggle").forEach(toggle => {
+    toggle.classList.toggle("hidden", isOpen);
+  });
+
+}
+
+function refreshCaseNumbers() {
+  [...caseEditor.querySelectorAll(".case-card")].forEach((card, index) => {
+    card.querySelector(".case-index").textContent = `任務 ${String(index + 1).padStart(2, "0")}`;
+  });
+}
+
+function ensureEditorForMode(mode) {
+  if (mode === "element-type") {
+    if (!elementTypeTaskEditor.children.length) addModeATask();
+    return;
+  }
+  if (mode === "progressive-reveal") {
+    if (!progressiveTaskEditor.children.length) addProgressiveTask();
+    return;
+  }
+  if (!caseEditor.children.length) addCase();
+}
+
+function loadIntoEditor(activity) {
+  activityTitle.value = activity.title || "";
+  activitySubtitle.value = activity.subtitle || "";
+
+  caseEditor.innerHTML = "";
+  elementTypeTaskEditor.innerHTML = "";
+  progressiveTaskEditor.innerHTML = "";
+
+  if (activity.template === "element-type") {
+    const tasks = activity.tasks?.length ? activity.tasks : [newModeATask()];
+    tasks.forEach(addModeATask);
+  } else if (activity.template === "progressive-reveal") {
+    addProgressiveTask(activity.progressive || newProgressiveTask());
+  } else {
+    const cases = activity.cases?.length ? activity.cases : newBlankActivity().cases;
+    cases.forEach(addCase);
+  }
+
+  setSelectedMode(activity.template || "drag-reveal");
+}
+
+function readEditor() {
+  const template = getSelectedMode();
 
   return {
     id: currentId || createId(),
     title: activityTitle.value.trim() || "未命名活動",
     subtitle: activitySubtitle.value.trim(),
-    template: getSelectedMode(),
-    cases
+    template,
+    cases: ["drag-reveal","open-tags"].includes(template) ? readCases() : [],
+    tasks: template === "element-type" ? readModeATasks() : [],
+    progressive: template === "progressive-reveal" ? readProgressiveTask() : null
   };
 }
 
 function splitKeywords(value) {
-  return value
-    .split(/[、,，]/)
-    .map(v => v.trim())
-    .filter(Boolean);
+  return value.split(/[、,，]/).map(v => v.trim()).filter(Boolean);
 }
 
 function validateActivity(activity) {
+  if (activity.template === "progressive-reveal") {
+    const task = activity.progressive;
+    const works = getWorkMap();
+    const types = getTypeMap();
+    if (!task?.workRef || !works.has(task.workRef)) return "逐層揭露尚未選擇有效作品";
+    if (!task.clueRefs || task.clueRefs.length < 2) return "逐層揭露至少需要 2 條線索";
+    const work = works.get(task.workRef);
+    const validClues = new Set((work.clues || []).map(clue => clue.id));
+    if (task.clueRefs.some(id => !validClues.has(id))) return "逐層揭露引用了已不存在的線索";
+    if (!task.typeRefs?.length) return "逐層揭露尚未提供可選類型";
+    if (task.typeRefs.some(id => !types.has(id))) return "逐層揭露引用了已不存在的類型";
+    if (task.referenceTypeRef && !task.typeRefs.includes(task.referenceTypeRef)) return "最終參考類型必須同時提供給學生";
+    return "";
+  }
+
+  if (activity.template === "element-type") {
+    if (!activity.tasks.length) return "至少需要一個分類任務";
+    const works = getWorkMap();
+    const elements = getLibraryElementMap();
+    const types = getTypeMap();
+
+    for (let i = 0; i < activity.tasks.length; i++) {
+      const task = activity.tasks[i];
+      if (!task.workRef || !works.has(task.workRef)) return `第 ${i + 1} 個分類任務尚未選擇有效作品`;
+      if (!task.elementRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選要素`;
+      if (task.elementRefs.length < task.minElements) return `第 ${i + 1} 個分類任務提供的要素少於最低選擇數`;
+      if (!task.correctElementRefs.length) return `第 ${i + 1} 個分類任務尚未設定參考要素`;
+      if (task.correctElementRefs.some(id => !task.elementRefs.includes(id))) return `第 ${i + 1} 個分類任務的參考要素必須同時提供給學生`;
+      if (task.elementRefs.some(id => !elements.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的要素`;
+      if (!task.typeRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選類型`;
+      if (!task.correctTypeRef) return `第 ${i + 1} 個分類任務尚未設定參考類型`;
+      if (!task.typeRefs.includes(task.correctTypeRef)) return `第 ${i + 1} 個分類任務的參考類型必須同時提供給學生`;
+      if (task.typeRefs.some(id => !types.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的類型`;
+    }
+    return "";
+  }
+
   if (!activity.cases.length) return "至少需要一個關卡";
 
   for (let i = 0; i < activity.cases.length; i++) {
@@ -330,24 +855,17 @@ function validateActivity(activity) {
     }
 
     if (activity.template !== "open-tags") {
-      if (new Set(c.correctCards).size !== c.correctCards.length) {
-        return `第 ${i + 1} 關的正確字卡有重複內容`;
-      }
-
+      if (new Set(c.correctCards).size !== c.correctCards.length) return `第 ${i + 1} 關的正確字卡有重複內容`;
       const missing = c.correctCards.filter(x => !c.cards.includes(x));
-      if (missing.length) {
-        return `第 ${i + 1} 關的正確字卡「${missing[0]}」不在字卡清單裡`;
-      }
+      if (missing.length) return `第 ${i + 1} 關的正確字卡「${missing[0]}」不在字卡清單裡`;
     }
   }
-
   return "";
 }
 
 function saveCurrent(showMessage = true) {
   const activity = readEditor();
   const index = activities.findIndex(a => a.id === activity.id);
-
   if (index >= 0) activities[index] = activity;
   else activities.push(activity);
 
@@ -358,56 +876,107 @@ function saveCurrent(showMessage = true) {
   return activity;
 }
 
+// ---------- 分享快照 ----------
 function bytesToBase64Url(bytes) {
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 async function gzipBytes(bytes) {
-  const stream = new Blob([bytes])
-    .stream()
-    .pipeThrough(new CompressionStream("gzip"));
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function encodeActivity(activity) {
-  const compact = {
-    t: activity.title,
-    s: activity.subtitle,
-    m: activity.template,
-    c: activity.cases.map((c) => {
-      const isOpen = activity.template === "open-tags";
-      return {
-        t: c.title,
-        i: c.intro,
-        p: c.prompt,
-        a: c.cards,
-        o: isOpen ? [] : c.correctCards.map(card => c.cards.indexOf(card)),
-        r: isOpen ? "" : c.revealTitle,
-        k: isOpen ? [] : c.keywords,
-        d: isOpen ? "" : c.revealDescription,
-        q: isOpen ? c.discussionPrompt : ""
-      };
-    })
-  };
+function buildElementTypeSnapshot(activity) {
+  const workMap = getWorkMap();
+  const elementMap = getLibraryElementMap();
+  const typeMap = getTypeMap();
 
-  const json = JSON.stringify(compact);
-  const rawBytes = new TextEncoder().encode(json);
+  return activity.tasks.map(task => {
+    const work = workMap.get(task.workRef);
+    const elementOptions = task.elementRefs.map(id => elementMap.get(id)).filter(Boolean);
+    const typeOptions = task.typeRefs.map(id => typeMap.get(id)).filter(Boolean);
+    return {
+      w: {
+        n: work?.name || "未命名作品",
+        sh: work?.showName !== false,
+        i: work?.intro || "",
+        img: work?.image || ""
+      },
+      p: task.prompt,
+      e: elementOptions.map(element => ({
+        i: element.id,
+        n: element.name
+      })),
+      ce: task.correctElementRefs.map(id => elementOptions.findIndex(element => element.id === id)).filter(index => index >= 0),
+      y: typeOptions.map(type => ({
+        i: type.id,
+        n: type.name,
+        ic: type.icon || "◼",
+        c: type.color || "#667085",
+        d: type.description || ""
+      })),
+      cy: typeOptions.findIndex(type => type.id === task.correctTypeRef),
+      min: task.minElements
+    };
+  });
+}
+
+function buildProgressiveSnapshot(activity) {
+  const task = activity.progressive;
+  const work = getWorkMap().get(task.workRef);
+  const typeMap = getTypeMap();
+  const clueMap = new Map((work?.clues || []).map(clue => [clue.id, clue]));
+  const types = task.typeRefs.map(id => typeMap.get(id)).filter(Boolean);
+  return {
+    w:{n:work?.name||"未命名作品",sh:work?.showName!==false,i:work?.intro||"",img:work?.image||""},
+    p:task.prompt||"",
+    l:task.clueRefs.map(id=>clueMap.get(id)).filter(Boolean).map(clue=>({i:clue.id,t:clue.text})),
+    y:types.map(type=>({i:type.id,n:type.name,ic:type.icon||"◼",c:type.color||"#667085",d:type.description||""})),
+    ry:types.findIndex(type=>type.id===task.referenceTypeRef)
+  };
+}
+
+async function encodeActivity(activity) {
+  let compact;
+
+  if (activity.template === "element-type") {
+    compact = {t:activity.title,s:activity.subtitle,m:"element-type",x:buildElementTypeSnapshot(activity)};
+  } else if (activity.template === "progressive-reveal") {
+    compact = {t:activity.title,s:activity.subtitle,m:"progressive-reveal",g:buildProgressiveSnapshot(activity)};
+  } else {
+    compact = {
+      t: activity.title,
+      s: activity.subtitle,
+      m: activity.template,
+      c: activity.cases.map(c => {
+        const isOpen = activity.template === "open-tags";
+        return {
+          t: c.title,
+          i: c.intro,
+          p: c.prompt,
+          a: c.cards,
+          o: isOpen ? [] : c.correctCards.map(card => c.cards.indexOf(card)),
+          r: isOpen ? "" : c.revealTitle,
+          k: isOpen ? [] : c.keywords,
+          d: isOpen ? "" : c.revealDescription,
+          q: isOpen ? c.discussionPrompt : ""
+        };
+      })
+    };
+  }
+
+  const rawBytes = new TextEncoder().encode(JSON.stringify(compact));
 
   if (typeof CompressionStream === "function") {
     try {
       const compressed = await gzipBytes(rawBytes);
-      if (compressed.length < rawBytes.length) {
-        return `z.${bytesToBase64Url(compressed)}`;
-      }
+      if (compressed.length < rawBytes.length) return `z.${bytesToBase64Url(compressed)}`;
     } catch (error) {
       console.warn("活動資料壓縮失敗，改用未壓縮分享格式。", error);
     }
   }
-
   return `u.${bytesToBase64Url(rawBytes)}`;
 }
 
@@ -421,7 +990,6 @@ async function buildShareUrl(activity) {
 async function previewOrShare(openPreview = false) {
   const activity = saveCurrent(false);
   const validation = validateActivity(activity);
-
   if (validation) {
     showToast(validation);
     return;
@@ -442,8 +1010,8 @@ async function previewOrShare(openPreview = false) {
   qrNotice.textContent = "";
 
   if (url.length > QR_SAFE_MAX_LENGTH) {
-    qrcodeEl.innerHTML = "<p class='subtle'>活動內容較多，已超過第一版 QR Code 的安全容量。</p>";
-    qrNotice.textContent = "學生連結仍可使用；建議先精簡文字或拆成兩個活動。後續升級活動代碼後即可解除這個限制。";
+    qrcodeEl.innerHTML = "<p class='subtle'>活動內容較多，已超過目前 QR Code 的安全容量。</p>";
+    qrNotice.textContent = "學生連結仍可使用；建議精簡作品介紹或減少一次分享的任務數。";
     qrNotice.classList.remove("hidden");
   } else if (window.QRCode) {
     try {
@@ -456,7 +1024,6 @@ async function previewOrShare(openPreview = false) {
     } catch (error) {
       console.error("QR Code 產生失敗", error);
       qrcodeEl.innerHTML = "<p class='subtle'>QR Code 產生失敗，請使用下方學生連結。</p>";
-      qrNotice.textContent = "如果活動內容較多，可先精簡文字後再試一次。";
       qrNotice.classList.remove("hidden");
     }
   } else {
@@ -464,21 +1031,16 @@ async function previewOrShare(openPreview = false) {
     qrNotice.textContent = "請確認網路連線後重新整理；學生連結本身不受影響。";
     qrNotice.classList.remove("hidden");
   }
-
   shareDialog.showModal();
 }
 
 function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (ch) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
+  return String(text ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
   })[ch]);
 }
 
-el("newActivityBtn").addEventListener("click", () => {
+function createNewActivity() {
   saveCurrent(false);
   const activity = newBlankActivity();
   activities.unshift(activity);
@@ -487,10 +1049,50 @@ el("newActivityBtn").addEventListener("click", () => {
   renderLibrary();
   loadIntoEditor(activity);
   showToast("已建立新活動");
-});
+}
 
+
+function getActivitySummaries() {
+  return activities.map(activity => ({
+    id: activity.id,
+    title: activity.title || "未命名活動",
+    subtitle: activity.subtitle || "",
+    template: activity.template || "drag-reveal",
+    taskCount: activity.template === "element-type"
+      ? (activity.tasks?.length || 0)
+      : activity.template === "progressive-reveal"
+        ? (activity.progressive?.clueRefs?.length || 0)
+        : (activity.cases?.length || 0)
+  }));
+}
+
+async function buildSessionActivitySnapshot(activityId) {
+  if (currentId === activityId) saveCurrent(false);
+
+  const activity = activities.find(item => item.id === activityId);
+  if (!activity) throw new Error("找不到指定活動");
+
+  const validation = validateActivity(activity);
+  if (validation) throw new Error(validation);
+
+  return {
+    id: activity.id,
+    title: activity.title || "未命名活動",
+    subtitle: activity.subtitle || "",
+    template: activity.template || "drag-reveal",
+    stageCount: activity.template === "progressive-reveal" ? (activity.progressive?.clueRefs?.length || 1) : 1,
+    encoded: await encodeActivity(activity)
+  };
+}
+
+window.ClassroomActivityAPI = {
+  list: getActivitySummaries,
+  buildSessionSnapshot: buildSessionActivitySnapshot
+};
+
+// ---------- 事件 ----------
 el("addCaseBtn").addEventListener("click", () => addCase());
-
+el("addElementTypeTaskBtn").addEventListener("click", () => addModeATask());
 el("saveBtn").addEventListener("click", () => saveCurrent(true));
 
 el("duplicateBtn").addEventListener("click", () => {
@@ -498,6 +1100,7 @@ el("duplicateBtn").addEventListener("click", () => {
   const copy = cloneData(source);
   copy.id = createId();
   copy.title = `${source.title}－副本`;
+  (copy.tasks || []).forEach(task => task.id = createId());
   activities.unshift(copy);
   currentId = copy.id;
   persist();
@@ -507,15 +1110,9 @@ el("duplicateBtn").addEventListener("click", () => {
 });
 
 el("deleteBtn").addEventListener("click", () => {
-  if (!currentId) return;
-  if (!confirm("確定要刪除這個活動嗎？")) return;
-
+  if (!currentId || !confirm("確定要刪除這個活動嗎？")) return;
   activities = activities.filter(a => a.id !== currentId);
-
-  if (!activities.length) {
-    activities = [newBlankActivity()];
-  }
-
+  if (!activities.length) activities = [newBlankActivity()];
   currentId = activities[0].id;
   persist();
   renderLibrary();
@@ -528,19 +1125,20 @@ el("shareBtn").addEventListener("click", () => previewOrShare(false));
 
 modeInputs.forEach(input => {
   input.addEventListener("change", () => {
-    if (input.checked) applyModeUI(input.value);
+    if (!input.checked) return;
+    applyModeUI(input.value);
+    ensureEditorForMode(input.value);
   });
 });
 
 el("copyUrlBtn").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(shareUrlInput.value);
-    showToast("連結已複製");
   } catch {
     shareUrlInput.select();
     document.execCommand("copy");
-    showToast("連結已複製");
   }
+  showToast("連結已複製");
 });
 
 loadActivities();

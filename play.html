@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>課堂互動活動</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="v14.css" />
+  <link rel="stylesheet" href="v16.css" />
+  <link rel="stylesheet" href="v17.css" />
+  <link rel="stylesheet" href="v18.css" />
+  <script src="session-api.js" defer></script>
   <script src="play.js" defer></script>
 </head>
 <body class="student-page">
@@ -23,9 +28,10 @@
     <section id="activityState" class="hidden">
       <header class="student-hero">
         <div>
-          <p class="eyebrow">CLASSROOM MISSION</p>
+          <p class="eyebrow">今日課堂任務</p>
           <h1 id="studentTitle">活動名稱</h1>
           <p id="studentSubtitle" class="subtle"></p>
+        <div id="studentSessionBadge" class="student-session-badge hidden"></div>
         </div>
         <div class="progress-wrap">
           <div class="progress-meta">
@@ -41,12 +47,84 @@
       <section id="missionCard" class="student-card mission-card">
         <div class="mission-heading">
           <div>
-            <span id="studentCaseIndex" class="section-kicker">CASE 01</span>
+            <span id="studentCaseIndex" class="section-kicker">任務 01</span>
             <h2 id="studentCaseTitle">作品名稱</h2>
+            <div id="studentWorkMedia" class="student-work-media hidden"><img id="studentWorkImage" alt="" /></div>
             <div id="studentCaseIntro" class="work-intro hidden"></div>
             <p id="studentCasePrompt" class="case-prompt subtle"></p>
           </div>
           <span id="lockBadge" class="status-chip">分析中</span>
+        </div>
+
+        <div id="elementTypeInteraction" class="element-type-interaction hidden">
+          <section id="elementStepPanel" class="classification-step">
+            <div class="classification-step-head">
+              <span class="step-number">STEP 1</span>
+              <div>
+                <h3>先找出故事的重要要素</h3>
+                <p>先不要急著猜類型，從作品內容中找出你的判斷證據。</p>
+              </div>
+            </div>
+            <div id="elementChoiceGrid" class="classification-choice-grid"></div>
+            <div class="classification-step-footer">
+              <span id="elementSelectionStatus">已選 0 個要素</span>
+              <button id="elementToTypeBtn" class="btn btn-primary">下一步：判斷類型</button>
+            </div>
+          </section>
+
+          <section id="typeStepPanel" class="classification-step hidden">
+            <div class="classification-step-head">
+              <span class="step-number">STEP 2</span>
+              <div>
+                <h3>根據剛才的要素判斷類型</h3>
+                <p>看看你選出的證據，哪一種類型最能代表這個故事？</p>
+              </div>
+            </div>
+
+            <div class="chosen-evidence-box">
+              <span class="summary-label">我找到的故事要素</span>
+              <div id="chosenElementCloud" class="keyword-cloud"></div>
+            </div>
+
+            <div id="typeChoiceGrid" class="type-choice-grid"></div>
+
+            <div class="classification-step-footer">
+              <button id="typeBackBtn" class="btn btn-secondary">← 回去調整要素</button>
+              <button id="submitElementTypeBtn" class="btn btn-primary">提交分類判斷</button>
+            </div>
+          </section>
+        </div>
+
+        <div id="progressiveInteraction" class="progressive-interaction hidden">
+          <section class="progressive-clue-board">
+            <div class="progressive-student-head">
+              <div>
+                <span id="progressiveStageKicker" class="step-number">線索 1 / 1</span>
+                <h3>目前你知道了什麼？</h3>
+              </div>
+              <span id="progressiveSyncBadge" class="sync-badge">個人預覽</span>
+            </div>
+            <div id="progressiveClueList" class="progressive-clue-list"></div>
+          </section>
+
+          <section id="progressiveJudgementPanel" class="classification-step progressive-judgement-panel">
+            <div class="classification-step-head">
+              <span class="step-number">判斷</span>
+              <div><h3>根據目前線索，你怎麼分類？</h3><p>可以保留上一層答案，也可以因為新線索改變判斷。</p></div>
+            </div>
+            <div id="progressiveTypeGrid" class="type-choice-grid"></div>
+            <div class="classification-step-footer">
+              <span id="progressivePreviousAnswer">這是你的第一次判斷。</span>
+              <button id="submitProgressiveBtn" class="btn btn-primary">提交這一層判斷</button>
+            </div>
+          </section>
+
+          <section id="progressiveWaitingPanel" class="progressive-waiting-panel hidden">
+            <div class="waiting-icon">⏳</div>
+            <h3>這一層已提交</h3>
+            <p id="progressiveWaitingText">等待老師公開下一條線索…</p>
+            <button id="selfNextClueBtn" class="btn btn-primary hidden" type="button">公開下一條線索 →</button>
+          </section>
         </div>
 
         <div id="interactionArea">
@@ -84,7 +162,7 @@
         </div>
 
         <div id="revealPanel" class="reveal-panel hidden">
-          <p class="section-kicker">揭密</p>
+          <p class="section-kicker">線索揭曉</p>
           <div id="keywordCloud" class="keyword-cloud"></div>
           <div class="reveal-title-wrap">
             <span class="sparkle">✦</span>
@@ -96,8 +174,47 @@
           <button id="nextCaseBtn" class="btn btn-primary">下一關</button>
         </div>
 
+        <div id="progressiveResultPanel" class="progressive-result-panel hidden">
+          <p class="section-kicker">判斷歷程</p>
+          <div class="classification-result-heading">
+            <div class="big-icon">🧭</div>
+            <div><h2>哪一條線索讓你改變想法？</h2><p class="subtle">回頭看看每一層的判斷變化，再準備和全班分享你的理由。</p></div>
+          </div>
+          <div id="progressiveHistoryList" class="progressive-history-list"></div>
+          <div id="progressiveReferenceResult" class="progressive-reference-result hidden"></div>
+          <button id="progressiveFinishBtn" class="btn btn-primary">完成活動</button>
+        </div>
+
+        <div id="elementTypeResultPanel" class="element-type-result-panel hidden">
+          <p class="section-kicker">分類結果</p>
+          <div class="classification-result-heading">
+            <div id="elementTypeResultIcon" class="big-icon">🧠</div>
+            <div>
+              <h2 id="elementTypeResultTitle">來比較你的判斷</h2>
+              <p id="elementTypeResultText" class="subtle"></p>
+            </div>
+          </div>
+
+          <div class="classification-result-grid">
+            <section>
+              <span class="summary-label">你的故事要素</span>
+              <div id="studentElementResult" class="keyword-cloud"></div>
+              <span class="summary-label result-type-label">你的類型判斷</span>
+              <div id="studentTypeResult" class="result-type-card"></div>
+            </section>
+            <section>
+              <span class="summary-label">參考故事要素</span>
+              <div id="referenceElementResult" class="keyword-cloud"></div>
+              <span class="summary-label result-type-label">參考類型</span>
+              <div id="referenceTypeResult" class="result-type-card"></div>
+            </section>
+          </div>
+
+          <button id="elementTypeNextBtn" class="btn btn-primary">下一關</button>
+        </div>
+
         <div id="discussionPanel" class="discussion-panel hidden">
-          <p class="section-kicker">OPEN DISCUSSION</p>
+          <p class="section-kicker">討論時間</p>
           <div class="discussion-heading">
             <div class="big-icon">💬</div>
             <div>
@@ -122,8 +239,8 @@
 
       <section id="completePanel" class="student-card complete-card hidden">
         <div class="big-icon">🏁</div>
-        <p class="section-kicker">MISSION COMPLETE</p>
-        <h2>活動完成！</h2>
+        <p class="section-kicker">挑戰完成</p>
+        <h2>任務全部完成！</h2>
         <p id="completeText">你已經完成所有關卡。現在回頭看看：不同作品的主要元素，會如何影響我們對故事類型的判斷？</p>
         <button id="restartBtn" class="btn btn-secondary">重新挑戰</button>
       </section>
