@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>課堂互動工具｜教師端</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body class="teacher-page">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">INTERACTIVE CLASSROOM</p>
+      <h1>課堂互動工具</h1>
+      <p class="subtle">建立活動、預覽、產生 QR Code，讓學生直接掃碼操作。</p>
+    </div>
+    <button id="newActivityBtn" class="btn btn-secondary">＋ 新活動</button>
+  </header>
+
+  <main class="layout">
+    <aside class="panel library-panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-kicker">活動庫</span>
+          <h2>我的活動</h2>
+        </div>
+      </div>
+
+      <div id="activityList" class="activity-list"></div>
+
+      <div class="tip-box">
+        <strong>第一版說明</strong>
+        <p>活動會儲存在這台裝置的瀏覽器中；分享給學生時，活動內容會寫入分享網址。</p>
+      </div>
+    </aside>
+
+    <section class="panel editor-panel">
+      <div class="panel-heading editor-title-row">
+        <div>
+          <span class="section-kicker">模板 01</span>
+          <h2>探索式拖曳揭密</h2>
+        </div>
+        <span class="status-chip">V1.1</span>
+      </div>
+
+      <div class="form-grid two-col">
+        <label class="field">
+          <span>活動名稱</span>
+          <input id="activityTitle" type="text" placeholder="例如：故事鑑定所" />
+        </label>
+
+        <label class="field">
+          <span>活動說明</span>
+          <input id="activitySubtitle" type="text" placeholder="例如：找出作品裡真正重要的故事線索" />
+        </label>
+      </div>
+
+      <div class="editor-toolbar">
+        <div>
+          <span class="section-kicker">關卡</span>
+          <h3>活動內容</h3>
+        </div>
+        <button id="addCaseBtn" class="btn btn-secondary">＋ 新增關卡</button>
+      </div>
+
+      <div id="caseEditor"></div>
+
+      <div class="sticky-actions">
+        <div class="action-left">
+          <button id="saveBtn" class="btn btn-primary">儲存活動</button>
+          <button id="duplicateBtn" class="btn btn-secondary">複製活動</button>
+          <button id="deleteBtn" class="btn btn-danger-soft">刪除</button>
+        </div>
+        <div class="action-right">
+          <button id="previewBtn" class="btn btn-secondary">學生畫面預覽</button>
+          <button id="shareBtn" class="btn btn-accent">產生分享 QR Code</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="shareDialog" class="share-dialog">
+    <form method="dialog" class="share-card">
+      <button class="dialog-close" aria-label="關閉">×</button>
+      <span class="section-kicker">學生加入活動</span>
+      <h2 id="shareActivityName">活動名稱</h2>
+      <p class="subtle">請學生掃描 QR Code，或直接開啟下方連結。</p>
+
+      <div id="qrcode" class="qr-wrap" aria-label="QR Code"></div>
+      <p id="qrNotice" class="small-note qr-notice hidden"></p>
+
+      <label class="field">
+        <span>學生連結</span>
+        <div class="copy-row">
+          <input id="shareUrl" type="text" readonly />
+          <button id="copyUrlBtn" type="button" class="btn btn-secondary">複製</button>
+        </div>
+      </label>
+
+      <div class="dialog-actions">
+        <a id="openStudentLink" class="btn btn-primary" target="_blank" rel="noopener">開啟學生畫面</a>
+      </div>
+
+      <p class="small-note">
+        第一版使用「網址攜帶活動資料」的方式，因此活動若包含大量文字，網址會變長；之後可再升級為活動代碼＋雲端資料庫。
+      </p>
+    </form>
+  </dialog>
+
+  <template id="caseTemplate">
+    <article class="case-card">
+      <div class="case-card-header">
+        <div>
+          <span class="case-index">CASE 01</span>
+          <h3>關卡設定</h3>
+        </div>
+        <button type="button" class="icon-btn remove-case" title="刪除關卡">🗑</button>
+      </div>
+
+      <div class="form-grid two-col">
+        <label class="field">
+          <span>作品／情境名稱</span>
+          <input class="case-title" type="text" placeholder="例如：名偵探柯南" />
+        </label>
+        <label class="field">
+          <span>提示文字</span>
+          <input class="case-prompt" type="text" placeholder="例如：哪些元素最能代表這個故事？" />
+        </label>
+      </div>
+
+      <section class="card-builder">
+        <div class="card-builder-header">
+          <div>
+            <span class="field-label">字卡設定</span>
+            <p class="field-help">輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。</p>
+          </div>
+          <button type="button" class="btn btn-secondary add-card-btn">＋ 新增字卡</button>
+        </div>
+        <div class="card-editor-list"></div>
+      </section>
+
+      <div class="form-grid two-col">
+        <label class="field">
+          <span>揭露標題</span>
+          <input class="case-reveal-title" type="text" placeholder="例如：推理小說" />
+        </label>
+        <label class="field">
+          <span>揭露關鍵字（用、分隔）</span>
+          <input class="case-keywords" type="text" placeholder="謎團、線索、推理、真相" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>揭露說明</span>
+        <textarea class="case-reveal-desc" rows="3" placeholder="例如：故事通常以謎團為核心，角色透過線索與推理逐步找出真相。"></textarea>
+      </label>
+    </article>
+  </template>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

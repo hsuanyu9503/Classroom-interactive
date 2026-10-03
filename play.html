@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>課堂互動活動</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="play.js" defer></script>
+</head>
+<body class="student-page">
+  <main id="studentApp" class="student-shell">
+    <section id="loadingState" class="student-card centered-card">
+      <div class="loader"></div>
+      <p>正在載入活動…</p>
+    </section>
+
+    <section id="errorState" class="student-card centered-card hidden">
+      <div class="big-icon">⚠️</div>
+      <h1>找不到活動資料</h1>
+      <p class="subtle">請重新掃描老師提供的 QR Code。</p>
+    </section>
+
+    <section id="activityState" class="hidden">
+      <header class="student-hero">
+        <div>
+          <p class="eyebrow">CLASSROOM MISSION</p>
+          <h1 id="studentTitle">活動名稱</h1>
+          <p id="studentSubtitle" class="subtle"></p>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-meta">
+            <span id="caseCounter">1 / 1</span>
+            <span id="progressText">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+        </div>
+      </header>
+
+      <section id="missionCard" class="student-card mission-card">
+        <div class="mission-heading">
+          <div>
+            <span id="studentCaseIndex" class="section-kicker">CASE 01</span>
+            <h2 id="studentCaseTitle">作品名稱</h2>
+            <p id="studentCasePrompt" class="subtle"></p>
+          </div>
+          <span id="lockBadge" class="status-chip">分析中</span>
+        </div>
+
+        <div id="interactionArea">
+          <div class="interaction-grid">
+            <section>
+              <div class="mini-heading">
+                <span>故事線索</span>
+                <small>點一下或拖曳到右側</small>
+              </div>
+              <div id="cardPool" class="card-pool drop-zone"></div>
+            </section>
+
+            <section>
+              <div class="mini-heading">
+                <span>我的判斷</span>
+                <small>放入最能代表作品的字卡</small>
+              </div>
+              <div id="answerZone" class="answer-zone drop-zone">
+                <div id="emptyHint" class="empty-hint">把你選中的字卡放到這裡</div>
+              </div>
+            </section>
+          </div>
+
+          <div class="student-actions">
+            <button id="resetCaseBtn" class="btn btn-secondary">重新選擇</button>
+            <button id="submitCaseBtn" class="btn btn-primary">送出判斷</button>
+          </div>
+        </div>
+
+        <div id="feedbackPanel" class="feedback-panel hidden">
+          <div id="feedbackIcon" class="feedback-icon">✨</div>
+          <h3 id="feedbackTitle">判斷結果</h3>
+          <p id="feedbackText"></p>
+          <button id="revealBtn" class="btn btn-accent">看看這些線索指向哪裡</button>
+        </div>
+
+        <div id="revealPanel" class="reveal-panel hidden">
+          <p class="section-kicker">揭密</p>
+          <div id="keywordCloud" class="keyword-cloud"></div>
+          <div class="reveal-title-wrap">
+            <span class="sparkle">✦</span>
+            <h2 id="revealTitle"></h2>
+            <span class="sparkle">✦</span>
+          </div>
+          <p id="revealDescription" class="reveal-description"></p>
+
+          <button id="nextCaseBtn" class="btn btn-primary">下一關</button>
+        </div>
+      </section>
+
+      <section id="completePanel" class="student-card complete-card hidden">
+        <div class="big-icon">🏁</div>
+        <p class="section-kicker">MISSION COMPLETE</p>
+        <h2>活動完成！</h2>
+        <p>你已經完成所有關卡。現在回頭看看：不同作品的主要元素，會如何影響我們對故事類型的判斷？</p>
+        <button id="restartBtn" class="btn btn-secondary">重新挑戰</button>
+      </section>
+    </section>
+  </main>
+  <div id="studentToast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
