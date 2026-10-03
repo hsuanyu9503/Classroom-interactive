@@ -37,6 +37,7 @@ const defaultActivity = {
   cases: [
     {
       title: "名偵探柯南",
+      intro: "高中生偵探工藤新一因意外變成小學生模樣，化名江戶川柯南，一邊隱藏身分，一邊運用觀察與推理破解各種案件。",
       prompt: "哪些元素最能代表這個故事？",
       cards: ["蒐集線索", "解開謎團", "找出犯人", "使用魔法", "前往異世界"],
       correctCards: ["蒐集線索", "解開謎團", "找出犯人"],
@@ -86,6 +87,7 @@ function newBlankActivity() {
     cases: [
       {
         title: "",
+        intro: "",
         prompt: "",
         cards: [],
         correctCards: [],
@@ -168,6 +170,7 @@ function addCase(caseData = {}) {
   const card = fragment.querySelector(".case-card");
 
   card.querySelector(".case-title").value = caseData.title || "";
+  card.querySelector(".case-intro").value = caseData.intro || "";
   card.querySelector(".case-prompt").value = caseData.prompt || "";
   card.querySelector(".case-reveal-title").value = caseData.revealTitle || "";
   card.querySelector(".case-keywords").value = (caseData.keywords || []).join("、");
@@ -230,6 +233,7 @@ function readEditor() {
 
     return {
       title: card.querySelector(".case-title").value.trim(),
+      intro: card.querySelector(".case-intro").value.trim(),
       prompt: card.querySelector(".case-prompt").value.trim(),
       cards,
       correctCards,
@@ -295,12 +299,28 @@ function saveCurrent(showMessage = true) {
   return activity;
 }
 
-function encodeActivity(activity) {
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function gzipBytes(bytes) {
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function encodeActivity(activity) {
   const compact = {
     t: activity.title,
     s: activity.subtitle,
     c: activity.cases.map((c) => ({
       t: c.title,
+      i: c.intro,
       p: c.prompt,
       a: c.cards,
       o: c.correctCards.map(card => c.cards.indexOf(card)),
@@ -311,20 +331,30 @@ function encodeActivity(activity) {
   };
 
   const json = JSON.stringify(compact);
-  const bytes = new TextEncoder().encode(json);
-  let binary = "";
-  bytes.forEach(b => binary += String.fromCharCode(b));
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  const rawBytes = new TextEncoder().encode(json);
+
+  if (typeof CompressionStream === "function") {
+    try {
+      const compressed = await gzipBytes(rawBytes);
+      if (compressed.length < rawBytes.length) {
+        return `z.${bytesToBase64Url(compressed)}`;
+      }
+    } catch (error) {
+      console.warn("活動資料壓縮失敗，改用未壓縮分享格式。", error);
+    }
+  }
+
+  return `u.${bytesToBase64Url(rawBytes)}`;
 }
 
-function buildShareUrl(activity) {
-  const encoded = encodeActivity(activity);
+async function buildShareUrl(activity) {
+  const encoded = await encodeActivity(activity);
   const path = new URL("play.html", window.location.href);
   path.hash = `data=${encoded}`;
   return path.toString();
 }
 
-function previewOrShare(openPreview = false) {
+async function previewOrShare(openPreview = false) {
   const activity = saveCurrent(false);
   const validation = validateActivity(activity);
 
@@ -333,7 +363,7 @@ function previewOrShare(openPreview = false) {
     return;
   }
 
-  const url = buildShareUrl(activity);
+  const url = await buildShareUrl(activity);
 
   if (openPreview) {
     window.open(url, "_blank", "noopener");

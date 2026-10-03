@@ -539,6 +539,11 @@ input:focus, textarea:focus {
   margin-bottom: 22px;
 }
 
+.mission-heading > div {
+  min-width: 0;
+  flex: 1;
+}
+
 .interaction-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -811,7 +816,12 @@ input:focus, textarea:focus {
   }
 
   .mission-heading {
-    align-items: flex-start;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mission-heading .status-chip {
+    align-self: flex-start;
   }
 
   .mini-heading {
@@ -836,4 +846,47 @@ input:focus, textarea:focus {
 .qr-notice {
   margin: -8px 0 18px;
   text-align: center;
+}
+
+
+/* V1.2 — work introduction */
+.optional-tag {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.work-intro {
+  max-width: 760px;
+  margin: 12px 0 12px;
+  padding: 14px 16px;
+  border: 1px solid #e0e7ff;
+  border-left: 4px solid var(--primary);
+  border-radius: 14px;
+  background: #f8faff;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.case-prompt {
+  margin-top: 10px;
+  margin-bottom: 0;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .work-intro {
+    padding: 12px 13px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
 }

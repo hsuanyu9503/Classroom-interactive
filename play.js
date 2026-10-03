@@ -5,15 +5,42 @@ let currentCaseIndex = 0;
 let selected = new Set();
 let draggedCard = null;
 
-function decodeActivity(encoded) {
+function base64UrlToBytes(encoded) {
   const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
   const padding = "=".repeat((4 - normalized.length % 4) % 4);
   const binary = atob(normalized + padding);
-  const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+  return Uint8Array.from(binary, c => c.charCodeAt(0));
+}
+
+async function gunzipBytes(bytes) {
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function decodeActivity(encoded) {
+  let payload = encoded;
+  let bytes;
+
+  if (encoded.startsWith("z.")) {
+    if (typeof DecompressionStream !== "function") {
+      throw new Error("compression-not-supported");
+    }
+    payload = encoded.slice(2);
+    bytes = await gunzipBytes(base64UrlToBytes(payload));
+  } else if (encoded.startsWith("u.")) {
+    payload = encoded.slice(2);
+    bytes = base64UrlToBytes(payload);
+  } else {
+    // V1～V1.2 舊連結：沒有格式前綴，直接以 Base64URL 還原。
+    bytes = base64UrlToBytes(payload);
+  }
+
   const json = new TextDecoder().decode(bytes);
   const raw = JSON.parse(json);
 
-  // V1.1 compact share format. Legacy full-format links are still supported.
+  // 精簡分享格式。舊版完整格式仍可直接使用。
   if (raw && Array.isArray(raw.c)) {
     return {
       title: raw.t || "課堂活動",
@@ -21,6 +48,7 @@ function decodeActivity(encoded) {
       template: "drag-reveal",
       cases: raw.c.map((c) => ({
         title: c.t || "",
+        intro: c.i || "",
         prompt: c.p || "",
         cards: Array.isArray(c.a) ? c.a : [],
         correctCards: Array.isArray(c.o)
@@ -36,14 +64,14 @@ function decodeActivity(encoded) {
   return raw;
 }
 
-function loadFromUrl() {
+async function loadFromUrl() {
   try {
     const hash = window.location.hash.replace(/^#/, "");
     const params = new URLSearchParams(hash);
     const data = params.get("data");
     if (!data) throw new Error("missing-data");
 
-    activity = decodeActivity(data);
+    activity = await decodeActivity(data);
     if (!activity || !Array.isArray(activity.cases) || !activity.cases.length) {
       throw new Error("invalid-activity");
     }
@@ -66,6 +94,12 @@ function renderCase() {
 
   el("studentCaseIndex").textContent = `CASE ${String(currentCaseIndex + 1).padStart(2, "0")}`;
   el("studentCaseTitle").textContent = c.title;
+
+  const intro = el("studentCaseIntro");
+  const introText = (c.intro || "").trim();
+  intro.textContent = introText;
+  intro.classList.toggle("hidden", !introText);
+
   el("studentCasePrompt").textContent = c.prompt || "選出最能代表這個作品／情境的字卡。";
   el("caseCounter").textContent = `${currentCaseIndex + 1} / ${activity.cases.length}`;
   el("lockBadge").textContent = "分析中";
