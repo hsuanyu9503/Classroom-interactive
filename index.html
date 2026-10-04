@@ -16,7 +16,7 @@
       <h1>課堂互動工具</h1>
       <p class="subtle">先整理共用教材，再把展示、互動與收束串成完整的一堂課。</p>
     </div>
-    <span class="workspace-version">V1.9.4</span>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V1.9.6</span></div>
   </header>
 
   <nav class="workspace-tabs" aria-label="工作區切換">
@@ -379,7 +379,7 @@
         </div>
         <div class="action-right">
           <button id="previewBtn" class="btn btn-secondary">預覽學生畫面</button>
-          <button id="shareBtn" class="btn btn-accent">分享給學生</button>
+          <button id="shareBtn" class="btn btn-accent">🔗 分享獨立活動</button>
         </div>
       </div>
     </section>
@@ -394,7 +394,7 @@
           <div>
             <span class="section-kicker">CLASSROOM SESSION</span>
             <h2>課堂連線與學生加入</h2>
-            <p class="subtle">建立課堂代碼，讓學生掃 QR Code、輸入座號後進入活動；作答資料會綁定這次 Session。</p>
+            <p class="subtle">用於正式課堂互動：學生輸入座號加入，作答可回傳教師端，並支援逐層同步與全班統計。跨裝置使用需先完成 Supabase 雲端設定。</p>
           </div>
           <span id="cloudModeBadge" class="cloud-mode-badge local">本機測試模式</span>
         </div>
@@ -442,7 +442,7 @@
 
         <div class="session-create-actions">
           <div>
-            <strong>建立後會產生 5 碼課堂代碼與加入 QR Code。</strong>
+            <strong>建立後會產生 5 碼課堂代碼；雲端模式會提供可跨裝置使用的加入 QR Code。</strong>
             <small id="sessionCreateHint">尚未設定雲端時，Session 僅能在同一個瀏覽器中測試。</small>
           </div>
           <button id="createSessionBtn" class="btn btn-primary" type="button">＋ 建立課堂 Session</button>
@@ -466,7 +466,7 @@
           <section class="session-code-panel">
             <span class="summary-label">課堂代碼</span>
             <div id="activeSessionCode" class="session-code">ABCDE</div>
-            <p>學生可掃描右側 QR Code，或開啟加入連結後輸入這組代碼。</p>
+            <p id="sessionJoinHelp">雲端模式下，學生可掃描 QR Code，或開啟加入連結後輸入這組代碼。</p>
             <div class="copy-row">
               <input id="sessionJoinUrl" type="text" readonly />
               <button id="copySessionUrlBtn" class="btn btn-secondary" type="button">複製連結</button>
@@ -577,12 +577,50 @@
     </main>
   </section>
 
+  <dialog id="dataManagementDialog" class="share-dialog data-management-dialog">
+    <form method="dialog" class="share-card">
+      <button class="dialog-close" aria-label="關閉">×</button>
+      <span class="section-kicker">DATA MANAGEMENT</span>
+      <h2>教材資料管理</h2>
+      <p class="subtle">備份與還原課程、類型工具箱、作品庫與活動模板。Supabase 金鑰、Session 紀錄與學生作答不會寫入備份檔。</p>
+
+      <div class="backup-summary-grid">
+        <div><span>課程</span><strong id="backupCourseCount">0</strong></div>
+        <div><span>類型</span><strong id="backupTypeCount">0</strong></div>
+        <div><span>作品</span><strong id="backupWorkCount">0</strong></div>
+        <div><span>活動</span><strong id="backupActivityCount">0</strong></div>
+      </div>
+
+      <section class="backup-action-card">
+        <div>
+          <strong>📤 匯出教材備份</strong>
+          <p>下載一份 JSON 備份，可保存到雲端硬碟或帶到另一台電腦。</p>
+        </div>
+        <button id="exportBackupBtn" type="button" class="btn btn-primary">下載備份</button>
+      </section>
+
+      <section class="backup-action-card">
+        <div>
+          <strong>📥 匯入教材備份</strong>
+          <p>匯入後會覆蓋目前的課程、類型、作品與活動資料，完成後重新載入工作台。</p>
+        </div>
+        <button id="importBackupBtn" type="button" class="btn btn-secondary">選擇備份檔</button>
+        <input id="backupFileInput" type="file" accept=".json,application/json" hidden />
+      </section>
+
+      <div class="backup-warning">
+        <strong>匯入前建議先匯出目前資料</strong>
+        <p>備份不包含 Supabase Project URL、Publishable key、課堂 Session 或學生作答紀錄。</p>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="shareDialog" class="share-dialog">
     <form method="dialog" class="share-card">
       <button class="dialog-close" aria-label="關閉">×</button>
       <span class="section-kicker">分享活動</span>
       <h2 id="shareActivityName">活動名稱</h2>
-      <p class="subtle">QR Code 會依活動內容自動調整尺寸；投影時請保留完整白邊，或複製連結分享給學生。</p>
+      <p class="subtle">學生可直接開啟並自行作答；這種分享不會把作答回傳教師端。QR Code 會依活動內容自動調整尺寸。</p>
 
       <div id="qrcode" class="qr-wrap" aria-label="QR Code"></div>
       <p id="qrNotice" class="small-note qr-notice hidden"></p>

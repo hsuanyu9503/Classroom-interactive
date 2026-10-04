@@ -116,7 +116,22 @@
     return String(text ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
   }
 
+  function saveWorkspaceBeforeLeaving(nextView = "") {
+    const activeView = document.querySelector(".workspace-tab.active")?.dataset.view || "";
+    if (!activeView || activeView === nextView) return;
+
+    try {
+      if (activeView === "courses") saveCurrentCourse(false);
+      else if (activeView === "types") saveCurrentType(false);
+      else if (activeView === "works") saveCurrentWork(false);
+      else if (activeView === "activities" && typeof saveCurrent === "function" && currentId) saveCurrent(false);
+    } catch (error) {
+      console.warn("工作區自動儲存失敗", error);
+    }
+  }
+
   function switchView(view) {
+    saveWorkspaceBeforeLeaving(view);
     document.querySelectorAll(".workspace-tab").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
     document.querySelectorAll(".workspace-view").forEach(section => section.classList.toggle("active", section.dataset.workspaceView === view));
 
@@ -136,7 +151,19 @@
     }
   }
 
-  document.querySelectorAll(".workspace-tab").forEach(btn => btn.addEventListener("click", () => switchView(btn.dataset.view)));
+  document.querySelectorAll(".workspace-tab").forEach(btn => {
+    btn.addEventListener("click", () => switchView(btn.dataset.view));
+    btn.addEventListener("v195-save-current", () => {
+      const view = btn.dataset.view;
+      try {
+        if (view === "courses") saveCurrentCourse(false);
+        else if (view === "types") saveCurrentType(false);
+        else if (view === "works") saveCurrentWork(false);
+      } catch (error) {
+        console.warn("教材自動儲存失敗", error);
+      }
+    });
+  });
   $("newActivityVisibleBtn")?.addEventListener("click", () => {
     if (typeof createNewActivity === "function") {
       createNewActivity();
@@ -479,6 +506,16 @@
 
   function showMiniToast(message){const toast=$("toast");if(!toast)return;toast.textContent=message;toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),1500);}
 
+  window.addEventListener("beforeunload", () => {
+    const activeView = document.querySelector(".workspace-tab.active")?.dataset.view || "";
+    try {
+      if (activeView === "courses") saveCurrentCourse(false);
+      else if (activeView === "types") saveCurrentType(false);
+      else if (activeView === "works") saveCurrentWork(false);
+      else if (activeView === "activities" && typeof saveCurrent === "function" && currentId) saveCurrent(false);
+    } catch {}
+  });
+
   // Initial rendering
   renderCourseList(); loadCourseEditor(currentCourse());
   renderTypeList(); loadTypeEditor(types.find(t=>t.id===currentTypeId));
@@ -519,7 +556,7 @@ const modeInputs = [...document.querySelectorAll('input[name="activityMode"]')];
 const editorPanel = document.querySelector(".editor-panel");
 const templateKicker = el("templateKicker");
 const templateTitle = el("templateTitle");
-const QR_SAFE_MAX_LENGTH = 1300;
+const QR_SAFE_MAX_LENGTH = 1100;
 
 function createId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -1662,7 +1699,7 @@ async function buildShareUrl(activity) {
 
 function getQrRenderSize(urlLength) {
   if (urlLength <= 700) return 400;
-  return 560;
+  return 640;
 }
 
 function getQrQualityLabel(urlLength) {
@@ -1738,12 +1775,12 @@ async function previewOrShare(openPreview = false) {
   } else if (url.length > QR_SAFE_MAX_LENGTH) {
     qrcodeEl.classList.remove("qr-size-medium","qr-size-large");
     qrcodeEl.innerHTML = "<p class='subtle'>活動內容較多，若直接塞進 QR Code 會過度密集而難以掃描。</p>";
-    qrNotice.textContent = `目前分享網址 ${url.length} 字元，已超過教室投影建議上限。學生連結仍可使用；請優先改用課堂 Session QR，或精簡作品介紹／圖片網址。`;
+    qrNotice.textContent = `目前分享網址 ${url.length} 字元，已超過 1100 字元的教室掃碼建議上限。學生連結仍可使用；請優先改用課堂 Session QR，或精簡作品介紹／圖片網址。`;
     qrNotice.classList.remove("hidden");
   } else if (window.QRCode) {
     try {
       const qrSize = getQrRenderSize(url.length);
-      qrcodeEl.classList.toggle("qr-size-medium", qrSize === 560);
+      qrcodeEl.classList.toggle("qr-size-medium", qrSize === 640);
       qrcodeEl.classList.remove("qr-size-large");
       new QRCode(qrcodeEl, {
         text: url,
@@ -1878,6 +1915,118 @@ el("copyUrlBtn").addEventListener("click", async () => {
     document.execCommand("copy");
   }
   showToast("連結已複製");
+});
+
+
+// ---------- V1.9.5 教材備份 / 還原 ----------
+const BACKUP_KEYS = {
+  courses:"interactive-classroom-v15-courses",
+  types:"interactive-classroom-v15-types",
+  works:"interactive-classroom-v15-works",
+  activities:"interactive-classroom-v1"
+};
+
+function readBackupArray(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function updateBackupSummary() {
+  const sets = {
+    backupCourseCount:readBackupArray(BACKUP_KEYS.courses).length,
+    backupTypeCount:readBackupArray(BACKUP_KEYS.types).length,
+    backupWorkCount:readBackupArray(BACKUP_KEYS.works).length,
+    backupActivityCount:readBackupArray(BACKUP_KEYS.activities).length
+  };
+  Object.entries(sets).forEach(([id,count]) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = String(count);
+  });
+}
+
+function openDataManagement() {
+  // Clicking the active workspace tab triggers the first module's silent
+  // save hook added below without actually leaving the workspace.
+  document.querySelector(".workspace-tab.active")?.dispatchEvent(new CustomEvent("v195-save-current"));
+  if (document.querySelector(".workspace-tab.active")?.dataset.view === "activities" && currentId) saveCurrent(false);
+  updateBackupSummary();
+  document.getElementById("dataManagementDialog")?.showModal();
+}
+
+function exportTeachingBackup() {
+  document.querySelector(".workspace-tab.active")?.dispatchEvent(new CustomEvent("v195-save-current"));
+  if (document.querySelector(".workspace-tab.active")?.dataset.view === "activities" && currentId) saveCurrent(false);
+
+  const payload = {
+    schema:"classroom-interactive-backup",
+    version:1,
+    appVersion:"1.9.5",
+    exportedAt:new Date().toISOString(),
+    data:{
+      courses:readBackupArray(BACKUP_KEYS.courses),
+      types:readBackupArray(BACKUP_KEYS.types),
+      works:readBackupArray(BACKUP_KEYS.works),
+      activities:readBackupArray(BACKUP_KEYS.activities)
+    }
+  };
+
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `classroom-interactive-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast("教材備份已下載");
+}
+
+async function importTeachingBackup(file) {
+  if (!file) return;
+  let payload;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch {
+    showToast("備份檔不是有效的 JSON");
+    return;
+  }
+
+  const data = payload?.data;
+  const valid = payload?.schema === "classroom-interactive-backup"
+    && data
+    && ["courses","types","works","activities"].every(key => Array.isArray(data[key]));
+
+  if (!valid) {
+    showToast("備份格式不正確，無法匯入");
+    return;
+  }
+
+  if (!confirm("匯入會覆蓋目前的課程、類型、作品與活動資料。確定繼續嗎？")) return;
+
+  localStorage.setItem(BACKUP_KEYS.courses, JSON.stringify(data.courses));
+  localStorage.setItem(BACKUP_KEYS.types, JSON.stringify(data.types));
+  localStorage.setItem(BACKUP_KEYS.works, JSON.stringify(data.works));
+  localStorage.setItem(BACKUP_KEYS.activities, JSON.stringify(data.activities));
+  location.reload();
+}
+
+document.getElementById("dataManagementBtn")?.addEventListener("click", openDataManagement);
+document.getElementById("exportBackupBtn")?.addEventListener("click", exportTeachingBackup);
+document.getElementById("importBackupBtn")?.addEventListener("click", () => {
+  const input = document.getElementById("backupFileInput");
+  if (input) {
+    input.value = "";
+    input.click();
+  }
+});
+document.getElementById("backupFileInput")?.addEventListener("change", event => {
+  importTeachingBackup(event.target.files?.[0]);
 });
 
 loadActivities();
@@ -2023,23 +2172,58 @@ loadActivities();
     $("sessionJoinUrl").value = joinUrl;
 
     const qr = $("sessionQrCode");
+    const qrNotice = $("sessionQrNotice");
+    const joinHelp = $("sessionJoinHelp");
     qr.innerHTML = "";
-    if (window.QRCode) {
+    qr.classList.remove("session-qr-cloud","session-qr-local");
+
+    const sessionOriginWarning = typeof getShareOriginWarning === "function" ? getShareOriginWarning() : "";
+
+    if (activeSession.mode !== "cloud") {
+      qr.classList.add("session-qr-local");
+      qr.innerHTML = `
+        <div class="session-local-qr-warning">
+          <span>🧪</span>
+          <strong>本機測試模式</strong>
+          <small>跨裝置 QR 尚未啟用</small>
+        </div>`;
+      qrNotice.textContent = "本機 Session 只存在這個瀏覽器中；完成 Supabase 設定後才可讓學生手機掃碼加入。";
+      if (joinHelp) joinHelp.textContent = "本機模式僅供同一瀏覽器驗證流程；正式上課請先完成 Supabase 雲端設定。";
+    } else if (sessionOriginWarning) {
+      qr.classList.add("session-qr-local");
+      qr.innerHTML = `<div class="session-local-qr-warning"><span>⚠️</span><strong>目前網址不能跨裝置掃描</strong><small>請從 GitHub Pages 開啟教師端</small></div>`;
+      qrNotice.textContent = sessionOriginWarning;
+      if (joinHelp) joinHelp.textContent = "雲端資料已啟用，但目前教師端網址不適合跨裝置分享；請改從 GitHub Pages 開啟。";
+    } else if (joinUrl.length > QR_SAFE_MAX_LENGTH) {
+      qr.classList.add("session-qr-local");
+      qr.innerHTML = `<div class="session-local-qr-warning"><span>🔗</span><strong>加入網址過長</strong><small>請改用複製連結或檢查雲端設定</small></div>`;
+      qrNotice.textContent = `加入網址 ${joinUrl.length} 字元，超過 1100 字元的教室掃碼建議上限。`;
+    } else if (window.QRCode) {
       try {
-        new QRCode(qr, {text:joinUrl,width:190,height:190,correctLevel:QRCode.CorrectLevel.L});
-        $("sessionQrNotice").textContent = activeSession.mode === "cloud"
-          ? "學生掃碼後輸入座號即可加入。"
-          : "本機測試 QR 僅適合在同一瀏覽器驗證流程。";
-      } catch {
-        $("sessionQrNotice").textContent = "QR Code 產生失敗，請使用左側加入連結。";
+        const size = typeof getQrRenderSize === "function" ? getQrRenderSize(joinUrl.length) : 400;
+        qr.classList.add("session-qr-cloud");
+        new QRCode(qr, {
+          text:joinUrl,
+          width:size,
+          height:size,
+          correctLevel:QRCode.CorrectLevel.L
+        });
+        qrNotice.textContent = `${typeof getQrQualityLabel === "function" ? getQrQualityLabel(joinUrl.length) : "學生掃碼後輸入座號即可加入。"} · 加入網址 ${joinUrl.length} 字元`;
+        if (joinHelp) joinHelp.textContent = "學生可掃描右側 QR Code，或開啟加入連結後輸入這組課堂代碼。";
+      } catch (error) {
+        console.error("Session QR Code 產生失敗", error);
+        qrNotice.textContent = "QR Code 產生失敗，請使用左側加入連結。";
       }
     } else {
-      $("sessionQrNotice").textContent = "QR Code 元件尚未載入，請使用左側加入連結。";
+      qrNotice.textContent = "QR Code 元件尚未載入，請使用左側加入連結。";
     }
+
     await refreshActiveSession();
-    if (["progressive-reveal","open-classification"].includes(activeSession.activityMode)) {
-      refreshTimer = setInterval(() => refreshActiveSession(true), 2500);
-    }
+    clearInterval(refreshTimer);
+    refreshTimer = setInterval(() => {
+      const sessionViewActive = document.querySelector('[data-workspace-view="sessions"]')?.classList.contains("active");
+      if (activeSession && sessionViewActive) refreshActiveSession(true);
+    }, 3000);
   }
 
   async function refreshActiveSession(silent = false) {
@@ -2321,6 +2505,4 @@ loadActivities();
 
   window.ClassroomSessionManager = {refresh, refreshActiveSession};
   refresh();
-  clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => { if (activeSession) refreshActiveSession(); }, 3000);
 })();
