@@ -3705,7 +3705,7 @@ html{
 
 
 /* =========================================================
-   V2.12.1 — Footer credit
+   V2.12.2 — Footer credit
    ========================================================= */
 body{
   display:flex;
@@ -3714,21 +3714,24 @@ body{
 
 .app-credit{
   width:100%;
-  margin:0 auto 14px;
+  margin:0 auto 12px;
   margin-top:auto;
-  padding:28px 16px 0;
+  padding:24px 16px 0;
   text-align:center;
-  color:#9aa3b2;
-  font-size:12px;
-  font-weight:700;
-  letter-spacing:.02em;
-  line-height:1.5;
+  color:#bcc3cf;
+  font-size:10px;
+  font-weight:500;
+  letter-spacing:.01em;
+  line-height:1.45;
+  opacity:.82;
 }
+
 @media(max-width:640px){
   .app-credit{
-    margin:0 auto 10px;
-    margin-top:auto;
-    padding-top:22px;
-    font-size:11px;
+    margin-bottom:8px;
+    padding-top:18px;
+    font-size:9px;
+    color:#c4cad4;
+    opacity:.78;
   }
 }
