@@ -1,4 +1,4 @@
--- V2.8.0 SQL SETUP
+-- V2.8.1 SQL SETUP
 -- 修正 get_student_session_state() 中：
 --   select s.*, p.id into v_session, v_participant_id
 -- 造成 PostgreSQL 42601：
@@ -1213,7 +1213,7 @@ grant execute on function public.claim_classroom_session(uuid,text,text) to anon
 
 
 -- =========================================================
--- V2.8.0：逐層思辨 layered-deliberation
+-- V2.8.1：逐層思辨 layered-deliberation
 -- 重點：
 -- 1) 完整情境層存在 deliberation_data，只供教師 RPC 讀取。
 -- 2) activity_encoded 僅保存不含未公開層次的學生 shell。
@@ -1328,7 +1328,7 @@ begin
 end;
 $$;
 
--- V2.8.0：覆寫作答 RPC，伺服器端限制逐層思辨的作答時機。
+-- V2.8.1：覆寫作答 RPC，伺服器端限制逐層思辨的作答時機。
 create or replace function public.submit_classroom_response(
   p_session_id uuid,
   p_participant_token text,
@@ -1437,7 +1437,7 @@ begin
 end;
 $$;
 
--- V2.8.0：教師快照可取得完整 deliberation_data（含教師備註）。
+-- V2.8.1：教師快照可取得完整 deliberation_data（含教師備註）。
 create or replace function public.get_teacher_session(
   p_session_id uuid,
   p_teacher_token text
@@ -1543,7 +1543,7 @@ begin
 end;
 $$;
 
--- V2.8.0：學生只取得已公開層次；published 前不取得全班分布與匿名理由。
+-- V2.8.1：學生只取得已公開層次；published 前不取得全班分布與匿名理由。
 create or replace function public.get_student_session_state(
   p_session_id uuid,
   p_participant_token text

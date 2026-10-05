@@ -19,6 +19,7 @@ let openFinalResponse = null;
 let openPollTimer = null;
 let deliberationPollTimer = null;
 let deliberationSelectedChoice = "";
+let deliberationDraftStage = 0;
 let deliberationState = null;
 let deliberationLocalResponses = [];
 let sessionRealtime = null;
@@ -512,6 +513,20 @@ function renderDeliberationState() {
   const layers=Array.isArray(d.released_layers) ? d.released_layers : [];
   const current=layers[stage-1] || layers.at(-1) || {};
   const own=deliberationOwnResponse(stage);
+  const stageChanged=deliberationDraftStage!==stage;
+
+  // Session 會定期同步教師狀態；同步不能清掉學生尚未送出的草稿。
+  // 只有真正切換到另一層時才清空新一層的未提交內容。
+  if (own) {
+    deliberationSelectedChoice=own.selected_type || "";
+    el("deliberationReasonInput").value=own.payload?.reason || "";
+    el("deliberationNeedInput").value=own.payload?.needToKnow || "";
+  } else if (stageChanged) {
+    deliberationSelectedChoice="";
+    el("deliberationReasonInput").value="";
+    el("deliberationNeedInput").value="";
+  }
+  deliberationDraftStage=stage;
 
   el("deliberationStageKicker").textContent=`第 ${stage} 層 / ${total}`;
   el("caseCounter").textContent=`${stage} / ${total}`;
@@ -559,15 +574,6 @@ function renderDeliberationState() {
     el("deliberationWaitingText").textContent="這一層目前不能再提交，請等待老師公布結果。";
   } else if (!own && round==="open") {
     el("deliberationWaitingPanel").classList.add("hidden");
-  }
-
-  if (own) {
-    el("deliberationReasonInput").value=own.payload?.reason || "";
-    el("deliberationNeedInput").value=own.payload?.needToKnow || "";
-  } else {
-    el("deliberationReasonInput").value="";
-    el("deliberationNeedInput").value="";
-    deliberationSelectedChoice="";
   }
 
   const published=round==="published";

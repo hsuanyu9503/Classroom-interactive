@@ -1,4 +1,4 @@
-/* V2.8.0 | Teacher Session / History / Summary / Presentation */
+/* V2.8.1 | Teacher Session / History / Summary / Presentation */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -684,7 +684,7 @@
         if (!courseId) throw new Error("請先選擇一門完整課程");
         const snapshot = await window.ClassroomCourseAPI.buildSnapshot(courseId);
         if ((snapshot.resources?.activities || []).some(item=>item.template === "layered-deliberation")) {
-          throw new Error("V2.8.0 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
+          throw new Error("V2.8.1 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
         }
         const encoded = await window.ClassroomCourseAPI.encodeSnapshot(snapshot);
         const steps = flattenCourseSnapshot(snapshot);
