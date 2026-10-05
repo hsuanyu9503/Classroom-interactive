@@ -1,4 +1,4 @@
-/* V2.5.0 | Teacher Core: workflow + Course/Type/Work libraries */
+/* V2.7.0 | Teacher Core: workflow + Course/Type/Work libraries */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2
@@ -264,6 +264,25 @@
     };
   }
 
+  function scrollTeacherToTop({focusDataManager=false}={}) {
+    try { document.activeElement?.blur?.(); } catch {}
+    const root = document.documentElement;
+    const previousBehavior = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    window.scrollTo({top:0,left:0,behavior:"auto"});
+    requestAnimationFrame(()=>{
+      window.scrollTo({top:0,left:0,behavior:"auto"});
+      root.style.scrollBehavior = previousBehavior;
+      if (focusDataManager) $("dataManagementBtn")?.focus?.({preventScroll:true});
+    });
+  }
+
+  function updateBackToTopVisibility() {
+    const button = $("backToTopBtn");
+    if (!button) return;
+    button.classList.toggle("show", window.scrollY > 520);
+  }
+
   function workflowForView(view) {
     return view === "sessions" ? "teach" : "prepare";
   }
@@ -353,7 +372,11 @@
     localStorage.setItem(WORKFLOW_KEY,currentWorkflow);
     document.body.dataset.workflow = currentWorkflow;
 
-    document.querySelectorAll(".workflow-mode-btn").forEach(btn=>{
+    $("backToTopBtn")?.addEventListener("click",()=>scrollTeacherToTop({focusDataManager:true}));
+  window.addEventListener("scroll",updateBackToTopVisibility,{passive:true});
+  updateBackToTopVisibility();
+
+  document.querySelectorAll(".workflow-mode-btn").forEach(btn=>{
       const active = btn.dataset.workflow === currentWorkflow;
       btn.classList.toggle("active",active);
       btn.setAttribute("aria-selected",active ? "true" : "false");
@@ -417,8 +440,10 @@
     }
   }
 
-  function switchView(view,{syncWorkflow=true}={}) {
+  function switchView(view,{syncWorkflow=true,preserveScroll=false}={}) {
     if (!["courses","types","works","activities","sessions"].includes(view)) view = "courses";
+    const previousView = activeWorkspaceView();
+    const viewChanged = previousView && previousView !== view;
     saveWorkspaceBeforeLeaving(view);
 
     const targetWorkflow = workflowForView(view);
@@ -440,6 +465,10 @@
 
     if (view === "sessions") window.ClassroomSessionManager?.refresh?.();
     updateWorkflowContext(view);
+
+    if (viewChanged && !preserveScroll) {
+      scrollTeacherToTop();
+    }
   }
 
   document.querySelectorAll(".workflow-mode-btn").forEach(btn=>{

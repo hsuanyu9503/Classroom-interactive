@@ -17,6 +17,7 @@ let openSelectedType = "";
 let openInitialResponse = null;
 let openFinalResponse = null;
 let openPollTimer = null;
+let sessionRealtime = null;
 let openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
 
 const el = (id) => document.getElementById(id);
@@ -131,6 +132,77 @@ function isSessionPlay() {
   return params.get("session") === "1";
 }
 
+function setStudentRealtimeStatus(status, detail = "") {
+  const badge = el("studentRealtimeStatus");
+  if (!badge || !isSessionPlay()) return;
+  badge.className = "student-realtime-status";
+
+  const context = window.ClassroomSessionAPI?.getParticipantContext?.();
+  if (context?.mode !== "cloud") {
+    badge.classList.add("local");
+    badge.textContent = "🧪 本機同步";
+    badge.classList.remove("hidden");
+    return;
+  }
+
+  if (status === "connected") {
+    badge.classList.add("live");
+    badge.textContent = "⚡ 即時同步";
+  } else if (status === "connecting") {
+    badge.textContent = "⚡ Realtime 連線中";
+  } else if (status === "closed") {
+    badge.classList.add("closed");
+    badge.textContent = "Session 已結束";
+  } else {
+    badge.classList.add("fallback");
+    badge.textContent = "↻ 輪詢備援";
+  }
+  badge.title = detail || "";
+  badge.classList.remove("hidden");
+}
+
+function stopStudentRealtime() {
+  try { sessionRealtime?.close?.(); } catch {}
+  sessionRealtime = null;
+}
+
+function refreshStudentRealtimeTarget() {
+  if (activity?.template === "progressive-reveal") {
+    syncProgressiveStageFromSession(false);
+  } else if (activity?.template === "open-classification") {
+    syncOpenClassificationState(false);
+  }
+}
+
+function startStudentRealtimeSync() {
+  if (!isSessionPlay()) return;
+  stopStudentRealtime();
+  const context = window.ClassroomSessionAPI?.getParticipantContext?.();
+
+  if (context?.mode !== "cloud" || !window.ClassroomSessionAPI?.subscribeRealtime) {
+    setStudentRealtimeStatus("local");
+    return;
+  }
+
+  sessionRealtime = window.ClassroomSessionAPI.subscribeRealtime(context.sessionId,{
+    config:context.cloudConfig,
+    onEvent:refreshStudentRealtimeTarget,
+    onStatus:(status,detail)=>{
+      setStudentRealtimeStatus(status,detail);
+      if (status === "closed") {
+        clearInterval(progressivePollTimer);
+        clearInterval(openPollTimer);
+        return;
+      }
+      if (activity?.template === "progressive-reveal") {
+        startProgressivePolling(status === "connected" ? 12000 : 1800);
+      } else if (activity?.template === "open-classification") {
+        startOpenPolling(status === "connected" ? 12000 : 1800);
+      }
+    }
+  });
+}
+
 function renderSessionBadge() {
   const badge = el("studentSessionBadge");
   if (!badge) return;
@@ -189,6 +261,7 @@ async function loadFromUrl() {
     el("studentSubtitle").textContent = activity.subtitle || "";
     renderSessionBadge();
     renderCase();
+    startStudentRealtimeSync();
   } catch (error) {
     console.error(error);
     el("loadingState").classList.add("hidden");
@@ -414,15 +487,25 @@ function advanceProgressiveLocal() {
   }
 }
 
-function startProgressivePolling() {
+function startProgressivePolling(intervalMs = 1800) {
   clearInterval(progressivePollTimer);
-  progressivePollTimer = setInterval(() => syncProgressiveStageFromSession(false), 1800);
+  progressivePollTimer = setInterval(
+    () => syncProgressiveStageFromSession(false),
+    Math.max(1500,Number(intervalMs)||1800)
+  );
 }
 
 async function syncProgressiveStageFromSession(initial=false) {
   if (!isSessionPlay() || !window.ClassroomSessionAPI?.studentState) return;
   try {
     const state = await window.ClassroomSessionAPI.studentState();
+    if (state.status === "closed") {
+      clearInterval(progressivePollTimer);
+      setStudentRealtimeStatus("closed");
+      stopStudentRealtime();
+      showToast("老師已結束這個課堂 Session");
+      return;
+    }
     hydrateProgressiveHistory(state.responses || []);
     const target = Math.max(0, Math.min((state.current_stage || 1) - 1, activity.progressive.clues.length - 1));
     if (target !== progressiveStageIndex || initial) {
@@ -729,9 +812,12 @@ async function refreshOpenStats() {
   }
 }
 
-function startOpenPolling() {
+function startOpenPolling(intervalMs = 1800) {
   clearInterval(openPollTimer);
-  openPollTimer = setInterval(() => syncOpenClassificationState(false), 1800);
+  openPollTimer = setInterval(
+    () => syncOpenClassificationState(false),
+    Math.max(1500,Number(intervalMs)||1800)
+  );
 }
 
 async function syncOpenClassificationState(initial=false) {
@@ -741,6 +827,13 @@ async function syncOpenClassificationState(initial=false) {
   }
   try {
     const state = await window.ClassroomSessionAPI.studentState();
+    if (state.status === "closed") {
+      clearInterval(openPollTimer);
+      setStudentRealtimeStatus("closed");
+      stopStudentRealtime();
+      showToast("老師已結束這個課堂 Session");
+      return;
+    }
     openStats = state.open_stats || openStats;
     openInitialResponse = openResponseFromState(state.responses || [], "initial") || openInitialResponse;
     openFinalResponse = openResponseFromState(state.responses || [], "final") || openFinalResponse;
@@ -1319,5 +1412,11 @@ function notifyCoursePlayerComplete() {
 if (isEmbeddedCourseActivity()) {
   document.body.classList.add("embedded-activity");
 }
+
+window.addEventListener("beforeunload",()=>{
+  clearInterval(progressivePollTimer);
+  clearInterval(openPollTimer);
+  stopStudentRealtime();
+});
 
 loadFromUrl();

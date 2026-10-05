@@ -1,10 +1,10 @@
-/* V2.5.0 compatibility loader.
+/* V2.7.0 compatibility loader.
    New index.html loads teacher-core.js, activity-editor.js and session-teacher.js directly.
    This file only protects older cached HTML that still requests teacher.js. */
 (() => {
   if (window.ClassroomTeacherModulesLoading || window.ClassroomCourseAPI) return;
   window.ClassroomTeacherModulesLoading = true;
-  const files = ["teacher-core.js","activity-editor.js","session-teacher.js"];
+  const files = ["teacher-core.js","activity-editor.js","session-teacher.js","release-center.js"];
   const load = index => {
     if (index >= files.length) {
       window.ClassroomTeacherModulesLoading = false;

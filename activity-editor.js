@@ -1,6 +1,7 @@
-/* V2.5.0 | Activity Editor + teaching backup */
+/* V2.7.0 | Activity Editor + teaching backup */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
+const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
 const TYPE_STORAGE_KEY = "interactive-classroom-v15-types";
 const WORK_STORAGE_KEY = "interactive-classroom-v15-works";
 
@@ -1455,6 +1456,7 @@ function openDataManagement() {
   document.querySelector(".workspace-tab.active")?.dispatchEvent(new CustomEvent("v195-save-current"));
   if (document.querySelector(".workspace-tab.active")?.dataset.view === "activities" && currentId) saveCurrent(false);
   updateBackupSummary();
+  window.ClassroomReleaseCenter?.refresh?.();
   document.getElementById("dataManagementDialog")?.showModal();
 }
 
@@ -1465,7 +1467,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.5.0",
+    appVersion:"2.7.0",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),
@@ -1487,6 +1489,9 @@ function exportTeachingBackup() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const backedUpAt = new Date().toISOString();
+  localStorage.setItem(LAST_BACKUP_KEY, backedUpAt);
+  window.ClassroomReleaseCenter?.refresh?.();
   showToast("教材備份已下載");
 }
 

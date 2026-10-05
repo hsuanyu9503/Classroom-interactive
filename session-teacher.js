@@ -1,15 +1,92 @@
-/* V2.5.0 | Teacher Session / History / Summary / Presentation */
+/* V2.7.0 | Teacher Session / History / Summary / Presentation */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
   let activeSession = null;
   let refreshTimer = null;
+  let sessionRealtime = null;
+  let realtimeRefreshTimer = null;
   let activeCourseSnapshot = null;
   let latestTeacherSnapshot = null;
   let presentationWindow = null;
   let presentationChannel = null;
   let presentationChannelSessionId = "";
   let presentationView = "content";
+
+  function setTeacherRealtimeStatus(status, detail = "") {
+    const badge = $("sessionRealtimeStatus");
+    if (!badge) return;
+    badge.className = "realtime-status";
+
+    if (!activeSession || activeSession.mode !== "cloud") {
+      badge.classList.add("local");
+      badge.textContent = "🧪 本機同步";
+      badge.title = "";
+      return;
+    }
+
+    if (status === "connected") {
+      badge.classList.add("live");
+      badge.textContent = "⚡ Realtime 即時同步";
+    } else if (status === "connecting") {
+      badge.textContent = "⚡ Realtime 連線中";
+    } else if (status === "closed") {
+      badge.classList.add("closed");
+      badge.textContent = "Session 已結束";
+    } else {
+      badge.classList.add("fallback");
+      badge.textContent = "↻ 輪詢備援";
+    }
+    badge.title = detail || "";
+  }
+
+  function scheduleTeacherPolling(intervalMs = 3000) {
+    clearInterval(refreshTimer);
+    if (!activeSession || activeSession.status === "closed") return;
+    refreshTimer = setInterval(()=>{
+      const active = document.querySelector('[data-workspace-view="sessions"]')?.classList.contains("active");
+      if (activeSession && active && activeSession.status !== "closed") refreshActiveSession(true);
+    },Math.max(2200,Number(intervalMs)||3000));
+  }
+
+  function stopSessionRealtime() {
+    clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = null;
+    try { sessionRealtime?.close?.(); } catch {}
+    sessionRealtime = null;
+  }
+
+  function queueRealtimeTeacherRefresh() {
+    clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = setTimeout(()=>{
+      const active = document.querySelector('[data-workspace-view="sessions"]')?.classList.contains("active");
+      if (activeSession && active && activeSession.status !== "closed") refreshActiveSession(true);
+    },80);
+  }
+
+  function startSessionRealtime() {
+    stopSessionRealtime();
+
+    if (!activeSession || activeSession.status === "closed") {
+      setTeacherRealtimeStatus("closed");
+      clearInterval(refreshTimer);
+      return;
+    }
+
+    if (activeSession.mode !== "cloud" || !window.ClassroomSessionAPI?.subscribeRealtime) {
+      setTeacherRealtimeStatus("local");
+      scheduleTeacherPolling(3000);
+      return;
+    }
+
+    sessionRealtime = window.ClassroomSessionAPI.subscribeRealtime(activeSession.id,{
+      onEvent:queueRealtimeTeacherRefresh,
+      onStatus:(status,detail)=>{
+        setTeacherRealtimeStatus(status,detail);
+        scheduleTeacherPolling(status === "connected" ? 12000 : 3000);
+      }
+    });
+  }
 
   function presentationChannelName(sessionId) {
     return `classroom-course-presentation:${sessionId}`;
@@ -495,6 +572,7 @@
   async function renderActiveSession() {
     if (!activeSession) return;
     clearInterval(refreshTimer);
+    stopSessionRealtime();
     $("activeSessionCard").classList.remove("hidden");
     $("activeSessionTitle").textContent = activeSession.title;
     $("activeSessionCode").textContent = activeSession.code;
@@ -552,11 +630,7 @@
     }
 
     await refreshActiveSession();
-    clearInterval(refreshTimer);
-    refreshTimer = setInterval(()=>{
-      const active = document.querySelector('[data-workspace-view="sessions"]')?.classList.contains("active");
-      if (activeSession && active && activeSession.status !== "closed") refreshActiveSession(true);
-    },3000);
+    startSessionRealtime();
   }
 
   async function refreshActiveSession(silent=false) {
@@ -595,7 +669,11 @@
       renderHistory();
       await renderTeachHome();
 
-      if (activeSession.status === "closed") clearInterval(refreshTimer);
+      if (activeSession.status === "closed") {
+        clearInterval(refreshTimer);
+        stopSessionRealtime();
+        setTeacherRealtimeStatus("closed");
+      }
     } catch (error) {
       showSessionToast(error.message || "更新 Session 失敗");
     } finally {
@@ -1075,6 +1153,11 @@
   $("nextStageBtn")?.addEventListener("click",()=>changeStage(1));
   $("openPreviousPhaseBtn")?.addEventListener("click",()=>changeOpenPhase(-1));
   $("openNextPhaseBtn")?.addEventListener("click",()=>changeOpenPhase(1));
+
+  window.addEventListener("beforeunload",()=>{
+    clearInterval(refreshTimer);
+    stopSessionRealtime();
+  });
 
   window.ClassroomSessionManager={refresh,refreshActiveSession};
   refresh();

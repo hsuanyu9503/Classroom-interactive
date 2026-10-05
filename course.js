@@ -6,6 +6,7 @@ let completedCourseNodes = new Set();
 let courseSessionMode = false;
 let presentationMode = false;
 let courseSessionPollTimer = null;
+let courseSessionRealtime = null;
 let lastCourseRevision = 0;
 let presentationSessionId = "";
 let presentationChannel = null;
@@ -500,6 +501,9 @@ async function syncCourseSessionState(initial = false) {
 
     if (state.status === "closed") {
       clearInterval(courseSessionPollTimer);
+      try { courseSessionRealtime?.close?.(); } catch {}
+      courseSessionRealtime = null;
+      setCourseRealtimeStatus("closed");
       showCourseComplete(true);
       return;
     }
@@ -518,9 +522,70 @@ async function syncCourseSessionState(initial = false) {
   }
 }
 
-function startCourseSessionPolling() {
+function setCourseRealtimeStatus(status, detail = "") {
+  const badge = $("courseRealtimeStatus");
+  if (!badge || !courseSessionMode) return;
+  badge.className = "student-realtime-status";
+
+  const context = participantContext();
+  if (context?.mode !== "cloud") {
+    badge.classList.add("local");
+    badge.textContent = "🧪 本機同步";
+    badge.classList.remove("hidden");
+    return;
+  }
+
+  if (status === "connected") {
+    badge.classList.add("live");
+    badge.textContent = "⚡ 即時同步";
+  } else if (status === "connecting") {
+    badge.textContent = "⚡ Realtime 連線中";
+  } else if (status === "closed") {
+    badge.classList.add("closed");
+    badge.textContent = "Session 已結束";
+  } else {
+    badge.classList.add("fallback");
+    badge.textContent = "↻ 輪詢備援";
+  }
+  badge.title = detail || "";
+  badge.classList.remove("hidden");
+}
+
+function startCourseSessionPolling(intervalMs = 2200) {
   clearInterval(courseSessionPollTimer);
-  courseSessionPollTimer = setInterval(() => syncCourseSessionState(false),2200);
+  courseSessionPollTimer = setInterval(
+    () => syncCourseSessionState(false),
+    Math.max(1800,Number(intervalMs)||2200)
+  );
+}
+
+function stopCourseSessionRealtime() {
+  try { courseSessionRealtime?.close?.(); } catch {}
+  courseSessionRealtime = null;
+}
+
+function startCourseSessionSync() {
+  stopCourseSessionRealtime();
+  const context = participantContext();
+
+  if (context?.mode !== "cloud" || !window.ClassroomSessionAPI?.subscribeRealtime) {
+    setCourseRealtimeStatus("local");
+    startCourseSessionPolling(2200);
+    return;
+  }
+
+  courseSessionRealtime = window.ClassroomSessionAPI.subscribeRealtime(context.sessionId,{
+    config:context.cloudConfig,
+    onEvent:()=>syncCourseSessionState(false),
+    onStatus:(status,detail)=>{
+      setCourseRealtimeStatus(status,detail);
+      if (status === "closed") {
+        clearInterval(courseSessionPollTimer);
+        return;
+      }
+      startCourseSessionPolling(status === "connected" ? 12000 : 2200);
+    }
+  });
 }
 
 function showCourseComplete(sessionClosed = false) {
@@ -587,7 +652,7 @@ async function loadCourse() {
 
     if (courseSessionMode) {
       await syncCourseSessionState(true);
-      startCourseSessionPolling();
+      startCourseSessionSync();
     } else {
       renderCurrentStep();
       if (presentationMode) startPresentationSync();
@@ -626,5 +691,10 @@ window.addEventListener("message",event => {
 $("coursePrevBtn").addEventListener("click",goPrevious);
 $("courseNextBtn").addEventListener("click",goNext);
 $("courseRestartBtn").addEventListener("click",restartCourse);
+
+window.addEventListener("beforeunload",()=>{
+  clearInterval(courseSessionPollTimer);
+  stopCourseSessionRealtime();
+});
 
 loadCourse();

@@ -102,6 +102,208 @@
     return payload;
   }
 
+
+  function realtimeLogicalTopic(sessionId) {
+    return `classroom-session-${String(sessionId || "").trim()}`;
+  }
+
+  function realtimeSocketUrl(config) {
+    const url = new URL(config.url);
+    const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${url.host}/realtime/v1/websocket?apikey=${encodeURIComponent(config.key)}&vsn=1.0.0`;
+  }
+
+  async function publishRealtime(sessionId, kind = "refresh", overrideConfig = null) {
+    const config = overrideConfig || getConfig();
+    const cleanId = String(sessionId || "").trim();
+    if (!cleanId || !config?.url || !config?.key) return false;
+
+    try {
+      const topic = realtimeLogicalTopic(cleanId);
+      const response = await fetch(
+        `${config.url}/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/refresh`,
+        {
+          method:"POST",
+          headers:{
+            "apikey":config.key,
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({
+            kind:String(kind || "refresh"),
+            at:Date.now()
+          })
+        }
+      );
+      return response.ok;
+    } catch (error) {
+      console.warn("Realtime 通知送出失敗，將由輪詢補上",error);
+      return false;
+    }
+  }
+
+  function subscribeRealtime(sessionId, {
+    config = null,
+    onEvent = null,
+    onStatus = null,
+    reconnectMs = 4000
+  } = {}) {
+    const cleanId = String(sessionId || "").trim();
+    const cloud = config || getConfig();
+    let socket = null;
+    let heartbeatTimer = null;
+    let reconnectTimer = null;
+    let stopped = false;
+    let joined = false;
+    let refCounter = 1;
+    let status = "idle";
+
+    const controller = {
+      close,
+      get status(){ return status; },
+      get connected(){ return joined && socket?.readyState === WebSocket.OPEN; }
+    };
+
+    function emitStatus(next, detail = "") {
+      status = next;
+      try { onStatus?.(next, detail, controller); } catch {}
+    }
+
+    function clearTimers() {
+      clearInterval(heartbeatTimer);
+      clearTimeout(reconnectTimer);
+      heartbeatTimer = null;
+      reconnectTimer = null;
+    }
+
+    function nextRef() {
+      refCounter += 1;
+      return String(refCounter);
+    }
+
+    function send(message) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+      socket.send(JSON.stringify(message));
+      return true;
+    }
+
+    function joinChannel() {
+      const joinRef = "1";
+      send({
+        topic:`realtime:${realtimeLogicalTopic(cleanId)}`,
+        event:"phx_join",
+        payload:{
+          config:{
+            broadcast:{ack:false,self:false},
+            presence:{enabled:false},
+            postgres_changes:[],
+            private:false
+          }
+        },
+        ref:joinRef,
+        join_ref:joinRef
+      });
+    }
+
+    function startHeartbeat() {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = setInterval(()=>{
+        send({
+          topic:"phoenix",
+          event:"heartbeat",
+          payload:{},
+          ref:nextRef(),
+          join_ref:null
+        });
+      },20000);
+    }
+
+    function scheduleReconnect() {
+      if (stopped) return;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect,Math.max(1500,Number(reconnectMs)||4000));
+    }
+
+    function handleMessage(event) {
+      let message;
+      try { message = JSON.parse(event.data); }
+      catch { return; }
+
+      if (message?.event === "phx_reply" && message?.ref === "1") {
+        if (message?.payload?.status === "ok") {
+          joined = true;
+          emitStatus("connected");
+          startHeartbeat();
+        } else {
+          joined = false;
+          emitStatus("error",message?.payload?.response?.reason || "channel join failed");
+          try { socket?.close?.(); } catch {}
+        }
+        return;
+      }
+
+      if (message?.event === "broadcast" && message?.payload?.event === "refresh") {
+        try { onEvent?.(message.payload.payload || {}); } catch {}
+      }
+    }
+
+    function connect() {
+      if (stopped) return;
+      clearTimers();
+      joined = false;
+
+      if (!cleanId || !cloud?.url || !cloud?.key || typeof WebSocket !== "function") {
+        emitStatus("unavailable");
+        return;
+      }
+
+      emitStatus("connecting");
+      try {
+        socket = new WebSocket(realtimeSocketUrl(cloud));
+      } catch (error) {
+        emitStatus("error",error.message || "websocket unavailable");
+        scheduleReconnect();
+        return;
+      }
+
+      socket.addEventListener("open",joinChannel);
+      socket.addEventListener("message",handleMessage);
+      socket.addEventListener("error",()=>{
+        if (!stopped) emitStatus("error","websocket error");
+      });
+      socket.addEventListener("close",()=>{
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+        if (stopped) return;
+        joined = false;
+        emitStatus("disconnected");
+        scheduleReconnect();
+      });
+    }
+
+    function close() {
+      stopped = true;
+      clearTimers();
+      joined = false;
+      try {
+        if (socket?.readyState === WebSocket.OPEN) {
+          send({
+            topic:`realtime:${realtimeLogicalTopic(cleanId)}`,
+            event:"phx_leave",
+            payload:{},
+            ref:nextRef(),
+            join_ref:"1"
+          });
+        }
+        socket?.close?.();
+      } catch {}
+      socket = null;
+      emitStatus("closed");
+    }
+
+    connect();
+    return controller;
+  }
+
   async function testCloudConfig(url, key) {
     const config = {url:String(url||"").trim().replace(/\/+$/,""), key:String(key||"").trim()};
     if (config.key.startsWith("sb_secret_")) throw new Error("不能使用 secret key");
@@ -333,6 +535,7 @@
         revision:data.revision || 1
       };
       saveParticipantContext(context);
+      publishRealtime(context.sessionId,"participant",config);
       return context;
     }
 
@@ -404,6 +607,7 @@
         p_payload: payload,
         p_node_ref: context.currentNodeRef || null
       }, context.cloudConfig);
+      publishRealtime(context.sessionId,"response",context.cloudConfig);
       return {ok:true};
     }
 
@@ -499,6 +703,7 @@
         p_stage:target
       });
       sessionMeta.currentStage = Number(result) || target;
+      publishRealtime(sessionMeta.id,"stage");
       return sessionMeta.currentStage;
     }
     const sessions = loadLocalSessions();
@@ -540,6 +745,7 @@
       sessionMeta.stageCount = data?.stage_count || totalStages;
       sessionMeta.activityMode = data?.activity_mode || activityMode || "";
       rememberTeacherSession(sessionMeta);
+      publishRealtime(sessionMeta.id,"node");
       return data;
     }
 
@@ -580,6 +786,7 @@
         p_node_ref:cleanNode,
         p_status:status
       }, context.cloudConfig);
+      publishRealtime(context.sessionId,"progress",context.cloudConfig);
       return {ok:true};
     }
 
@@ -618,6 +825,7 @@
       });
       sessionMeta.status = "closed";
       rememberTeacherSession(sessionMeta);
+      publishRealtime(sessionMeta.id,"closed");
       return true;
     }
     const sessions = loadLocalSessions();
@@ -717,6 +925,7 @@
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
     createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage,
     setCourseNode, submitCourseProgress, closeSession, studentState, buildJoinUrl,
-    loadTeacherHistory, updateTeacherHistory, getParticipantContext, updateParticipantContext, configFromUrlFragment
+    loadTeacherHistory, updateTeacherHistory, getParticipantContext, updateParticipantContext, configFromUrlFragment,
+    publishRealtime, subscribeRealtime
   };
 })();

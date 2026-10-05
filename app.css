@@ -20,7 +20,7 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: auto; }
 
 body {
   margin: 0;
@@ -2561,4 +2561,327 @@ input[type="color"]{height:46px;padding:5px 7px;cursor:pointer}
   .session-summary-metrics{grid-template-columns:1fr}
   .summary-node-row{grid-template-columns:1fr}
   .summary-node-row>b{text-align:left}
+}
+
+
+/* =========================================================
+   V2.6 — Realtime sync status
+   ========================================================= */
+.realtime-status,
+.student-realtime-status{
+  display:inline-flex;
+  align-items:center;
+  width:max-content;
+  max-width:100%;
+  gap:5px;
+  border:1px solid #dfe5ec;
+  border-radius:999px;
+  background:#f7f9fb;
+  color:#7b8495;
+  font-size:11px;
+  font-weight:850;
+  line-height:1.35;
+}
+.realtime-status{padding:5px 8px}
+.student-realtime-status{
+  margin-top:6px;
+  padding:5px 9px;
+}
+.realtime-status.live,
+.student-realtime-status.live{
+  border-color:#bee5d5;
+  background:#effaf5;
+  color:#177454;
+}
+.realtime-status.fallback,
+.student-realtime-status.fallback{
+  border-color:#ecdca7;
+  background:#fff9e9;
+  color:#8a6715;
+}
+.realtime-status.local,
+.student-realtime-status.local{
+  border-color:#dde2ea;
+  background:#f5f7fa;
+  color:#7b8495;
+}
+.realtime-status.closed,
+.student-realtime-status.closed{
+  border-color:#e3e5ea;
+  background:#f7f7f8;
+  color:#9198a5;
+}
+
+
+/* =========================================================
+   V2.6.1 — Layout / scroll reliability
+   ========================================================= */
+
+/* Long teacher pages must always be able to return to the actual document top.
+   Intentional smooth movement is still requested explicitly by JS where useful. */
+html{
+  scroll-behavior:auto;
+  scroll-padding-top:12px;
+}
+.teacher-page{
+  overflow-x:clip;
+}
+
+/* Realtime added another status chip in V2.6; let the row wrap instead of collide. */
+.session-status-row{
+  flex-wrap:wrap;
+  row-gap:7px;
+}
+
+/* Native dialogs can otherwise extend beyond short iPad / phone viewports. */
+.share-dialog,
+.data-management-dialog{
+  max-height:min(88dvh,820px);
+  overflow:auto;
+  overscroll-behavior:contain;
+}
+.share-dialog .share-card{
+  min-width:0;
+}
+
+/* A small escape hatch for every long teacher page. */
+.back-to-top-btn{
+  position:fixed;
+  right:max(16px,env(safe-area-inset-right));
+  bottom:max(18px,calc(env(safe-area-inset-bottom) + 12px));
+  z-index:80;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:44px;
+  padding:9px 13px;
+  border:1px solid #d8def0;
+  border-radius:999px;
+  background:rgba(255,255,255,.96);
+  color:#4753bd;
+  box-shadow:0 12px 32px rgba(43,56,85,.16);
+  backdrop-filter:blur(10px);
+  opacity:0;
+  transform:translateY(10px);
+  pointer-events:none;
+  cursor:pointer;
+  transition:opacity .16s ease,transform .16s ease;
+}
+.back-to-top-btn.show{
+  opacity:1;
+  transform:translateY(0);
+  pointer-events:auto;
+}
+.back-to-top-btn>span{
+  font-size:18px;
+  line-height:1;
+}
+.back-to-top-btn strong{
+  font-size:12px;
+  white-space:nowrap;
+}
+
+/* Sticky editing controls are useful only when there is enough room.
+   On short / narrow screens they consume too much of the viewport and can
+   visually cover editing fields, so they return to normal document flow. */
+@media (max-width:960px), (max-height:720px){
+  .v15-sidebar,
+  .library-panel,
+  .v15-savebar,
+  .sticky-actions{
+    position:static !important;
+  }
+  .course-player-nav{
+    position:static;
+  }
+  .teacher-course-presentation .course-player-header{
+    position:relative;
+    top:auto;
+  }
+}
+
+/* Medium-width teacher UI previously kept the wide desktop heading layout
+   until 640px, which could squeeze buttons and text into each other. */
+@media (max-width:760px){
+  .topbar{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .topbar-actions{
+    width:100%;
+    justify-content:flex-start;
+  }
+  .topbar-actions .btn{
+    flex:1 1 180px;
+  }
+  .workspace-version{
+    flex:0 0 auto;
+    align-self:flex-start;
+  }
+  .v15-editor-head,
+  .v15-section-toolbar,
+  .activity-template-toolbar{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .v15-head-actions{
+    width:100%;
+  }
+}
+
+/* On phones keep the escape button compact so it doesn't cover content. */
+@media (max-width:520px){
+  .back-to-top-btn{
+    right:max(10px,env(safe-area-inset-right));
+    bottom:max(12px,calc(env(safe-area-inset-bottom) + 8px));
+    width:44px;
+    padding:0;
+    justify-content:center;
+  }
+  .back-to-top-btn strong{
+    display:none;
+  }
+}
+
+
+/* =========================================================
+   V2.7 — Release Center / production readiness
+   ========================================================= */
+.release-center-card{
+  margin:18px 0;
+  padding:18px;
+  border:1px solid #dde3ee;
+  border-radius:18px;
+  background:linear-gradient(180deg,#fbfcff,#f6f8fc);
+}
+.release-center-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+}
+.release-center-head h3{
+  margin:2px 0 5px;
+  color:#344054;
+  font-size:19px;
+}
+.release-center-head p{
+  margin:0;
+  color:#7c8798;
+  font-size:13px;
+}
+.release-overall-badge{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  min-height:32px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid #dfe4ec;
+  background:#f7f8fa;
+  color:#717b8d;
+  font-size:12px;
+  font-weight:900;
+}
+.release-overall-badge.ready{
+  border-color:#bfe2d3;
+  background:#eef9f4;
+  color:#177252;
+}
+.release-overall-badge.warning{
+  border-color:#efdca7;
+  background:#fff9e8;
+  color:#886516;
+}
+.release-overall-badge.error{
+  border-color:#edc5c5;
+  background:#fff3f3;
+  color:#a44242;
+}
+.release-metrics{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;
+  margin:15px 0;
+}
+.release-metrics>div{
+  padding:10px 9px;
+  border:1px solid #e3e7ef;
+  border-radius:13px;
+  background:#fff;
+  text-align:center;
+}
+.release-metrics span{
+  display:block;
+  color:#8a94a5;
+  font-size:10px;
+  font-weight:850;
+}
+.release-metrics strong{
+  display:block;
+  margin-top:3px;
+  color:#4653c0;
+  font-size:17px;
+}
+.release-check-list{
+  display:grid;
+  gap:8px;
+}
+.release-check-item{
+  display:grid;
+  grid-template-columns:28px minmax(0,1fr);
+  gap:9px;
+  align-items:start;
+  padding:10px 12px;
+  border:1px solid #e5e8ef;
+  border-radius:13px;
+  background:#fff;
+}
+.release-check-icon{
+  width:28px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  border-radius:9px;
+  background:#f2f4f8;
+  font-size:14px;
+}
+.release-check-item.ok .release-check-icon{background:#eaf8f1}
+.release-check-item.warning .release-check-icon{background:#fff5d9}
+.release-check-item.error .release-check-icon{background:#fff0f0}
+.release-check-item strong{
+  display:block;
+  margin:0 0 2px;
+  color:#445065;
+  font-size:13px;
+}
+.release-check-item p{
+  margin:0;
+  color:#7d8797;
+  font-size:12px;
+  line-height:1.5;
+}
+.release-center-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:14px;
+}
+.backup-time-hint{
+  display:block;
+  margin-top:5px;
+  color:#8a94a5;
+  font-size:11px;
+}
+@media(max-width:760px){
+  .release-center-head{
+    flex-direction:column;
+    gap:10px;
+  }
+  .release-metrics{
+    grid-template-columns:1fr 1fr;
+  }
+  .release-center-actions .btn{
+    flex:1 1 180px;
+  }
 }

@@ -10,6 +10,7 @@
   <script src="teacher-core.js" defer></script>
   <script src="activity-editor.js" defer></script>
   <script src="session-teacher.js" defer></script>
+  <script src="release-center.js" defer></script>
 </head>
 <body class="teacher-page v15-page">
   <header class="topbar v15-topbar">
@@ -18,7 +19,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.5.0</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.7.0</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -561,6 +562,7 @@
             <div class="session-status-row">
               <span id="activeSessionStatus" class="session-status active">進行中</span>
               <span id="activeSessionMode" class="subtle">本機測試</span>
+              <span id="sessionRealtimeStatus" class="realtime-status local">🧪 本機同步</span>
             </div>
           </div>
           <div class="active-session-actions">
@@ -777,10 +779,37 @@
         <div><span>活動</span><strong id="backupActivityCount">0</strong></div>
       </div>
 
+      <section class="release-center-card" aria-labelledby="releaseCenterTitle">
+        <div class="release-center-head">
+          <div>
+            <span class="section-kicker">V2.7 RELEASE CENTER</span>
+            <h3 id="releaseCenterTitle">正式上線檢查</h3>
+            <p>確認這個瀏覽器的教材、備份與跨裝置 Session 是否已準備好。</p>
+          </div>
+          <span id="releaseOverallBadge" class="release-overall-badge checking">檢查中</span>
+        </div>
+
+        <div class="release-metrics">
+          <div><span>可上課 Course</span><strong id="releaseReadyCourseCount">—</strong></div>
+          <div><span>可用 Activity</span><strong id="releaseReadyActivityCount">—</strong></div>
+          <div><span>最後備份</span><strong id="releaseLastBackup">—</strong></div>
+          <div><span>本機資料量</span><strong id="releaseStorageUsage">—</strong></div>
+        </div>
+
+        <div id="releaseCheckList" class="release-check-list" aria-live="polite"></div>
+
+        <div class="release-center-actions">
+          <button id="runReleaseCheckBtn" type="button" class="btn btn-primary">✓ 執行完整檢查</button>
+          <button id="downloadDiagnosticBtn" type="button" class="btn btn-secondary">下載診斷報告</button>
+        </div>
+        <p id="releaseCheckNote" class="small-note">快速檢查不會連線到 Supabase；按「執行完整檢查」才會測試雲端 Healthcheck。</p>
+      </section>
+
       <section class="backup-action-card">
         <div>
           <strong>📤 匯出教材備份</strong>
           <p>下載一份 JSON 備份，可保存到雲端硬碟或帶到另一台電腦。</p>
+          <small id="lastBackupHint" class="backup-time-hint">尚未記錄備份時間</small>
         </div>
         <button id="exportBackupBtn" type="button" class="btn btn-primary">下載備份</button>
       </section>
@@ -800,6 +829,10 @@
       </div>
     </form>
   </dialog>
+
+  <button id="backToTopBtn" class="back-to-top-btn" type="button" aria-label="回到頁面頂端">
+    <span aria-hidden="true">↑</span><strong>回到頂部</strong>
+  </button>
 
   <dialog id="shareDialog" class="share-dialog">
     <form method="dialog" class="share-card">
