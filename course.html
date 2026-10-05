@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>完整課程｜課堂互動工具</title>
+  <link rel="stylesheet" href="app.css" />
+  <script src="session-api.js" defer></script>
+  <script src="course.js" defer></script>
+</head>
+<body class="course-player-page">
+  <main class="course-player-shell">
+    <section id="courseLoadingState" class="course-state-card">
+      <div class="loader"></div>
+      <p>正在載入完整課程…</p>
+    </section>
+
+    <section id="courseErrorState" class="course-state-card hidden">
+      <div class="big-icon">⚠️</div>
+      <h1>找不到課程資料</h1>
+      <p id="courseErrorText" class="subtle">請重新開啟老師提供的課程連結。</p>
+    </section>
+
+    <section id="coursePlayerState" class="hidden">
+      <header class="course-player-header">
+        <div class="course-brand">
+          <span id="courseCoverIcon" class="course-cover-icon">📚</span>
+          <div>
+            <p class="eyebrow">V2 COURSE PLAYER</p>
+            <h1 id="coursePlayerTitle">課程名稱</h1>
+            <p id="coursePlayerSubtitle" class="subtle"></p>
+            <div id="courseSessionBadge" class="student-session-badge hidden"></div>
+            <div id="coursePresentationBadge" class="course-presentation-badge hidden">
+              <span class="presentation-live-dot"></span>
+              <strong id="coursePresentationViewLabel">教師投影 · 教材畫面</strong>
+              <small id="coursePresentationSyncLabel">等待教師同步</small>
+            </div>
+          </div>
+        </div>
+        <div id="courseProgressWrap" class="course-progress-wrap">
+          <div class="course-progress-meta">
+            <span id="courseLessonLabel">第一節</span>
+            <span id="courseStepCounter">1 / 1</span>
+          </div>
+          <div class="progress-track"><div id="courseProgressBar" class="progress-bar"></div></div>
+        </div>
+      </header>
+
+      <section id="courseLessonIntro" class="course-lesson-intro hidden">
+        <span class="section-kicker">LESSON GOAL</span>
+        <strong id="courseLessonTitle"></strong>
+        <p id="courseLessonGoal"></p>
+      </section>
+
+      <section id="courseNodeCard" class="course-node-card">
+        <header class="course-node-head">
+          <div>
+            <span id="courseNodeKicker" class="section-kicker">CONTENT</span>
+            <h2 id="courseNodeTitle">教學節點</h2>
+            <p id="courseNodeSubtitle" class="subtle"></p>
+          </div>
+          <span id="courseNodeStatus" class="status-chip">學習中</span>
+        </header>
+        <div id="courseNodeContent" class="course-node-content"></div>
+      </section>
+
+      <section id="coursePresentationResults" class="course-presentation-results hidden">
+        <header class="presentation-results-head">
+          <div>
+            <span class="section-kicker">CLASS RESULTS</span>
+            <h2 id="presentationResultsTitle">全班結果</h2>
+            <p id="presentationResultsSubtitle" class="subtle">目前節點的匿名全班統計</p>
+          </div>
+          <span id="presentationResultsPhase" class="stage-badge">即時</span>
+        </header>
+        <div id="presentationResultMetrics" class="presentation-result-metrics"></div>
+        <div id="presentationDistributionSection" class="presentation-distribution-section hidden">
+          <div class="presentation-results-section-head">
+            <strong>全班分布</strong>
+            <span id="presentationDistributionTotal"></span>
+          </div>
+          <div id="presentationDistributionList" class="presentation-distribution-list"></div>
+        </div>
+        <div id="presentationResultsEmpty" class="presentation-results-empty hidden">
+          目前還沒有可以公開的全班結果。
+        </div>
+      </section>
+
+      <nav class="course-player-nav" aria-label="課程導覽">
+        <button id="coursePrevBtn" class="btn btn-secondary" type="button">← 上一步</button>
+        <div id="courseActivityWait" class="course-activity-wait hidden">完成活動後即可繼續</div>
+        <button id="courseNextBtn" class="btn btn-primary" type="button">下一步 →</button>
+      </nav>
+    </section>
+
+    <section id="courseCompleteState" class="course-state-card hidden">
+      <div class="big-icon">🎉</div>
+      <h1>課程完成</h1>
+      <p id="courseCompleteText" class="subtle">你已經完成這門課的所有步驟。</p>
+      <button id="courseRestartBtn" class="btn btn-primary" type="button">從頭再看一次</button>
+    </section>
+  </main>
+</body>
+</html>

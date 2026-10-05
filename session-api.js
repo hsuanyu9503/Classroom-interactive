@@ -133,7 +133,8 @@
     localStorage.setItem(TEACHER_HISTORY_KEY, JSON.stringify(items.slice(0, 20)));
   }
 
-  function rememberTeacherSession(session) {
+  function rememberTeacherSession(session, snapshot = null) {
+    const previous = loadTeacherHistory().find(item => item.id === session.id) || {};
     const history = loadTeacherHistory().filter(item => item.id !== session.id);
     history.unshift({
       id: session.id,
@@ -141,10 +142,48 @@
       title: session.title,
       teacherToken: session.teacherToken,
       mode: session.mode,
-      activityMode: session.activityMode || "",
-      stageCount: session.stageCount || 1,
-      createdAt: session.createdAt || new Date().toISOString()
+      sessionKind: session.sessionKind || previous.sessionKind || "activity",
+      activityMode: session.activityMode || snapshot?.activity_mode || previous.activityMode || "",
+      stageCount: session.stageCount || snapshot?.stage_count || previous.stageCount || 1,
+      courseId: session.courseId || snapshot?.course_id || previous.courseId || "",
+      courseEncoded: session.courseEncoded || snapshot?.course_encoded || previous.courseEncoded || "",
+      currentNodeRef: session.currentNodeRef || snapshot?.current_node_ref || previous.currentNodeRef || "",
+      revision: session.revision || snapshot?.revision || previous.revision || 1,
+      status: snapshot?.status || session.status || previous.status || "active",
+      participantCount: Number(snapshot?.participant_count ?? previous.participantCount ?? 0),
+      responseCount: Number(snapshot?.response_count ?? previous.responseCount ?? 0),
+      lastViewedAt: new Date().toISOString(),
+      createdAt: session.createdAt || previous.createdAt || new Date().toISOString()
     });
+    saveTeacherHistory(history);
+  }
+
+  function updateTeacherHistory(sessionMeta, snapshot = null) {
+    if (!sessionMeta?.id) return;
+    const history = loadTeacherHistory();
+    const index = history.findIndex(item => item.id === sessionMeta.id);
+    if (index < 0) {
+      rememberTeacherSession(sessionMeta, snapshot);
+      return;
+    }
+    const previous = history[index];
+    history[index] = {
+      ...previous,
+      code: sessionMeta.code || previous.code,
+      title: sessionMeta.title || previous.title,
+      mode: sessionMeta.mode || previous.mode,
+      sessionKind: sessionMeta.sessionKind || snapshot?.session_kind || previous.sessionKind || "activity",
+      activityMode: sessionMeta.activityMode || snapshot?.activity_mode || previous.activityMode || "",
+      stageCount: sessionMeta.stageCount || snapshot?.stage_count || previous.stageCount || 1,
+      courseId: sessionMeta.courseId || snapshot?.course_id || previous.courseId || "",
+      courseEncoded: sessionMeta.courseEncoded || snapshot?.course_encoded || previous.courseEncoded || "",
+      currentNodeRef: sessionMeta.currentNodeRef || snapshot?.current_node_ref || previous.currentNodeRef || "",
+      revision: sessionMeta.revision || snapshot?.revision || previous.revision || 1,
+      status: snapshot?.status || sessionMeta.status || previous.status || "active",
+      participantCount: Number(snapshot?.participant_count ?? previous.participantCount ?? 0),
+      responseCount: Number(snapshot?.response_count ?? previous.responseCount ?? 0),
+      lastViewedAt: new Date().toISOString()
+    };
     saveTeacherHistory(history);
   }
 
@@ -163,7 +202,7 @@
       });
       const id = typeof result === "string" ? result : (result?.id || result?.session_id || result);
       const session = {
-        id, code, title, teacherToken, mode:"cloud",
+        id, code, title, teacherToken, mode:"cloud", sessionKind:"activity",
         activityMode: activityMode || "",
         stageCount: Math.max(1, Number(stageCount) || 1),
         currentStage: 1,
@@ -176,7 +215,7 @@
     const sessions = loadLocalSessions();
     const id = crypto?.randomUUID?.() || `local-${Date.now()}`;
     const session = {
-      id, code, title, teacherToken, mode:"local",
+      id, code, title, teacherToken, mode:"local", sessionKind:"activity",
       activityMode: activityMode || "",
       activityEncoded,
       stageCount: Math.max(1, Number(stageCount) || 1),
@@ -185,6 +224,69 @@
       createdAt:new Date().toISOString(),
       participants:[],
       responses:[]
+    };
+    sessions.unshift(session);
+    saveLocalSessions(sessions);
+    rememberTeacherSession(session);
+    return session;
+  }
+
+  async function createCourseSession({
+    title,
+    courseEncoded,
+    courseId = "",
+    currentNodeRef,
+    activityMode = "",
+    stageCount = 1
+  }) {
+    if (!courseEncoded || !currentNodeRef) throw new Error("完整課程 Session 資料不完整");
+
+    const code = randomCode();
+    const teacherToken = randomToken();
+
+    if (isCloudConfigured()) {
+      const result = await rpc("create_course_session", {
+        p_code:code,
+        p_teacher_token:teacherToken,
+        p_title:title,
+        p_course_encoded:courseEncoded,
+        p_course_id:courseId || "",
+        p_current_node_ref:currentNodeRef,
+        p_activity_mode:activityMode || "",
+        p_stage_count:Math.max(1,Number(stageCount)||1)
+      });
+      const id = typeof result === "string" ? result : (result?.id || result?.session_id || result);
+      const session = {
+        id,code,title,teacherToken,mode:"cloud",sessionKind:"course",
+        courseId:courseId || "",
+        courseEncoded,
+        currentNodeRef,
+        revision:1,
+        activityMode:activityMode || "",
+        stageCount:Math.max(1,Number(stageCount)||1),
+        currentStage:1,
+        createdAt:new Date().toISOString()
+      };
+      rememberTeacherSession(session);
+      return session;
+    }
+
+    const sessions = loadLocalSessions();
+    const id = crypto?.randomUUID?.() || `local-course-${Date.now()}`;
+    const session = {
+      id,code,title,teacherToken,mode:"local",sessionKind:"course",
+      courseId:courseId || "",
+      courseEncoded,
+      currentNodeRef,
+      revision:1,
+      activityMode:activityMode || "",
+      stageCount:Math.max(1,Number(stageCount)||1),
+      currentStage:1,
+      status:"active",
+      createdAt:new Date().toISOString(),
+      participants:[],
+      responses:[],
+      progress:[]
     };
     sessions.unshift(session);
     saveLocalSessions(sessions);
@@ -207,7 +309,10 @@
         p_participant_token: participantToken
       }, config);
       const data = Array.isArray(result) ? result[0] : result;
-      if (!data?.session_id || !data?.activity_encoded) throw new Error("無法取得課堂活動");
+      if (!data?.session_id) throw new Error("無法取得課堂 Session");
+      const kind = data.session_kind || "activity";
+      if (kind === "course" && !data.course_encoded) throw new Error("無法取得完整課程");
+      if (kind !== "course" && !data.activity_encoded) throw new Error("無法取得課堂活動");
       const context = {
         mode:"cloud",
         cloudConfig:config,
@@ -216,11 +321,16 @@
         participantToken,
         studentCode:cleanStudent,
         code:cleanCode,
-        title:data.title || "課堂活動",
-        activityEncoded:data.activity_encoded,
+        title:data.title || (kind === "course" ? "完整課程" : "課堂活動"),
+        sessionKind:kind,
+        activityEncoded:data.activity_encoded || "",
         activityMode:data.activity_mode || "",
         stageCount:data.stage_count || 1,
-        currentStage:data.current_stage || 1
+        currentStage:data.current_stage || 1,
+        courseEncoded:data.course_encoded || "",
+        courseId:data.course_id || "",
+        currentNodeRef:data.current_node_ref || "",
+        revision:data.revision || 1
       };
       saveParticipantContext(context);
       return context;
@@ -252,10 +362,15 @@
       studentCode:cleanStudent,
       code:cleanCode,
       title:session.title,
-      activityEncoded:session.activityEncoded,
+      sessionKind:session.sessionKind || "activity",
+      activityEncoded:session.activityEncoded || "",
       activityMode:session.activityMode || "",
       stageCount:session.stageCount || 1,
-      currentStage:session.currentStage || 1
+      currentStage:session.currentStage || 1,
+      courseEncoded:session.courseEncoded || "",
+      courseId:session.courseId || "",
+      currentNodeRef:session.currentNodeRef || "",
+      revision:session.revision || 1
     };
     saveParticipantContext(context);
     return context;
@@ -286,7 +401,8 @@
         p_mode: mode,
         p_selected_elements: selectedElements,
         p_selected_type: selectedType || null,
-        p_payload: payload
+        p_payload: payload,
+        p_node_ref: context.currentNodeRef || null
       }, context.cloudConfig);
       return {ok:true};
     }
@@ -294,14 +410,16 @@
     const sessions = loadLocalSessions();
     const session = sessions.find(item => item.id === context.sessionId);
     if (!session) throw new Error("本機 Session 已不存在");
+    if (session.status !== "active") throw new Error("Session 已結束");
     const participant = session.participants.find(item => item.id === context.participantId && item.participantToken === context.participantToken);
     if (!participant) throw new Error("學生加入憑證已失效");
 
-    const key = `${context.participantId}:${taskIndex}:${stageKey}`;
+    const key = `${context.participantId}:${context.currentNodeRef || "activity"}:${taskIndex}:${stageKey}`;
     const record = {
       key,
       participantId:context.participantId,
       studentCode:context.studentCode,
+      nodeRef:context.currentNodeRef || "",
       taskIndex,
       stageKey,
       mode,
@@ -335,15 +453,28 @@
       code:session.code,
       title:session.title,
       status:session.status,
+      session_kind:session.sessionKind || "activity",
+      course_id:session.courseId || "",
+      course_encoded:session.courseEncoded || "",
+      current_node_ref:session.currentNodeRef || "",
+      revision:session.revision || 1,
       activity_mode:session.activityMode,
       current_stage:session.currentStage || 1,
       stage_count:session.stageCount || 1,
       participant_count:session.participants.length,
       response_count:session.responses.length,
       responses:session.responses.map(r => ({
-        participant_id:r.participantId, student_code:r.studentCode, task_index:r.taskIndex,
+        participant_id:r.participantId, student_code:r.studentCode, node_ref:r.nodeRef || "", task_index:r.taskIndex,
         stage_key:r.stageKey, mode:r.mode, selected_type:r.selectedType, selected_elements:r.selectedElements,
         payload:r.payload, submitted_at:r.submittedAt
+      })),
+      progress:(session.progress || []).map(item => ({
+        participant_id:item.participantId,
+        student_code:item.studentCode,
+        node_ref:item.nodeRef,
+        status:item.status,
+        started_at:item.startedAt || null,
+        completed_at:item.completedAt || null
       })),
       participants:session.participants.map(p => ({
         id:p.id,
@@ -377,6 +508,126 @@
     sessionMeta.currentStage = session.currentStage;
     saveLocalSessions(sessions);
     return session.currentStage;
+  }
+
+  function updateParticipantContext(patch = {}) {
+    const context = getParticipantContext();
+    if (!context) return null;
+    const next = {...context,...patch};
+    saveParticipantContext(next);
+    return next;
+  }
+
+  async function setCourseNode(sessionMeta, nodeRef, {
+    activityMode = "",
+    stageCount = 1
+  } = {}) {
+    if (!sessionMeta?.id || !nodeRef) throw new Error("Course Session 節點資料不完整");
+    const totalStages = Math.max(1,Number(stageCount)||1);
+
+    if (sessionMeta.mode === "cloud") {
+      const result = await rpc("set_course_session_node", {
+        p_session_id:sessionMeta.id,
+        p_teacher_token:sessionMeta.teacherToken,
+        p_node_ref:nodeRef,
+        p_activity_mode:activityMode || "",
+        p_stage_count:totalStages
+      });
+      const data = typeof result === "string" ? JSON.parse(result) : result;
+      sessionMeta.currentNodeRef = data?.current_node_ref || nodeRef;
+      sessionMeta.revision = data?.revision || (sessionMeta.revision || 1) + 1;
+      sessionMeta.currentStage = data?.current_stage || 1;
+      sessionMeta.stageCount = data?.stage_count || totalStages;
+      sessionMeta.activityMode = data?.activity_mode || activityMode || "";
+      rememberTeacherSession(sessionMeta);
+      return data;
+    }
+
+    const sessions = loadLocalSessions();
+    const session = sessions.find(item => item.id === sessionMeta.id && item.teacherToken === sessionMeta.teacherToken);
+    if (!session || (session.sessionKind || "activity") !== "course") throw new Error("找不到完整課程 Session");
+    session.currentNodeRef = nodeRef;
+    session.revision = (session.revision || 1) + 1;
+    session.currentStage = 1;
+    session.stageCount = totalStages;
+    session.activityMode = activityMode || "";
+    sessionMeta.currentNodeRef = nodeRef;
+    sessionMeta.revision = session.revision;
+    sessionMeta.currentStage = 1;
+    sessionMeta.stageCount = totalStages;
+    sessionMeta.activityMode = activityMode || "";
+    saveLocalSessions(sessions);
+    rememberTeacherSession(sessionMeta);
+    return {
+      current_node_ref:nodeRef,
+      revision:session.revision,
+      current_stage:1,
+      stage_count:totalStages,
+      activity_mode:activityMode || ""
+    };
+  }
+
+  async function submitCourseProgress(nodeRef, status = "completed") {
+    const context = getParticipantContext();
+    if (!context || context.sessionKind !== "course") return {skipped:true};
+    const cleanNode = String(nodeRef || context.currentNodeRef || "").trim();
+    if (!cleanNode) throw new Error("找不到目前課程節點");
+
+    if (context.mode === "cloud") {
+      await rpc("set_course_node_progress", {
+        p_session_id:context.sessionId,
+        p_participant_token:context.participantToken,
+        p_node_ref:cleanNode,
+        p_status:status
+      }, context.cloudConfig);
+      return {ok:true};
+    }
+
+    const sessions = loadLocalSessions();
+    const session = sessions.find(item => item.id === context.sessionId);
+    if (!session) throw new Error("本機 Session 已不存在");
+    if (session.status !== "active") throw new Error("Session 已結束");
+    const participant = session.participants.find(item => item.id === context.participantId && item.participantToken === context.participantToken);
+    if (!participant) throw new Error("學生加入憑證已失效");
+
+    session.progress ||= [];
+    const key = `${context.participantId}:${cleanNode}`;
+    const now = new Date().toISOString();
+    const existing = session.progress.find(item => item.key === key);
+    const record = {
+      key,
+      participantId:context.participantId,
+      studentCode:context.studentCode,
+      nodeRef:cleanNode,
+      status:status === "in-progress" ? "in-progress" : "completed",
+      startedAt:existing?.startedAt || now,
+      completedAt:status === "completed" ? now : (existing?.completedAt || null)
+    };
+    if (existing) Object.assign(existing,record);
+    else session.progress.push(record);
+    saveLocalSessions(sessions);
+    return {ok:true};
+  }
+
+  async function closeSession(sessionMeta) {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if (sessionMeta.mode === "cloud") {
+      await rpc("close_classroom_session", {
+        p_session_id:sessionMeta.id,
+        p_teacher_token:sessionMeta.teacherToken
+      });
+      sessionMeta.status = "closed";
+      rememberTeacherSession(sessionMeta);
+      return true;
+    }
+    const sessions = loadLocalSessions();
+    const session = sessions.find(item => item.id === sessionMeta.id && item.teacherToken === sessionMeta.teacherToken);
+    if (!session) throw new Error("找不到本機 Session");
+    session.status = "closed";
+    sessionMeta.status = "closed";
+    saveLocalSessions(sessions);
+    rememberTeacherSession(sessionMeta);
+    return true;
   }
 
   async function studentState() {
@@ -417,10 +668,23 @@
       return [...counts.values()].sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name,"zh-Hant"));
     };
     const finalResponses = openResponses.filter(r => r.stageKey === "final");
+    const ownProgress = (session.progress || [])
+      .filter(item => item.participantId === participant.id)
+      .map(item => ({
+        node_ref:item.nodeRef,
+        status:item.status,
+        started_at:item.startedAt || null,
+        completed_at:item.completedAt || null
+      }));
+
     return {
+      session_kind:session.sessionKind || "activity",
+      current_node_ref:session.currentNodeRef || "",
+      revision:session.revision || 1,
       current_stage:session.currentStage || 1,
       stage_count:session.stageCount || 1,
       status:session.status,
+      progress:ownProgress,
       responses:ownResponses,
       open_stats:{
         initial:distribution("initial"),
@@ -434,7 +698,12 @@
   }
 
   function buildJoinUrl(session) {
-    const url = new URL("join.html", location.href);
+    let url;
+    try {
+      url = new URL("join.html", location.href);
+    } catch {
+      url = new URL("join.html", document.baseURI);
+    }
     url.searchParams.set("code", session.code);
 
     if (session.mode === "cloud") {
@@ -446,7 +715,8 @@
 
   window.ClassroomSessionAPI = {
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
-    createSession, joinSession, submitResponse, teacherSnapshot, setStage, studentState, buildJoinUrl,
-    loadTeacherHistory, getParticipantContext, configFromUrlFragment
+    createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage,
+    setCourseNode, submitCourseProgress, closeSession, studentState, buildJoinUrl,
+    loadTeacherHistory, updateTeacherHistory, getParticipantContext, updateParticipantContext, configFromUrlFragment
   };
 })();

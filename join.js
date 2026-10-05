@@ -23,9 +23,18 @@
         $("studentCode").value,
         cloud
       );
-      const play = new URL("play.html", location.href);
-      play.hash = `data=${context.activityEncoded}&session=1`;
-      location.href = play.toString();
+      let target;
+      try {
+        target = new URL(context.sessionKind === "course" ? "course.html" : "play.html", location.href);
+      } catch {
+        target = new URL(context.sessionKind === "course" ? "course.html" : "play.html", document.baseURI);
+      }
+      if (context.sessionKind === "course") {
+        target.hash = `data=${context.courseEncoded}&session=1`;
+      } else {
+        target.hash = `data=${context.activityEncoded}&session=1`;
+      }
+      location.href = target.toString();
     } catch (error) {
       errorBox.textContent = error.message || "加入課堂失敗";
       errorBox.classList.remove("hidden");

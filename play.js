@@ -1228,6 +1228,7 @@ function showComplete() {
   el("completePanel").classList.remove("hidden");
   el("progressBar").style.width = "100%";
   el("progressText").textContent = "100%";
+  notifyCoursePlayerComplete();
 
   const completeText = el("completeText");
   if (activity.template === "progressive-reveal") {
@@ -1300,5 +1301,23 @@ el("submitOpenClassificationBtn").addEventListener("click", submitOpenClassifica
 el("openPreviewRejudgeBtn").addEventListener("click", beginOpenPreviewRejudge);
 el("openClassificationFinishBtn").addEventListener("click", showComplete);
 el("elementTypeNextBtn").addEventListener("click", nextCase);
+
+function isEmbeddedCourseActivity() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return params.get("embedded") === "1";
+}
+
+function notifyCoursePlayerComplete() {
+  if (!isEmbeddedCourseActivity() || window.parent === window) return;
+  window.parent.postMessage({
+    type:"classroom:activity-complete",
+    activityId:activity?.id || "",
+    template:activity?.template || ""
+  }, "*");
+}
+
+if (isEmbeddedCourseActivity()) {
+  document.body.classList.add("embedded-activity");
+}
 
 loadFromUrl();

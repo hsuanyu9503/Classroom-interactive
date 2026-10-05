@@ -3,29 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>課堂互動工具｜課程設計工作台</title>
+  <title>課堂互動工具｜教師工作台</title>
   <link rel="stylesheet" href="app.css" />
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
   <script src="session-api.js" defer></script>
-  <script src="teacher.js" defer></script>
+  <script src="teacher-core.js" defer></script>
+  <script src="activity-editor.js" defer></script>
+  <script src="session-teacher.js" defer></script>
 </head>
 <body class="teacher-page v15-page">
   <header class="topbar v15-topbar">
     <div>
-      <p class="eyebrow">課程設計工作台</p>
+      <p id="workflowEyebrow" class="eyebrow">PREP WORKSPACE</p>
       <h1>課堂互動工具</h1>
-      <p class="subtle">先整理共用教材，再把展示、互動與收束串成完整的一堂課。</p>
+      <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V1.9.6</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.5.0</span></div>
   </header>
 
-  <nav class="workspace-tabs" aria-label="工作區切換">
-    <button class="workspace-tab active" data-view="courses">🧭 課程編排</button>
-    <button class="workspace-tab" data-view="types">🧰 類型工具箱</button>
-    <button class="workspace-tab" data-view="works">🗂️ 作品庫</button>
-    <button class="workspace-tab" data-view="activities">🧩 活動模板</button>
-    <button class="workspace-tab" data-view="sessions">📡 課堂 Session</button>
-  </nav>
+  <section class="teacher-workflow-nav" aria-label="教師工作流程">
+    <div class="workflow-switcher" role="tablist" aria-label="備課與上課">
+      <button class="workflow-mode-btn active" data-workflow="prepare" type="button">
+        <span class="workflow-mode-icon">✏️</span>
+        <span><strong>備課</strong><small>整理教材、活動與課程流程</small></span>
+      </button>
+      <button class="workflow-mode-btn" data-workflow="teach" type="button">
+        <span class="workflow-mode-icon">📡</span>
+        <span><strong>上課</strong><small>建立 Session、控制進度與投影</small></span>
+      </button>
+    </div>
+
+    <div class="workspace-tabs workflow-subnav" data-workflow-nav="prepare" aria-label="備課工具">
+      <button class="workspace-tab active" data-view="courses">🧭 課程編排</button>
+      <button class="workspace-tab" data-view="works">🗂️ 作品庫</button>
+      <button class="workspace-tab" data-view="types">🧰 類型工具箱</button>
+      <button class="workspace-tab" data-view="activities">🧩 活動模板</button>
+    </div>
+
+    <div class="workspace-tabs workflow-subnav hidden" data-workflow-nav="teach" aria-label="上課工具">
+      <button class="workspace-tab" data-view="sessions">📡 課堂控制</button>
+    </div>
+  </section>
+
+  <section id="workflowContextBar" class="workflow-context-bar" aria-live="polite">
+    <div>
+      <span id="workflowContextKicker" class="section-kicker">PREP · COURSE</span>
+      <strong id="workflowContextTitle">課程編排</strong>
+      <p id="workflowContextDescription">把 Lesson 與 Node 串成完整教學流程，完成後可預覽、分享或帶入 Session。</p>
+    </div>
+    <div id="workflowContextStats" class="workflow-context-stats"></div>
+  </section>
 
   <section class="workspace-view active" data-workspace-view="courses">
     <main class="v15-layout">
@@ -72,6 +99,17 @@
           <textarea id="courseDescription" rows="3" placeholder="簡短記錄這堂課的核心概念或教師備課重點。"></textarea>
         </label>
 
+        <div class="course-v2-settings">
+          <label class="toggle-field v2-disabled-setting">
+            <input id="courseAllowStudentNavigation" type="checkbox" checked disabled />
+            <span>獨立課程由學生自行導覽 <small>（使用 Course Session 時會自動改為老師同步控制）</small></span>
+          </label>
+          <label class="toggle-field">
+            <input id="courseShowProgress" type="checkbox" checked />
+            <span>學生端顯示整體課程進度</span>
+          </label>
+        </div>
+
         <div class="v15-section-toolbar">
           <div>
             <span class="section-kicker">LESSONS</span>
@@ -82,12 +120,17 @@
 
         <div id="lessonEditor" class="lesson-editor"></div>
 
-        <div class="v15-savebar">
+        <div class="v15-savebar course-v2-savebar">
           <div class="save-state">
             <span class="save-dot"></span>
             <span id="courseSaveState">尚未修改</span>
           </div>
-          <button id="saveCourseBtn" class="btn btn-primary">儲存課程架構</button>
+          <div class="course-v2-actions">
+            <button id="startCourseSessionBtn" class="btn btn-teach" type="button">📡 用這門課上課</button>
+            <button id="previewCourseBtn" class="btn btn-secondary" type="button">▶ 預覽完整課程</button>
+            <button id="shareCourseBtn" class="btn btn-accent" type="button">🔗 分享完整課程</button>
+            <button id="saveCourseBtn" class="btn btn-primary" type="button">儲存課程架構</button>
+          </div>
         </div>
       </section>
     </main>
@@ -284,7 +327,7 @@
               <small>學生選字卡後判斷對錯，再揭露主要小說類型。</small>
             </span>
           </label>
-          <label class="mode-option">
+          <label id="legacyOpenTagsOption" class="mode-option legacy-mode-option">
             <input type="radio" name="activityMode" value="open-tags" />
             <span class="mode-option-body">
               <strong>💬 開放式標籤討論</strong>
@@ -378,6 +421,7 @@
           <button id="deleteBtn" class="btn btn-danger-soft">刪除</button>
         </div>
         <div class="action-right">
+          <button id="startActivitySessionBtn" class="btn btn-teach">📡 用這個活動上課</button>
           <button id="previewBtn" class="btn btn-secondary">預覽學生畫面</button>
           <button id="shareBtn" class="btn btn-accent">🔗 分享獨立活動</button>
         </div>
@@ -389,6 +433,50 @@
 
   <section class="workspace-view" data-workspace-view="sessions">
     <main class="session-workspace">
+      <section id="teachHomeDashboard" class="panel teach-home-dashboard">
+        <div class="teach-home-head">
+          <div>
+            <span class="section-kicker">TEACH HOME</span>
+            <h2>今天要上什麼？</h2>
+            <p class="subtle">從準備完成的課程或活動直接開始，也可以繼續最近一次尚未結束的 Session。</p>
+          </div>
+          <button id="openSessionSetupBtn" class="btn btn-secondary" type="button">＋ 自訂建立 Session</button>
+        </div>
+
+        <div class="teach-home-metrics">
+          <div><span>可上課課程</span><strong id="teachReadyCourseCount">0</strong></div>
+          <div><span>可用活動</span><strong id="teachReadyActivityCount">0</strong></div>
+          <div><span>進行中 Session</span><strong id="teachActiveSessionCount">0</strong></div>
+          <div><span>歷史 Session</span><strong id="teachHistorySessionCount">0</strong></div>
+        </div>
+
+        <section id="teachContinueCard" class="teach-continue-card hidden">
+          <div>
+            <span class="summary-label">CONTINUE SESSION</span>
+            <strong id="teachContinueTitle">最近的課堂</strong>
+            <p id="teachContinueMeta">—</p>
+          </div>
+          <button id="continueLatestSessionBtn" class="btn btn-primary" type="button">繼續上課 →</button>
+        </section>
+
+        <div class="teach-launch-grid">
+          <section class="teach-launch-panel">
+            <div class="teach-launch-head">
+              <div><span class="section-kicker">READY COURSES</span><h3>完整課程</h3></div>
+              <button id="goCoursePrepBtn" class="btn btn-ghost" type="button">回備課編排</button>
+            </div>
+            <div id="teachReadyCourseList" class="teach-ready-list"></div>
+          </section>
+          <section class="teach-launch-panel">
+            <div class="teach-launch-head">
+              <div><span class="section-kicker">READY ACTIVITIES</span><h3>單一活動</h3></div>
+              <button id="goActivityPrepBtn" class="btn btn-ghost" type="button">回活動模板</button>
+            </div>
+            <div id="teachReadyActivityList" class="teach-ready-list"></div>
+          </section>
+        </div>
+      </section>
+
       <section class="panel session-config-card">
         <div class="v15-editor-head session-head">
           <div>
@@ -427,10 +515,25 @@
           </div>
         </details>
 
+        <div class="session-kind-selector">
+          <label class="session-kind-option active">
+            <input id="sessionKindActivity" type="radio" name="sessionKind" value="activity" checked />
+            <span><strong>🧩 單一活動 Session</strong><small>沿用 V1：只進行一個 Activity。</small></span>
+          </label>
+          <label class="session-kind-option">
+            <input id="sessionKindCourse" type="radio" name="sessionKind" value="course" />
+            <span><strong>📚 完整課程 Session</strong><small>學生只加入一次，整堂課跟著老師切換 Node。</small></span>
+          </label>
+        </div>
+
         <div class="session-create-grid">
-          <label class="field">
+          <label id="sessionActivityField" class="field">
             <span>要進行的活動</span>
             <select id="sessionActivitySelect"></select>
+          </label>
+          <label id="sessionCourseField" class="field hidden">
+            <span>要進行的完整課程</span>
+            <select id="sessionCourseSelect"></select>
           </label>
           <label class="field">
             <span>Session 顯示名稱</span>
@@ -439,6 +542,7 @@
         </div>
 
         <div id="sessionActivityPreview" class="session-activity-preview"></div>
+        <div id="sessionCoursePreview" class="session-activity-preview hidden"></div>
 
         <div class="session-create-actions">
           <div>
@@ -459,7 +563,10 @@
               <span id="activeSessionMode" class="subtle">本機測試</span>
             </div>
           </div>
-          <button id="refreshSessionBtn" class="btn btn-secondary" type="button">↻ 更新資料</button>
+          <div class="active-session-actions">
+            <button id="refreshSessionBtn" class="btn btn-secondary" type="button">↻ 更新資料</button>
+            <button id="closeSessionBtn" class="btn btn-danger-soft" type="button">結束 Session</button>
+          </div>
         </div>
 
         <div class="session-live-grid">
@@ -488,10 +595,51 @@
             <strong id="sessionResponseCount">0</strong>
           </div>
           <div class="session-metric">
-            <span>活動模式</span>
+            <span>Session 類型</span>
             <strong id="sessionActivityMode">—</strong>
           </div>
         </div>
+
+        <section id="courseSessionControl" class="course-session-control hidden">
+          <div class="session-section-head">
+            <div>
+              <span class="section-kicker">COURSE CONTROL</span>
+              <h3>完整課程控制台</h3>
+            </div>
+            <span id="courseSessionNodeBadge" class="stage-badge">1 / 1</span>
+          </div>
+
+          <div class="course-control-grid">
+            <div class="course-current-node">
+              <span class="summary-label">目前全班節點</span>
+              <strong id="courseSessionNodeTitle">—</strong>
+              <p id="courseSessionLessonTitle">—</p>
+              <small id="courseSessionNodeMeta">—</small>
+              <div class="progressive-control-actions">
+                <button id="previousCourseNodeBtn" class="btn btn-secondary" type="button">← 上一步</button>
+                <button id="openCoursePresentationBtn" class="btn btn-secondary" type="button">🖥️ 開啟投影畫面</button>
+                <button id="nextCourseNodeBtn" class="btn btn-primary" type="button">下一步 →</button>
+              </div>
+              <div id="presentationControlBar" class="presentation-control-bar">
+                <span class="summary-label">投影內容</span>
+                <div class="presentation-view-switch">
+                  <button id="presentationContentBtn" class="presentation-view-btn active" type="button">教材畫面</button>
+                  <button id="presentationResultsBtn" class="presentation-view-btn" type="button">全班結果</button>
+                </div>
+                <span id="presentationSyncState" class="presentation-sync-state">尚未開啟投影</span>
+              </div>
+            </div>
+            <div class="course-node-progress-panel">
+              <span class="summary-label">目前節點完成狀態</span>
+              <div class="course-node-progress-number">
+                <strong id="courseNodeCompletedCount">0</strong>
+                <span>/ <b id="courseNodeParticipantCount">0</b> 人</span>
+              </div>
+              <div class="progress-track"><div id="courseNodeProgressBar" class="progress-bar"></div></div>
+              <p id="courseNodeProgressText">還沒有學生完成這一步。</p>
+            </div>
+          </div>
+        </section>
 
         <section id="progressiveSessionControl" class="progressive-session-control hidden">
           <div class="session-section-head">
@@ -565,6 +713,23 @@
         </section>
       </section>
 
+      <section id="sessionSummaryCard" class="panel session-summary-card hidden">
+        <div class="session-section-head">
+          <div>
+            <span class="section-kicker">SESSION SUMMARY</span>
+            <h2 id="sessionSummaryTitle">課後摘要</h2>
+            <p id="sessionSummarySubtitle" class="subtle">匿名彙整這次課堂的完成與作答狀況。</p>
+          </div>
+          <span id="sessionSummaryStatus" class="session-status">已結束</span>
+        </div>
+        <div class="session-summary-metrics">
+          <div><span>參與學生</span><strong id="summaryParticipantCount">0</strong></div>
+          <div><span>作答紀錄</span><strong id="summaryResponseCount">0</strong></div>
+          <div><span>整體完成率</span><strong id="summaryCompletionRate">—</strong></div>
+        </div>
+        <div id="sessionSummaryDetails" class="session-summary-details"></div>
+      </section>
+
       <section class="panel session-history-card">
         <div class="session-section-head">
           <div>
@@ -577,12 +742,33 @@
     </main>
   </section>
 
+  <dialog id="courseShareDialog" class="share-dialog">
+    <form method="dialog" class="share-card">
+      <button class="dialog-close" aria-label="關閉">×</button>
+      <span class="section-kicker">V2 COURSE PLAYER</span>
+      <h2 id="shareCourseName">完整課程</h2>
+      <p class="subtle">系統會把目前課程與所引用教材製作成可播放快照。內容較多時 QR 可能停用，但學生連結仍可使用。</p>
+      <div id="courseQrcode" class="qr-wrap" aria-label="課程 QR Code"></div>
+      <p id="courseQrNotice" class="small-note qr-notice hidden"></p>
+      <label class="field">
+        <span>學生課程連結</span>
+        <div class="copy-row">
+          <input id="courseShareUrl" type="text" readonly />
+          <button id="copyCourseUrlBtn" type="button" class="btn btn-secondary">複製</button>
+        </div>
+      </label>
+      <div class="dialog-actions">
+        <a id="openCourseLink" class="btn btn-primary" target="_blank" rel="noopener">開啟課程播放器</a>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dataManagementDialog" class="share-dialog data-management-dialog">
     <form method="dialog" class="share-card">
       <button class="dialog-close" aria-label="關閉">×</button>
       <span class="section-kicker">DATA MANAGEMENT</span>
       <h2>教材資料管理</h2>
-      <p class="subtle">備份與還原課程、類型工具箱、作品庫與活動模板。Supabase 金鑰、Session 紀錄與學生作答不會寫入備份檔。</p>
+      <p class="subtle">備份與還原 V2 Course／Lesson／Node、類型工具箱、作品庫與活動模板。Supabase 金鑰、Session 紀錄與學生作答不會寫入備份檔。</p>
 
       <div class="backup-summary-grid">
         <div><span>課程</span><strong id="backupCourseCount">0</strong></div>
@@ -895,6 +1081,24 @@
           <button type="button" class="icon-btn lesson-remove" title="刪除節次">🗑</button>
         </div>
       </div>
+      <div class="lesson-meta-grid">
+        <label class="field">
+          <span>短標題 <span class="optional-tag">學生進度列</span></span>
+          <input class="lesson-short-title" type="text" placeholder="例如：類型拆解" />
+        </label>
+        <label class="field">
+          <span>預估時間（分鐘）</span>
+          <input class="lesson-minutes" type="number" min="1" max="180" step="1" placeholder="40" />
+        </label>
+      </div>
+      <label class="field">
+        <span>本節學習目標 <span class="optional-tag">選填</span></span>
+        <textarea class="lesson-goal" rows="2" placeholder="例如：能從故事內容找出重要要素，並根據要素判斷小說類型。"></textarea>
+      </label>
+      <label class="field">
+        <span>教師備註 <span class="optional-tag">學生不會看到</span></span>
+        <textarea class="lesson-teacher-note" rows="2" placeholder="記錄本節提醒、時間配置或提問策略。"></textarea>
+      </label>
       <div class="lesson-node-list"></div>
       <button type="button" class="btn btn-secondary add-node-btn">＋ 加入教學節點</button>
     </article>
@@ -904,16 +1108,35 @@
     <div class="lesson-node">
       <div class="node-grip">⋮⋮</div>
       <div class="node-main">
-        <select class="node-type">
-          <option value="showcase">🖼️ 作品牆</option>
-          <option value="toolbox">🧰 類型工具箱</option>
-          <option value="activity">🧩 互動活動</option>
-          <option value="summary">🧭 收束／指南</option>
-          <option value="content">📝 教學內容頁</option>
-        </select>
-        <input class="node-title" type="text" placeholder="節點名稱，例如：作品有什麼不一樣？" />
+        <div class="node-v2-top">
+          <select class="node-type">
+            <option value="work-wall">🖼️ 作品牆</option>
+            <option value="type-toolbox">🧰 類型工具箱</option>
+            <option value="activity">🧩 互動活動</option>
+            <option value="content">📝 教學內容／收束</option>
+          </select>
+          <input class="node-title" type="text" placeholder="節點名稱，例如：作品有什麼不一樣？" />
+        </div>
+        <input class="node-subtitle" type="text" placeholder="副標／引導語（選填）" />
         <select class="node-activity-ref hidden" aria-label="引用活動"></select>
-        <textarea class="node-note" rows="2" placeholder="教師備註或此節點要呈現的重點（選填）"></textarea>
+        <label class="field node-resource-field hidden">
+          <span class="node-resource-label">引用教材</span>
+          <select class="node-resource-refs" multiple size="5"></select>
+          <small class="field-help">可按 Ctrl / Cmd 多選；若未選擇，播放器會使用目前資料庫中全部項目。</small>
+        </label>
+        <label class="field node-body-field">
+          <span>學生端內容 <span class="optional-tag">選填</span></span>
+          <textarea class="node-body" rows="3" placeholder="內容頁文字、引導問題或收束重點。"></textarea>
+        </label>
+        <div class="node-navigation-grid">
+          <input class="node-previous-label" type="text" placeholder="上一頁按鈕文字（選填）" />
+          <input class="node-next-label" type="text" placeholder="下一頁按鈕文字（選填）" />
+          <label class="toggle-field compact-toggle">
+            <input class="node-allow-back" type="checkbox" checked />
+            <span>允許返回</span>
+          </label>
+        </div>
+        <textarea class="node-note" rows="2" placeholder="教師備註（學生不會看到）"></textarea>
       </div>
       <div class="node-actions">
         <button type="button" class="icon-btn node-up" title="往上">↑</button>
