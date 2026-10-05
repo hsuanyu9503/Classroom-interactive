@@ -19,7 +19,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.7.5</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.8.0</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -356,6 +356,13 @@
               <small>選主要類型與故事證據，全班比較後由老師開放第二次判斷。</small>
             </span>
           </label>
+          <label class="mode-option">
+            <input type="radio" name="activityMode" value="layered-deliberation" />
+            <span class="mode-option-body">
+              <strong>⚖️ 逐層思辨</strong>
+              <small>教師逐層公開情境，學生每層獨立判斷與說理；雲端 Session 不會把未公開資訊送到學生端。</small>
+            </span>
+          </label>
         </div>
       </section>
 
@@ -413,6 +420,51 @@
           </div>
         </div>
         <div id="openClassificationTaskEditor"></div>
+      </section>
+      <section id="deliberationEditorSection" class="deliberation-editor-section hidden">
+        <div class="editor-toolbar deliberation-toolbar">
+          <div>
+            <span class="section-kicker">SERVER-GATED DELIBERATION</span>
+            <h3>逐層思辨活動</h3>
+            <p class="field-help">正式上課需使用 Supabase 雲端 Session。未公開層次與教師備註不會傳送到學生端。</p>
+          </div>
+          <button id="addDeliberationLayerBtn" class="btn btn-secondary" type="button">＋ 新增情境層</button>
+        </div>
+        <div class="deliberation-meta-grid">
+          <label class="field">
+            <span>案例來源／資料性質</span>
+            <textarea id="deliberationSourceNote" rows="3" placeholder="例如：依當事人公開貼文敘述整理；店員對平台限制的說法屬其個人回覆，未另行驗證。"></textarea>
+          </label>
+          <label class="field">
+            <span>固定判斷題</span>
+            <textarea id="deliberationFixedQuestion" rows="3">就目前資訊，你認為這段影片繼續公開，有多能被接受？</textarea>
+          </label>
+        </div>
+        <div class="deliberation-option-note">
+          <strong>固定選項</strong>
+          <span>A 完全不能接受</span>
+          <span>B 不太能接受</span>
+          <span>C 大致能接受</span>
+          <span>D 完全能接受</span>
+          <span>U 資訊不足，暫不判斷</span>
+          <small>U 是獨立選項，不納入平均分數；本模式不計分、不排名。</small>
+        </div>
+        <div id="deliberationLayersEditor" class="deliberation-layers-editor"></div>
+        <section class="mode-a-config-block deliberation-reflection-editor">
+          <div class="mode-a-config-head">
+            <div>
+              <span class="section-kicker">FINAL REFLECTION</span>
+              <h4>活動結束後的個人回顧</h4>
+            </div>
+          </div>
+          <div class="form-grid two-col">
+            <label class="field"><span>判斷歷程反思</span><textarea id="deliberationReflectionKey" rows="3">哪一層最影響你？為什麼？</textarea></label>
+            <label class="field"><span>事實／假設／價值反思</span><textarea id="deliberationReflectionValue" rows="3">你得知了新事實、修正了假設，還是重新衡量某個價值？</textarea></label>
+            <label class="field"><span>具體回應</span><textarea id="deliberationReflectionAction" rows="3">如果你是店員，會如何處理並回覆顧客？</textarea></label>
+            <label class="field"><span>審美延伸（假設情境）</span><textarea id="deliberationReflectionExtension" rows="3">如果影片中的你很好看，大家也都稱讚，是否就足以支持公開？「好看」與「適合公開」之間，還需要哪些理由？</textarea></label>
+          </div>
+          <p class="field-help">反思答案預設只回傳教師端，不會自動投影。</p>
+        </section>
       </section>
 
       <div class="sticky-actions">
@@ -707,6 +759,40 @@
           <div id="openChangeSummary" class="open-change-summary hidden">
             <div><span>改變判斷</span><strong id="openChangedCount">0</strong></div>
             <div><span>維持原判斷</span><strong id="openUnchangedCount">0</strong></div>
+          </div>
+        </section>
+
+        <section id="deliberationSessionControl" class="deliberation-session-control hidden">
+          <div class="session-section-head">
+            <div>
+              <span class="section-kicker">LAYERED DELIBERATION</span>
+              <h3>逐層思辨控制台</h3>
+            </div>
+            <span id="deliberationStageBadge" class="stage-badge">第 1 層 / 1</span>
+          </div>
+          <div class="deliberation-teacher-grid">
+            <div class="deliberation-current-panel">
+              <span class="summary-label">目前公開資訊</span>
+              <strong id="deliberationTeacherLayerTitle">—</strong>
+              <p id="deliberationTeacherLayerContent">—</p>
+              <div class="deliberation-teacher-question"><span>核心提問</span><p id="deliberationTeacherCoreQuestion">—</p></div>
+              <div id="deliberationTeacherNoteWrap" class="deliberation-teacher-note hidden"><span>教師備註（學生端不會收到）</span><p id="deliberationTeacherNote">—</p></div>
+              <p id="deliberationSubmissionText" class="subtle">本層已提交 0 / 0</p>
+              <div class="deliberation-round-status"><span class="summary-label">目前狀態</span><strong id="deliberationRoundStateText">開放作答</strong></div>
+              <div class="progressive-control-actions deliberation-state-actions">
+                <button id="deliberationOpenBtn" class="btn btn-secondary" type="button">開放作答</button>
+                <button id="deliberationLockBtn" class="btn btn-secondary" type="button">🔒 結束作答</button>
+                <button id="deliberationPublishBtn" class="btn btn-primary" type="button">公布結果</button>
+                <button id="openDeliberationPresentationBtn" class="btn btn-secondary" type="button">🖥️ 開啟投影</button>
+                <button id="deliberationNextBtn" class="btn btn-primary" type="button">下一層 →</button>
+              </div>
+            </div>
+            <div class="deliberation-results-panel">
+              <span class="summary-label">本層判斷分布（教師可隨時查看）</span>
+              <div id="deliberationTeacherDistribution" class="stage-distribution-list"></div>
+              <span class="summary-label deliberation-reason-heading">匿名理由</span>
+              <div id="deliberationTeacherReasons" class="deliberation-reason-list"></div>
+            </div>
           </div>
         </section>
 

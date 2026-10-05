@@ -1,4 +1,4 @@
-/* V2.7.5 | Activity Editor + teaching backup */
+/* V2.8.0 | Activity Editor + layered deliberation + teaching backup */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -25,6 +25,14 @@ const progressiveTaskEditor = el("progressiveTaskEditor");
 const openClassificationEditorSection = el("openClassificationEditorSection");
 const openClassificationTaskTemplate = el("openClassificationTaskTemplate");
 const openClassificationTaskEditor = el("openClassificationTaskEditor");
+const deliberationEditorSection = el("deliberationEditorSection");
+const deliberationLayersEditor = el("deliberationLayersEditor");
+const deliberationSourceNote = el("deliberationSourceNote");
+const deliberationFixedQuestion = el("deliberationFixedQuestion");
+const deliberationReflectionKey = el("deliberationReflectionKey");
+const deliberationReflectionValue = el("deliberationReflectionValue");
+const deliberationReflectionAction = el("deliberationReflectionAction");
+const deliberationReflectionExtension = el("deliberationReflectionExtension");
 const standardTaskToolbar = el("standardTaskToolbar");
 const shareDialog = el("shareDialog");
 const shareUrlInput = el("shareUrl");
@@ -155,6 +163,37 @@ function newOpenClassificationTask() {
   };
 }
 
+
+function defaultDeliberationLayers() {
+  return [
+    {id:createId(),title:"① 公開影像",content:"顧客到店購買飲料，店員發布的影片中出現顧客可辨識的臉部。",question:"目前能否判斷影片是否適合繼續公開？還需要知道什麼？",teacherNote:""},
+    {id:createId(),title:"② 未被告知或同意",content:"顧客表示，當時完全沒有被告知，也沒有同意被拍攝。",question:"到店消費、被鏡頭拍到，是否足以支持公開影像？",teacherNote:""},
+    {id:createId(),title:"③ 經朋友轉傳才知道",content:"顧客七月初到店，直到 7 月 24 日朋友轉傳，才知道自己的影像被公開。",question:"沒有立即反對是否代表接受？你是否曾假設顧客早就知道？",teacherNote:""},
+    {id:createId(),title:"④ 要求遮臉",content:"顧客先要求將臉打馬賽克，未立即要求刪除整段影片。",question:"你支持這個要求，是因為尊重選擇，還是因為對發布者影響較小？",teacherNote:""},
+    {id:createId(),title:"⑤ 保留的理由",content:"店員表示遮臉需要刪除重發；影片累積許多觀看，對自己很重要，因此希望保留，也表示會尊重顧客決定。",question:"修改成本與觀看利益，應在判斷中占多少分量？理解心情是否等於接受要求？",teacherNote:"店員對平台修改限制的說法應標示為其回覆，不當成已驗證的平台規則。"},
+    {id:createId(),title:"⑥ 處理結果",content:"顧客明確要求下架。依其敘述，IG 內容撤下後，Threads 影片仍存在，因此再次要求處理。",question:"表示尊重需要哪些行動？你正在評價最初公開，還是事後處理？",teacherNote:""}
+  ];
+}
+
+function newDeliberationActivityData() {
+  return {
+    sourceNote:"依當事人貼文敘述整理；店員對平台修改限制的說法屬其回覆，不當成已驗證的平台規則。",
+    fixedQuestion:"就目前資訊，你認為這段影片繼續公開，有多能被接受？",
+    options:[
+      {id:"A",label:"完全不能接受"},{id:"B",label:"不太能接受"},
+      {id:"C",label:"大致能接受"},{id:"D",label:"完全能接受"},
+      {id:"U",label:"資訊不足，暫不判斷"}
+    ],
+    layers:defaultDeliberationLayers(),
+    reflection:{
+      key:"哪一層最影響你？為什麼？",
+      value:"你得知了新事實、修正了假設，還是重新衡量某個價值？",
+      action:"如果你是店員，會如何處理並回覆顧客？",
+      extension:"如果影片中的你很好看，大家也都稱讚，是否就足以支持公開？「好看」與「適合公開」之間，還需要哪些理由？"
+    }
+  };
+}
+
 const defaultActivity = {
   id: createId(),
   title: "故事鑑定所",
@@ -175,7 +214,8 @@ const defaultActivity = {
   ],
   tasks: [],
   progressive: null,
-  openClassification: null
+  openClassification: null,
+  deliberation: null
 };
 
 function showToast(message) {
@@ -204,7 +244,7 @@ function loadActivities() {
   }
 
   activities = activities.map(activity => {
-    const allowed = new Set(["drag-reveal","open-tags","element-type","progressive-reveal","open-classification"]);
+    const allowed = new Set(["drag-reveal","open-tags","element-type","progressive-reveal","open-classification","layered-deliberation"]);
     const template = allowed.has(activity.template) ? activity.template : "drag-reveal";
 
     return {
@@ -221,6 +261,9 @@ function loadActivities() {
         : null,
       openClassification: template === "open-classification"
         ? (activity.openClassification || null)
+        : null,
+      deliberation: template === "layered-deliberation"
+        ? (activity.deliberation || newDeliberationActivityData())
         : null
     };
   });
@@ -252,7 +295,8 @@ function newBlankActivity() {
     }],
     tasks: [],
     progressive: null,
-    openClassification: null
+    openClassification: null,
+    deliberation: null
   };
 }
 
@@ -261,6 +305,7 @@ function getModeLabel(template) {
   if (template === "element-type") return "要素 → 類型分類";
   if (template === "progressive-reveal") return "逐層揭露";
   if (template === "open-classification") return "開放分類";
+  if (template === "layered-deliberation") return "逐層思辨";
   return "探索式揭密";
 }
 
@@ -276,7 +321,9 @@ function renderLibrary() {
         ? activity.progressive?.clueRefs?.length || 0
         : activity.template === "open-classification"
           ? 1
-          : activity.cases?.length || 0;
+          : activity.template === "layered-deliberation"
+            ? (activity.deliberation?.layers?.length || 0)
+            : activity.cases?.length || 0;
     item.innerHTML = `
       <strong>${escapeHtml(activity.title || "未命名活動")}</strong>
       <small>${count} 個任務 · ${getModeLabel(activity.template)}</small>
@@ -825,13 +872,83 @@ function refreshOpenClassificationLibraryReferences() {
   addOpenClassificationTask(snapshot);
 }
 
+
+// ---------- 逐層思辨 ----------
+function addDeliberationLayer(layer = null) {
+  const data = layer || {id:createId(),title:`第 ${deliberationLayersEditor.children.length + 1} 層`,content:"",question:"",teacherNote:""};
+  const card=document.createElement("article");
+  card.className="case-card deliberation-layer-card";
+  card.dataset.layerId=data.id || createId();
+  card.innerHTML=`
+    <div class="case-card-header">
+      <div><span class="case-index">情境層</span><h3>${escapeHtml(data.title || "未命名層次")}</h3></div>
+      <button type="button" class="icon-btn deliberation-remove-layer" aria-label="刪除此層">×</button>
+    </div>
+    <div class="form-grid two-col">
+      <label class="field"><span>層次標題</span><input class="deliberation-layer-title" type="text" value="${escapeHtml(data.title || "")}" /></label>
+      <label class="field"><span>核心提問</span><textarea class="deliberation-layer-question" rows="3">${escapeHtml(data.question || "")}</textarea></label>
+    </div>
+    <label class="field"><span>本層新增資訊</span><textarea class="deliberation-layer-content" rows="4">${escapeHtml(data.content || "")}</textarea></label>
+    <label class="field"><span>教師備註 <span class="optional-tag">不送學生端</span></span><textarea class="deliberation-layer-note" rows="3">${escapeHtml(data.teacherNote || "")}</textarea></label>`;
+  card.querySelector(".deliberation-layer-title").addEventListener("input",()=>{
+    card.querySelector("h3").textContent=card.querySelector(".deliberation-layer-title").value.trim() || "未命名層次";
+  });
+  card.querySelector(".deliberation-remove-layer").addEventListener("click",()=>{
+    if (deliberationLayersEditor.children.length <= 2) { showToast("逐層思辨至少保留 2 層"); return; }
+    card.remove(); refreshDeliberationLayerNumbers();
+  });
+  deliberationLayersEditor.appendChild(card);
+  refreshDeliberationLayerNumbers();
+}
+
+function refreshDeliberationLayerNumbers() {
+  [...deliberationLayersEditor.querySelectorAll(".deliberation-layer-card")].forEach((card,index)=>{
+    card.querySelector(".case-index").textContent=`情境層 ${String(index+1).padStart(2,"0")}`;
+  });
+}
+
+function loadDeliberationEditor(data = null) {
+  const d=data || newDeliberationActivityData();
+  deliberationSourceNote.value=d.sourceNote || "";
+  deliberationFixedQuestion.value=d.fixedQuestion || "";
+  deliberationReflectionKey.value=d.reflection?.key || "";
+  deliberationReflectionValue.value=d.reflection?.value || "";
+  deliberationReflectionAction.value=d.reflection?.action || "";
+  deliberationReflectionExtension.value=d.reflection?.extension || "";
+  deliberationLayersEditor.innerHTML="";
+  (d.layers?.length ? d.layers : defaultDeliberationLayers()).forEach(addDeliberationLayer);
+}
+
+function readDeliberationEditor() {
+  return {
+    sourceNote:deliberationSourceNote.value.trim(),
+    fixedQuestion:deliberationFixedQuestion.value.trim(),
+    options:[
+      {id:"A",label:"完全不能接受"},{id:"B",label:"不太能接受"},
+      {id:"C",label:"大致能接受"},{id:"D",label:"完全能接受"},
+      {id:"U",label:"資訊不足，暫不判斷"}
+    ],
+    layers:[...deliberationLayersEditor.querySelectorAll(".deliberation-layer-card")].map((card,index)=>({
+      id:card.dataset.layerId || `layer-${index+1}`,
+      title:card.querySelector(".deliberation-layer-title").value.trim(),
+      content:card.querySelector(".deliberation-layer-content").value.trim(),
+      question:card.querySelector(".deliberation-layer-question").value.trim(),
+      teacherNote:card.querySelector(".deliberation-layer-note").value.trim()
+    })),
+    reflection:{
+      key:deliberationReflectionKey.value.trim(), value:deliberationReflectionValue.value.trim(),
+      action:deliberationReflectionAction.value.trim(), extension:deliberationReflectionExtension.value.trim()
+    }
+  };
+}
+
 // ---------- 模式切換 ----------
 function getSelectedMode() {
   return modeInputs.find(input => input.checked)?.value || "drag-reveal";
 }
 
 function setSelectedMode(mode) {
-  const allowed = new Set(["drag-reveal", "open-tags", "element-type", "progressive-reveal", "open-classification"]);
+  const allowed = new Set(["drag-reveal", "open-tags", "element-type", "progressive-reveal", "open-classification", "layered-deliberation"]);
   const normalized = allowed.has(mode) ? mode : "drag-reveal";
   modeInputs.forEach(input => {
     input.checked = input.value === normalized;
@@ -845,29 +962,33 @@ function applyModeUI(mode) {
   const isElementType = mode === "element-type";
   const isProgressive = mode === "progressive-reveal";
   const isOpenClassification = mode === "open-classification";
+  const isDeliberation = mode === "layered-deliberation";
 
   editorPanel?.classList.toggle("open-tags-mode", isOpen);
   editorPanel?.classList.toggle("element-type-mode", isElementType);
   editorPanel?.classList.toggle("progressive-reveal-mode", isProgressive);
   editorPanel?.classList.toggle("open-classification-mode", isOpenClassification);
+  editorPanel?.classList.toggle("layered-deliberation-mode", isDeliberation);
 
   if (templateKicker) {
-    templateKicker.textContent = isOpenClassification ? "模板 05" : isProgressive ? "模板 04" : isElementType ? "模板 03" : isOpen ? "模板 02" : "模板 01";
+    templateKicker.textContent = isDeliberation ? "模板 06" : isOpenClassification ? "模板 05" : isProgressive ? "模板 04" : isElementType ? "模板 03" : isOpen ? "模板 02" : "模板 01";
   }
   if (templateTitle) {
-    templateTitle.textContent = isOpenClassification
-      ? "開放分類"
+    templateTitle.textContent = isDeliberation
+      ? "逐層思辨"
+      : isOpenClassification ? "開放分類"
       : isProgressive ? "逐層揭露"
       : isElementType ? "要素 → 類型分類"
       : isOpen ? "開放式標籤討論" : "探索式拖曳揭密";
   }
 
-  const isSpecial = isElementType || isProgressive || isOpenClassification;
+  const isSpecial = isElementType || isProgressive || isOpenClassification || isDeliberation;
   standardTaskToolbar?.classList.toggle("hidden", isSpecial);
   caseEditor?.classList.toggle("hidden", isSpecial);
   elementTypeEditorSection?.classList.toggle("hidden", !isElementType);
   progressiveEditorSection?.classList.toggle("hidden", !isProgressive);
   openClassificationEditorSection?.classList.toggle("hidden", !isOpenClassification);
+  deliberationEditorSection?.classList.toggle("hidden", !isDeliberation);
 
   document.querySelectorAll(".card-builder-label").forEach(label => {
     label.textContent = isOpen ? "標籤設定" : "字卡設定";
@@ -908,6 +1029,10 @@ function ensureEditorForMode(mode) {
     if (!openClassificationTaskEditor.children.length) addOpenClassificationTask();
     return;
   }
+  if (mode === "layered-deliberation") {
+    if (!deliberationLayersEditor.children.length) loadDeliberationEditor(newDeliberationActivityData());
+    return;
+  }
   if (!caseEditor.children.length) addCase();
 }
 
@@ -918,6 +1043,8 @@ function loadIntoEditor(activity) {
   caseEditor.innerHTML = "";
   elementTypeTaskEditor.innerHTML = "";
   progressiveTaskEditor.innerHTML = "";
+  openClassificationTaskEditor.innerHTML = "";
+  deliberationLayersEditor.innerHTML = "";
 
   if (activity.template === "element-type") {
     const tasks = activity.tasks?.length ? activity.tasks : [newModeATask()];
@@ -926,6 +1053,8 @@ function loadIntoEditor(activity) {
     addProgressiveTask(activity.progressive || newProgressiveTask());
   } else if (activity.template === "open-classification") {
     addOpenClassificationTask(activity.openClassification || newOpenClassificationTask());
+  } else if (activity.template === "layered-deliberation") {
+    loadDeliberationEditor(activity.deliberation || newDeliberationActivityData());
   } else {
     const cases = activity.cases?.length ? activity.cases : newBlankActivity().cases;
     cases.forEach(addCase);
@@ -945,7 +1074,8 @@ function readEditor() {
     cases: ["drag-reveal","open-tags"].includes(template) ? readCases() : [],
     tasks: template === "element-type" ? readModeATasks() : [],
     progressive: template === "progressive-reveal" ? readProgressiveTask() : null,
-    openClassification: template === "open-classification" ? readOpenClassificationTask() : null
+    openClassification: template === "open-classification" ? readOpenClassificationTask() : null,
+    deliberation: template === "layered-deliberation" ? readDeliberationEditor() : null
   };
 }
 
@@ -954,6 +1084,19 @@ function splitKeywords(value) {
 }
 
 function validateActivity(activity) {
+  if (activity.template === "layered-deliberation") {
+    const d=activity.deliberation;
+    if (!d?.fixedQuestion?.trim()) return "逐層思辨尚未設定固定判斷題";
+    if (!Array.isArray(d.layers) || d.layers.length < 2) return "逐層思辨至少需要 2 層情境";
+    for (let i=0;i<d.layers.length;i++) {
+      const layer=d.layers[i];
+      if (!layer.title?.trim()) return `第 ${i+1} 層尚未填寫標題`;
+      if (!layer.content?.trim()) return `第 ${i+1} 層尚未填寫新增資訊`;
+      if (!layer.question?.trim()) return `第 ${i+1} 層尚未填寫核心提問`;
+    }
+    return "";
+  }
+
   if (activity.template === "open-classification") {
     const task = activity.openClassification;
     const works = getWorkMap();
@@ -1124,6 +1267,38 @@ function buildOpenClassificationSnapshot(activity) {
   };
 }
 
+
+function buildDeliberationSnapshot(activity,{includeLayers=true,includeTeacherNotes=false}={}) {
+  const d=activity.deliberation || newDeliberationActivityData();
+  return {
+    src:d.sourceNote || "",
+    q:d.fixedQuestion || "",
+    o:(d.options || []).map(option=>({i:option.id,l:option.label})),
+    l:includeLayers ? (d.layers || []).map((layer,index)=>({
+      i:String(index+1), id:layer.id || `layer-${index+1}`, t:layer.title || `第 ${index+1} 層`,
+      c:layer.content || "", q:layer.question || "", ...(includeTeacherNotes ? {n:layer.teacherNote || ""} : {})
+    })) : [],
+    r:{k:d.reflection?.key || "",v:d.reflection?.value || "",a:d.reflection?.action || "",e:d.reflection?.extension || ""}
+  };
+}
+
+async function encodeCompactActivity(compact) {
+  const rawBytes = new TextEncoder().encode(JSON.stringify(compact));
+  if (typeof CompressionStream === "function") {
+    try {
+      const compressed = await gzipBytes(rawBytes);
+      if (compressed.length < rawBytes.length) return `z.${bytesToBase64Url(compressed)}`;
+    } catch (error) {
+      console.warn("活動資料壓縮失敗，改用未壓縮分享格式。", error);
+    }
+  }
+  return `u.${bytesToBase64Url(rawBytes)}`;
+}
+
+async function buildDeliberationShellEncoded(activity) {
+  return encodeCompactActivity({t:activity.title,s:activity.subtitle,m:"layered-deliberation",d:buildDeliberationSnapshot(activity,{includeLayers:false})});
+}
+
 async function encodeActivity(activity) {
   let compact;
 
@@ -1133,6 +1308,8 @@ async function encodeActivity(activity) {
     compact = {t:activity.title,s:activity.subtitle,m:"progressive-reveal",g:buildProgressiveSnapshot(activity)};
   } else if (activity.template === "open-classification") {
     compact = {t:activity.title,s:activity.subtitle,m:"open-classification",o:buildOpenClassificationSnapshot(activity)};
+  } else if (activity.template === "layered-deliberation") {
+    compact = {t:activity.title,s:activity.subtitle,m:"layered-deliberation",d:buildDeliberationSnapshot(activity,{includeLayers:true})};
   } else {
     compact = {
       t: activity.title,
@@ -1155,17 +1332,7 @@ async function encodeActivity(activity) {
     };
   }
 
-  const rawBytes = new TextEncoder().encode(JSON.stringify(compact));
-
-  if (typeof CompressionStream === "function") {
-    try {
-      const compressed = await gzipBytes(rawBytes);
-      if (compressed.length < rawBytes.length) return `z.${bytesToBase64Url(compressed)}`;
-    } catch (error) {
-      console.warn("活動資料壓縮失敗，改用未壓縮分享格式。", error);
-    }
-  }
-  return `u.${bytesToBase64Url(rawBytes)}`;
+  return encodeCompactActivity(compact);
 }
 
 async function buildShareUrl(activity) {
@@ -1312,7 +1479,9 @@ function getActivitySummaries() {
         ? (activity.progressive?.clueRefs?.length || 0)
         : activity.template === "open-classification"
           ? 1
-          : (activity.cases?.length || 0)
+          : activity.template === "layered-deliberation"
+            ? (activity.deliberation?.layers?.length || 0)
+            : (activity.cases?.length || 0)
   }));
 }
 
@@ -1334,8 +1503,14 @@ async function buildSessionActivitySnapshot(activityId) {
       ? (activity.progressive?.clueRefs?.length || 1)
       : activity.template === "open-classification" && activity.openClassification?.allowRejudge !== false
         ? 2
-        : 1,
-    encoded: await encodeActivity(activity)
+        : activity.template === "layered-deliberation"
+          ? (activity.deliberation?.layers?.length || 1)
+          : 1,
+    encoded: await encodeActivity(activity),
+    shellEncoded: activity.template === "layered-deliberation" ? await buildDeliberationShellEncoded(activity) : "",
+    deliberationData: activity.template === "layered-deliberation"
+      ? buildDeliberationSnapshot(activity,{includeLayers:true,includeTeacherNotes:true})
+      : null
   };
 }
 
@@ -1358,6 +1533,7 @@ window.ClassroomActivityEditor = {
 // ---------- 事件 ----------
 el("addCaseBtn").addEventListener("click", () => addCase());
 el("addElementTypeTaskBtn").addEventListener("click", () => addModeATask());
+el("addDeliberationLayerBtn")?.addEventListener("click", () => addDeliberationLayer());
 el("saveBtn").addEventListener("click", () => saveCurrent(true));
 
 el("duplicateBtn").addEventListener("click", () => {
@@ -1467,7 +1643,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.7.5",
+    appVersion:"2.8.0",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),

@@ -1,4 +1,4 @@
-/* V2.7.5 | Teacher Core: workflow + Course/Type/Work libraries */
+/* V2.8.0 | Teacher Core: workflow + Course/Type/Work libraries */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2
@@ -990,6 +990,9 @@
     for (const id of activityIds) {
       const snap = await window.ClassroomActivityAPI?.buildSessionSnapshot?.(id);
       if (!snap) throw new Error("活動模組尚未載入");
+      if (snap.template === "layered-deliberation") {
+        throw new Error("逐層思辨包含未公開情境資訊，V2.8.0 請以「單一活動 Session」上課，不可放入完整 Course Snapshot。");
+      }
       activitySnapshots.push({
         id:snap.id,title:snap.title,subtitle:snap.subtitle,
         template:snap.template,stageCount:snap.stageCount,encoded:snap.encoded

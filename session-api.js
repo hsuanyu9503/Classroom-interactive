@@ -395,25 +395,51 @@
     saveTeacherHistory(history);
   }
 
-  async function createSession({title, activityEncoded, activityMode, stageCount=1}) {
+  async function createSession({
+    title,
+    activityEncoded,
+    activityMode,
+    stageCount=1,
+    shellEncoded="",
+    deliberationData=null
+  }) {
     const code = randomCode();
     const teacherToken = randomToken();
+    const totalStages = Math.max(1, Number(stageCount) || 1);
+
+    if (activityMode === "layered-deliberation" && !isCloudConfigured()) {
+      throw new Error("逐層思辨正式 Session 必須先完成 Supabase 雲端設定，才能確保未公開資訊不會傳到學生端");
+    }
 
     if (isCloudConfigured()) {
-      const result = await rpc("create_classroom_session", {
-        p_code: code,
-        p_teacher_token: teacherToken,
-        p_title: title,
-        p_activity_encoded: activityEncoded,
-        p_activity_mode: activityMode || "",
-        p_stage_count: Math.max(1, Number(stageCount) || 1)
-      });
+      let result;
+      if (activityMode === "layered-deliberation") {
+        if (!shellEncoded || !deliberationData) throw new Error("逐層思辨 Session 資料不完整");
+        result = await rpc("create_deliberation_session", {
+          p_code:code,
+          p_teacher_token:teacherToken,
+          p_title:title,
+          p_activity_shell_encoded:shellEncoded,
+          p_deliberation_data:deliberationData,
+          p_stage_count:totalStages
+        });
+      } else {
+        result = await rpc("create_classroom_session", {
+          p_code: code,
+          p_teacher_token: teacherToken,
+          p_title: title,
+          p_activity_encoded: activityEncoded,
+          p_activity_mode: activityMode || "",
+          p_stage_count: totalStages
+        });
+      }
       const id = typeof result === "string" ? result : (result?.id || result?.session_id || result);
       const session = {
         id, code, title, teacherToken, mode:"cloud", sessionKind:"activity",
         activityMode: activityMode || "",
-        stageCount: Math.max(1, Number(stageCount) || 1),
+        stageCount: totalStages,
         currentStage: 1,
+        roundState: activityMode === "layered-deliberation" ? "open" : "",
         createdAt:new Date().toISOString()
       };
       rememberTeacherSession(session);
@@ -426,7 +452,7 @@
       id, code, title, teacherToken, mode:"local", sessionKind:"activity",
       activityMode: activityMode || "",
       activityEncoded,
-      stageCount: Math.max(1, Number(stageCount) || 1),
+      stageCount: totalStages,
       currentStage: 1,
       status:"active",
       createdAt:new Date().toISOString(),
@@ -683,7 +709,7 @@
     const config = getConfig();
     if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
     return {
-      schema:"classroom-teacher-handoff", version:1, appVersion:"2.7.5", exportedAt:new Date().toISOString(),
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.8.0", exportedAt:new Date().toISOString(),
       warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
       cloud:{url:config.url,key:config.key},
       session:{
@@ -755,6 +781,7 @@
       activity_mode:session.activityMode,
       current_stage:session.currentStage || 1,
       stage_count:session.stageCount || 1,
+      round_state:session.roundState || "",
       participant_count:session.participants.length,
       response_count:session.responses.length,
       responses:session.responses.map(r => ({
@@ -803,6 +830,26 @@
     sessionMeta.currentStage = session.currentStage;
     saveLocalSessions(sessions);
     return session.currentStage;
+  }
+
+  async function setDeliberationState(sessionMeta,{stage=null,roundState=null}={}) {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if (sessionMeta.activityMode !== "layered-deliberation") throw new Error("目前不是逐層思辨 Session");
+    if (sessionMeta.mode !== "cloud") throw new Error("逐層思辨狀態控制需要 Supabase 雲端 Session");
+
+    const result = await rpc("set_deliberation_round", {
+      p_session_id:sessionMeta.id,
+      p_teacher_token:sessionMeta.teacherToken,
+      p_stage:stage == null ? Number(sessionMeta.currentStage || 1) : Number(stage),
+      p_round_state:roundState || sessionMeta.roundState || "open"
+    });
+    const data=typeof result === "string" ? JSON.parse(result) : (result || {});
+    sessionMeta.currentStage=Number(data.current_stage || stage || sessionMeta.currentStage || 1);
+    sessionMeta.stageCount=Number(data.stage_count || sessionMeta.stageCount || 1);
+    sessionMeta.roundState=data.round_state || roundState || sessionMeta.roundState || "open";
+    rememberTeacherSession(sessionMeta,data);
+    publishRealtime(sessionMeta.id,"stage");
+    return data;
   }
 
   function updateParticipantContext(patch = {}) {
@@ -1045,7 +1092,7 @@
 
   window.ClassroomSessionAPI = {
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
-    createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage,
+    createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage, setDeliberationState,
     setCourseNode, submitCourseProgress, closeSession, deleteSession, studentState, buildJoinUrl,
     createTeacherHandoff, claimTeacherHandoff, validateTeacherHandoffPackage,
     loadTeacherHistory, updateTeacherHistory, removeTeacherHistory,

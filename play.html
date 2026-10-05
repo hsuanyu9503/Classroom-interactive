@@ -199,6 +199,49 @@
           </div>
         </div>
 
+        <div id="deliberationInteraction" class="deliberation-interaction hidden">
+          <section class="deliberation-layer-board">
+            <div class="progressive-student-head">
+              <div><span id="deliberationStageKicker" class="step-number">第 1 層 / 1</span><h3>目前公開資訊</h3></div>
+              <span id="deliberationSyncBadge" class="sync-badge">教師同步</span>
+            </div>
+            <div id="deliberationReleasedLayers" class="deliberation-released-layers"></div>
+          </section>
+          <section id="deliberationAnswerPanel" class="classification-step">
+            <div class="classification-step-head">
+              <span class="step-number">判斷</span>
+              <div><h3 id="deliberationFixedQuestionText">就目前資訊，你怎麼判斷？</h3><p id="deliberationLayerQuestionText"></p></div>
+            </div>
+            <div id="deliberationChoiceGrid" class="deliberation-choice-grid"></div>
+            <label class="field"><span>我的理由 <small>必填</small></span><textarea id="deliberationReasonInput" rows="4" placeholder="本層最影響我的資訊是＿＿，因為＿＿。"></textarea></label>
+            <label class="field"><span>我還需要知道什麼？ <small>選填</small></span><textarea id="deliberationNeedInput" rows="3" placeholder="如果還需要更多資訊，可以寫在這裡。"></textarea></label>
+            <div class="classification-step-footer"><span id="deliberationSubmitHint">答案沒有對錯，請留下你此刻真正的判斷。</span><button id="submitDeliberationBtn" class="btn btn-primary" type="button">提交本層判斷</button></div>
+          </section>
+          <section id="deliberationWaitingPanel" class="progressive-waiting-panel hidden">
+            <div class="waiting-icon">⏳</div><h3 id="deliberationWaitingTitle">這一層已提交</h3><p id="deliberationWaitingText">等待老師結束作答與公布結果。</p>
+          </section>
+          <section id="deliberationPublishedPanel" class="deliberation-published-panel hidden">
+            <div class="open-class-stats"><span class="summary-label">全班判斷分布</span><div id="deliberationStudentDistribution" class="stage-distribution-list"></div></div>
+            <div class="deliberation-anonymous-reasons"><span class="summary-label">匿名理由</span><div id="deliberationStudentReasons" class="deliberation-reason-list"></div></div>
+            <label class="field deliberation-post-note"><span>討論後補記 <small>選填，不會覆蓋原始答案</small></span><textarea id="deliberationPostNoteInput" rows="3" placeholder="討論後，你想補充或修正哪些想法？"></textarea></label>
+            <button id="submitDeliberationPostNoteBtn" class="btn btn-secondary" type="button">儲存討論後補記</button>
+            <button id="deliberationPreviewNextBtn" class="btn btn-primary hidden" type="button">下一層 →</button>
+          </section>
+          <section id="deliberationHistoryPanel" class="deliberation-history-panel hidden">
+            <div class="mini-heading"><span>我的判斷歷程</span><small>沒有對錯、得分或排行榜</small></div>
+            <div id="deliberationHistoryList" class="deliberation-history-list"></div>
+            <div id="deliberationReflectionPanel" class="deliberation-reflection-panel hidden">
+              <h3>最後回看自己的思考</h3>
+              <label class="field"><span id="deliberationReflectionKeyLabel">哪一層最影響你？為什麼？</span><textarea id="deliberationReflectionKeyInput" rows="3"></textarea></label>
+              <label class="field"><span id="deliberationReflectionValueLabel">你得知了新事實、修正了假設，還是重新衡量某個價值？</span><textarea id="deliberationReflectionValueInput" rows="3"></textarea></label>
+              <label class="field"><span id="deliberationReflectionActionLabel">如果你是店員，會如何處理並回覆顧客？</span><textarea id="deliberationReflectionActionInput" rows="3"></textarea></label>
+              <label class="field"><span id="deliberationReflectionExtensionLabel">假設情境延伸</span><textarea id="deliberationReflectionExtensionInput" rows="3"></textarea></label>
+              <button id="submitDeliberationReflectionBtn" class="btn btn-primary" type="button">提交最後反思</button>
+              <p id="deliberationReflectionStatus" class="subtle"></p>
+            </div>
+          </section>
+        </div>
+
         <div id="interactionArea">
           <div class="interaction-grid">
             <section>

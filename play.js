@@ -17,6 +17,10 @@ let openSelectedType = "";
 let openInitialResponse = null;
 let openFinalResponse = null;
 let openPollTimer = null;
+let deliberationPollTimer = null;
+let deliberationSelectedChoice = "";
+let deliberationState = null;
+let deliberationLocalResponses = [];
 let sessionRealtime = null;
 let openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
 
@@ -46,6 +50,21 @@ async function decodeActivity(encoded) {
   }
 
   const raw = JSON.parse(new TextDecoder().decode(bytes));
+
+  if (raw?.m === "layered-deliberation" && raw.d) {
+    return {
+      title:raw.t||"",
+      subtitle:raw.s||"",
+      template:"layered-deliberation",
+      deliberation:{
+        sourceNote:raw.d.src||"",
+        fixedQuestion:raw.d.q||"",
+        options:Array.isArray(raw.d.o)?raw.d.o:[],
+        layers:Array.isArray(raw.d.l)?raw.d.l:[],
+        reflection:raw.d.r||{}
+      }
+    };
+  }
 
   if (raw?.m === "open-classification" && raw.o) {
     return {
@@ -171,6 +190,8 @@ function refreshStudentRealtimeTarget() {
     syncProgressiveStageFromSession(false);
   } else if (activity?.template === "open-classification") {
     syncOpenClassificationState(false);
+  } else if (activity?.template === "layered-deliberation") {
+    syncDeliberationState(false);
   }
 }
 
@@ -192,12 +213,15 @@ function startStudentRealtimeSync() {
       if (status === "closed") {
         clearInterval(progressivePollTimer);
         clearInterval(openPollTimer);
+        clearInterval(deliberationPollTimer);
         return;
       }
       if (activity?.template === "progressive-reveal") {
         startProgressivePolling(status === "connected" ? 12000 : 1800);
       } else if (activity?.template === "open-classification") {
         startOpenPolling(status === "connected" ? 12000 : 1800);
+      } else if (activity?.template === "layered-deliberation") {
+        startDeliberationPolling(status === "connected" ? 12000 : 1800);
       }
     }
   });
@@ -252,7 +276,9 @@ async function loadFromUrl() {
         : activity?.template === "open-classification"
           ? Array.isArray(activity.openClassification?.elements) && activity.openClassification.elements.length
             && Array.isArray(activity.openClassification?.types) && activity.openClassification.types.length
-          : Array.isArray(activity.cases) && activity.cases.length;
+          : activity?.template === "layered-deliberation"
+            ? Boolean(activity.deliberation?.fixedQuestion)
+            : Array.isArray(activity.cases) && activity.cases.length;
     if (!activity || !hasContent) throw new Error("invalid-activity");
 
     el("loadingState").classList.add("hidden");
@@ -273,6 +299,7 @@ function totalTasks() {
   if (activity.template === "element-type") return activity.tasks.length;
   if (activity.template === "progressive-reveal") return 1;
   if (activity.template === "open-classification") return 1;
+  if (activity.template === "layered-deliberation") return 1;
   return activity.cases.length;
 }
 
@@ -280,6 +307,7 @@ function currentTask() {
   if (activity.template === "element-type") return activity.tasks[currentCaseIndex];
   if (activity.template === "progressive-reveal") return activity.progressive;
   if (activity.template === "open-classification") return activity.openClassification;
+  if (activity.template === "layered-deliberation") return activity.deliberation;
   return activity.cases[currentCaseIndex];
 }
 
@@ -289,6 +317,7 @@ function resetPanels() {
   el("elementTypeInteraction").classList.add("hidden");
   el("progressiveInteraction").classList.add("hidden");
   el("openClassificationInteraction").classList.add("hidden");
+  el("deliberationInteraction").classList.add("hidden");
   el("openClassificationWaitingPanel").classList.add("hidden");
   el("openClassificationResultPanel").classList.add("hidden");
   el("feedbackPanel").classList.add("hidden");
@@ -315,6 +344,8 @@ function renderCase() {
     renderProgressiveTask();
   } else if (activity.template === "open-classification") {
     renderOpenClassificationTask();
+  } else if (activity.template === "layered-deliberation") {
+    renderDeliberationTask();
   } else {
     renderStandardCase();
   }
@@ -337,6 +368,350 @@ function renderWorkMedia(image, name) {
     img.removeAttribute("src");
     media.classList.add("hidden");
   }
+}
+
+
+const DELIBERATION_LABELS = {
+  A:"完全不能接受",
+  B:"不太能接受",
+  C:"大致能接受",
+  D:"完全能接受",
+  U:"資訊不足，暫不判斷"
+};
+
+function deliberationOwnResponse(stage) {
+  return (deliberationState?.responses || deliberationLocalResponses || []).find(
+    item=>item.mode==="layered-deliberation" && item.stage_key===`layer-${stage}`
+  ) || null;
+}
+
+function deliberationPostResponse(stage) {
+  return (deliberationState?.responses || deliberationLocalResponses || []).find(
+    item=>item.mode==="layered-deliberation" && item.stage_key===`layer-${stage}-post`
+  ) || null;
+}
+
+function renderDeliberationTask() {
+  clearInterval(deliberationPollTimer);
+  el("studentCaseIndex").textContent="逐層思辨";
+  el("studentCaseTitle").textContent=activity.title || "逐層思辨";
+  renderWorkMedia("", "");
+  el("studentCaseIntro").textContent=activity.deliberation?.sourceNote || "";
+  el("studentCaseIntro").classList.toggle("hidden",!activity.deliberation?.sourceNote);
+  el("studentCasePrompt").textContent="每一層只根據目前已公開資訊作答；沒有標準答案，也不計分。";
+  el("deliberationInteraction").classList.remove("hidden");
+
+  if (isSessionPlay()) {
+    syncDeliberationState(true);
+  } else {
+    const layers=activity.deliberation?.layers || [];
+    deliberationState={
+      current_stage:1,
+      stage_count:layers.length || 1,
+      round_state:"open",
+      status:"active",
+      responses:deliberationLocalResponses,
+      deliberation:{
+        source_note:activity.deliberation?.sourceNote || "",
+        fixed_question:activity.deliberation?.fixedQuestion || "",
+        options:activity.deliberation?.options || [],
+        released_layers:layers.slice(0,1),
+        distribution:[],
+        anonymous_reasons:[],
+        reflection:null
+      }
+    };
+    renderDeliberationState();
+  }
+}
+
+function normalizeDeliberationOptions(options) {
+  const list=Array.isArray(options)&&options.length ? options : Object.entries(DELIBERATION_LABELS).map(([i,l])=>({i,l}));
+  return list.map(item=>({id:item.i || item.id,label:item.l || item.label || DELIBERATION_LABELS[item.i] || item.i}));
+}
+
+function renderDeliberationDistribution(list, distribution) {
+  list.innerHTML="";
+  const counts=new Map([["A",0],["B",0],["C",0],["D",0],["U",0]]);
+  (distribution || []).forEach(item=>{
+    const id=String(item.id || "");
+    if (counts.has(id)) counts.set(id,Number(item.count)||0);
+  });
+  const total=[...counts.values()].reduce((a,b)=>a+b,0);
+  if (!total) {
+    list.innerHTML='<div class="empty-v15">目前沒有可顯示的全班結果。</div>';
+    return;
+  }
+  const max=Math.max(...counts.values(),1);
+  counts.forEach((count,id)=>{
+    const row=document.createElement("div");
+    row.className="stage-distribution-row";
+    row.innerHTML=`<span><b>${escapeHtml(id)}</b> ${escapeHtml(DELIBERATION_LABELS[id])}</span><div><i style="width:${count?Math.max(8,(count/max)*100):0}%"></i></div><strong>${count}</strong>`;
+    list.appendChild(row);
+  });
+}
+
+function renderDeliberationHistory() {
+  const panel=el("deliberationHistoryPanel");
+  const list=el("deliberationHistoryList");
+  const stageCount=Number(deliberationState?.stage_count)||1;
+  const responses=(deliberationState?.responses || deliberationLocalResponses || [])
+    .filter(item=>item.mode==="layered-deliberation" && /^layer-\d+$/.test(item.stage_key || ""));
+  if (!responses.length) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  list.innerHTML="";
+  let previous="";
+  for (let stage=1;stage<=stageCount;stage++) {
+    const r=responses.find(item=>item.stage_key===`layer-${stage}`);
+    if (!r) continue;
+    const changed=previous && previous!==r.selected_type;
+    const row=document.createElement("div");
+    row.className=`deliberation-history-row ${changed?"changed":""}`;
+    row.innerHTML=`<span>第 ${stage} 層</span><strong>${escapeHtml(r.selected_type || "—")} ${escapeHtml(DELIBERATION_LABELS[r.selected_type] || "")}</strong><small>${changed?"改變":"維持／起始"}</small>`;
+    list.appendChild(row);
+    previous=r.selected_type || previous;
+  }
+}
+
+function renderDeliberationReflection() {
+  const box=el("deliberationReflectionPanel");
+  const reflection=deliberationState?.deliberation?.reflection;
+  const finalReady=Number(deliberationState?.current_stage)===Number(deliberationState?.stage_count)
+    && deliberationState?.round_state==="published" && reflection;
+  box.classList.toggle("hidden",!finalReady);
+  if (!finalReady) return;
+
+  el("deliberationReflectionKeyLabel").textContent=reflection.k || "哪一層最影響你？為什麼？";
+  el("deliberationReflectionValueLabel").textContent=reflection.v || "你得知了新事實、修正了假設，還是重新衡量某個價值？";
+  el("deliberationReflectionActionLabel").textContent=reflection.a || "如果你是當事人，會怎麼回應？";
+  el("deliberationReflectionExtensionLabel").textContent=reflection.e || "假設情境延伸";
+  const existing=(deliberationState.responses || []).find(item=>item.stage_key==="reflection");
+  if (existing) {
+    const payload=existing.payload || {};
+    el("deliberationReflectionKeyInput").value=payload.key || "";
+    el("deliberationReflectionValueInput").value=payload.value || "";
+    el("deliberationReflectionActionInput").value=payload.action || "";
+    el("deliberationReflectionExtensionInput").value=payload.extension || "";
+    el("submitDeliberationReflectionBtn").disabled=true;
+    el("deliberationReflectionStatus").textContent="✓ 最後反思已提交";
+  } else {
+    el("submitDeliberationReflectionBtn").disabled=false;
+    el("deliberationReflectionStatus").textContent="個人反思預設不公開給全班。";
+  }
+}
+
+function renderDeliberationState() {
+  if (!deliberationState) return;
+  const d=deliberationState.deliberation || {};
+  const stage=Math.max(1,Number(deliberationState.current_stage)||1);
+  const total=Math.max(stage,Number(deliberationState.stage_count)||1);
+  const round=deliberationState.round_state || "open";
+  const layers=Array.isArray(d.released_layers) ? d.released_layers : [];
+  const current=layers[stage-1] || layers.at(-1) || {};
+  const own=deliberationOwnResponse(stage);
+
+  el("deliberationStageKicker").textContent=`第 ${stage} 層 / ${total}`;
+  el("caseCounter").textContent=`${stage} / ${total}`;
+  updateProgress(((stage-1)/Math.max(1,total))*100);
+  el("deliberationFixedQuestionText").textContent=d.fixed_question || activity.deliberation?.fixedQuestion || "就目前資訊，你怎麼判斷？";
+  el("deliberationLayerQuestionText").textContent=current.q || "";
+  el("lockBadge").textContent=round==="open" ? "作答中" : round==="locked" ? "已鎖定" : "已公布";
+
+  const released=el("deliberationReleasedLayers");
+  released.innerHTML="";
+  layers.forEach((layer,index)=>{
+    const card=document.createElement("article");
+    card.className=`deliberation-released-layer ${index===stage-1?"current":""}`;
+    const tag=document.createElement("span");tag.textContent=`第 ${index+1} 層`;
+    const title=document.createElement("strong");title.textContent=layer.t || `第 ${index+1} 層`;
+    const body=document.createElement("p");body.textContent=layer.c || "";
+    card.append(tag,title,body);
+    released.appendChild(card);
+  });
+
+  const grid=el("deliberationChoiceGrid");
+  grid.innerHTML="";
+  normalizeDeliberationOptions(d.options || activity.deliberation?.options).forEach(option=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="deliberation-choice";
+    button.dataset.id=option.id;
+    button.innerHTML=`<b>${escapeHtml(option.id)}</b><span>${escapeHtml(option.label)}</span>`;
+    button.classList.toggle("selected",deliberationSelectedChoice===option.id || (!deliberationSelectedChoice && own?.selected_type===option.id));
+    button.disabled=Boolean(own) || round!=="open";
+    button.addEventListener("click",()=>{
+      deliberationSelectedChoice=option.id;
+      grid.querySelectorAll(".deliberation-choice").forEach(item=>item.classList.toggle("selected",item.dataset.id===option.id));
+    });
+    grid.appendChild(button);
+  });
+
+  el("deliberationAnswerPanel").classList.toggle("hidden",Boolean(own) || round!=="open");
+  el("deliberationWaitingPanel").classList.toggle("hidden",round==="published");
+  if (own && round!=="published") {
+    el("deliberationWaitingTitle").textContent="這一層已提交";
+    el("deliberationWaitingText").textContent=round==="locked" ? "老師已結束本層作答，等待公布全班結果。" : "答案已保存，等待老師結束作答。";
+  } else if (!own && round==="locked") {
+    el("deliberationWaitingTitle").textContent="本層作答已結束";
+    el("deliberationWaitingText").textContent="這一層目前不能再提交，請等待老師公布結果。";
+  } else if (!own && round==="open") {
+    el("deliberationWaitingPanel").classList.add("hidden");
+  }
+
+  if (own) {
+    el("deliberationReasonInput").value=own.payload?.reason || "";
+    el("deliberationNeedInput").value=own.payload?.needToKnow || "";
+  } else {
+    el("deliberationReasonInput").value="";
+    el("deliberationNeedInput").value="";
+    deliberationSelectedChoice="";
+  }
+
+  const published=round==="published";
+  el("deliberationPublishedPanel").classList.toggle("hidden",!published);
+  if (published) {
+    renderDeliberationDistribution(el("deliberationStudentDistribution"),d.distribution || []);
+    const reasons=el("deliberationStudentReasons");reasons.innerHTML="";
+    const reasonItems=Array.isArray(d.anonymous_reasons)?d.anonymous_reasons:[];
+    if (!reasonItems.length) reasons.innerHTML='<div class="empty-v15">目前沒有匿名理由。</div>';
+    else reasonItems.forEach(item=>{
+      const card=document.createElement("div");card.className="deliberation-reason-item";
+      const reason=document.createElement("p");reason.textContent=item.reason || "";
+      card.appendChild(reason);
+      if (item.needToKnow) {
+        const need=document.createElement("small");need.textContent=`還想知道：${item.needToKnow}`;card.appendChild(need);
+      }
+      reasons.appendChild(card);
+    });
+    const post=deliberationPostResponse(stage);
+    el("deliberationPostNoteInput").value=post?.payload?.note || "";
+    el("deliberationPostNoteInput").disabled=Boolean(post);
+    el("submitDeliberationPostNoteBtn").disabled=Boolean(post);
+    el("submitDeliberationPostNoteBtn").textContent=post ? "✓ 補記已儲存" : "儲存討論後補記";
+
+    const previewNext=!isSessionPlay() && stage<total;
+    el("deliberationPreviewNextBtn").classList.toggle("hidden",!previewNext);
+  }
+
+  renderDeliberationHistory();
+  renderDeliberationReflection();
+}
+
+async function submitDeliberationAnswer() {
+  const stage=Math.max(1,Number(deliberationState?.current_stage)||1);
+  const choice=deliberationSelectedChoice;
+  const reason=el("deliberationReasonInput").value.trim();
+  const needToKnow=el("deliberationNeedInput").value.trim();
+  if (!choice) { showToast("請先選擇你的判斷"); return; }
+  if (!reason) { showToast("請填寫本層最影響你的理由"); return; }
+
+  if (isSessionPlay()) {
+    try {
+      await window.ClassroomSessionAPI.submitResponse({
+        taskIndex:0, stageKey:`layer-${stage}`, mode:"layered-deliberation",
+        selectedType:choice, payload:{reason,needToKnow}
+      });
+      await syncDeliberationState(false);
+      showToast("本層判斷已提交");
+    } catch (error) {
+      showToast(error.message || "提交失敗");
+    }
+    return;
+  }
+
+  deliberationLocalResponses=deliberationLocalResponses.filter(item=>item.stage_key!==`layer-${stage}`);
+  deliberationLocalResponses.push({
+    mode:"layered-deliberation",stage_key:`layer-${stage}`,selected_type:choice,
+    payload:{reason,needToKnow},submitted_at:new Date().toISOString()
+  });
+  deliberationState.responses=deliberationLocalResponses;
+  deliberationState.round_state="published";
+  deliberationState.deliberation.distribution=[{id:choice,count:1}];
+  deliberationState.deliberation.anonymous_reasons=[{reason,needToKnow}];
+  if (stage===deliberationState.stage_count) deliberationState.deliberation.reflection=activity.deliberation?.reflection || {};
+  renderDeliberationState();
+}
+
+async function submitDeliberationPostNote() {
+  const note=el("deliberationPostNoteInput").value.trim();
+  if (!note) { showToast("沒有補充內容"); return; }
+  const stage=Math.max(1,Number(deliberationState?.current_stage)||1);
+  if (isSessionPlay()) {
+    try {
+      await window.ClassroomSessionAPI.submitResponse({
+        taskIndex:0,stageKey:`layer-${stage}-post`,mode:"layered-deliberation",
+        payload:{note}
+      });
+      await syncDeliberationState(false);
+      showToast("討論後補記已保存");
+    } catch (error) { showToast(error.message || "補記保存失敗"); }
+  } else {
+    deliberationLocalResponses.push({mode:"layered-deliberation",stage_key:`layer-${stage}-post`,selected_type:"",payload:{note},submitted_at:new Date().toISOString()});
+    deliberationState.responses=deliberationLocalResponses;
+    renderDeliberationState();
+  }
+}
+
+async function submitDeliberationReflection() {
+  const payload={
+    key:el("deliberationReflectionKeyInput").value.trim(),
+    value:el("deliberationReflectionValueInput").value.trim(),
+    action:el("deliberationReflectionActionInput").value.trim(),
+    extension:el("deliberationReflectionExtensionInput").value.trim()
+  };
+  if (!payload.key || !payload.value || !payload.action) {
+    showToast("請至少完成前三項反思");
+    return;
+  }
+  if (isSessionPlay()) {
+    try {
+      await window.ClassroomSessionAPI.submitResponse({
+        taskIndex:0,stageKey:"reflection",mode:"layered-deliberation",payload
+      });
+      await syncDeliberationState(false);
+      showToast("最後反思已提交");
+    } catch (error) { showToast(error.message || "反思提交失敗"); }
+  } else {
+    deliberationLocalResponses.push({mode:"layered-deliberation",stage_key:"reflection",selected_type:"",payload,submitted_at:new Date().toISOString()});
+    deliberationState.responses=deliberationLocalResponses;
+    renderDeliberationState();
+  }
+}
+
+function previewNextDeliberationLayer() {
+  if (isSessionPlay() || !deliberationState) return;
+  const next=Math.min(Number(deliberationState.current_stage)+1,Number(deliberationState.stage_count));
+  if (next===deliberationState.current_stage) return;
+  deliberationState.current_stage=next;
+  deliberationState.round_state="open";
+  deliberationState.deliberation.released_layers=(activity.deliberation?.layers || []).slice(0,next);
+  deliberationState.deliberation.distribution=[];
+  deliberationState.deliberation.anonymous_reasons=[];
+  deliberationState.deliberation.reflection=null;
+  deliberationSelectedChoice="";
+  renderDeliberationState();
+}
+
+async function syncDeliberationState(initial=false) {
+  if (!isSessionPlay()) return;
+  try {
+    const state=await window.ClassroomSessionAPI.studentState();
+    deliberationState=state;
+    if (state.status==="closed") setStudentRealtimeStatus("closed");
+    renderDeliberationState();
+    if (initial) startDeliberationPolling(1800);
+  } catch (error) {
+    console.warn("逐層思辨同步失敗",error);
+  }
+}
+
+function startDeliberationPolling(interval=1800) {
+  clearInterval(deliberationPollTimer);
+  if (!isSessionPlay()) return;
+  deliberationPollTimer=setInterval(()=>syncDeliberationState(false),interval);
 }
 
 function renderProgressiveTask() {
@@ -1324,7 +1699,10 @@ function showComplete() {
   notifyCoursePlayerComplete();
 
   const completeText = el("completeText");
-  if (activity.template === "progressive-reveal") {
+  if (activity.template === "layered-deliberation") {
+    completeText.textContent =
+      "你完成了逐層思辨。這個活動不評分，也不要求你改變立場；重點是看見哪些新資訊、假設與價值影響了自己的判斷。";
+  } else if (activity.template === "progressive-reveal") {
     completeText.textContent =
       "你完成了逐層判斷。回頭看看自己的答案在哪一條線索後改變，並用作品內容說明理由。";
   } else if (activity.template === "open-classification") {
@@ -1359,6 +1737,10 @@ function restart() {
   openFinalResponse = null;
   openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
   clearInterval(openPollTimer);
+  clearInterval(deliberationPollTimer);
+  deliberationSelectedChoice="";
+  deliberationState=null;
+  deliberationLocalResponses=[];
   renderCase();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1393,6 +1775,10 @@ el("progressiveFinishBtn").addEventListener("click", showComplete);
 el("submitOpenClassificationBtn").addEventListener("click", submitOpenClassification);
 el("openPreviewRejudgeBtn").addEventListener("click", beginOpenPreviewRejudge);
 el("openClassificationFinishBtn").addEventListener("click", showComplete);
+el("submitDeliberationBtn")?.addEventListener("click",submitDeliberationAnswer);
+el("submitDeliberationPostNoteBtn")?.addEventListener("click",submitDeliberationPostNote);
+el("submitDeliberationReflectionBtn")?.addEventListener("click",submitDeliberationReflection);
+el("deliberationPreviewNextBtn")?.addEventListener("click",previewNextDeliberationLayer);
 el("elementTypeNextBtn").addEventListener("click", nextCase);
 
 function isEmbeddedCourseActivity() {
@@ -1416,6 +1802,7 @@ if (isEmbeddedCourseActivity()) {
 window.addEventListener("beforeunload",()=>{
   clearInterval(progressivePollTimer);
   clearInterval(openPollTimer);
+  clearInterval(deliberationPollTimer);
   stopStudentRealtime();
 });
 

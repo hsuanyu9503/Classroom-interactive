@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>逐層思辨｜全班投影</title>
+  <link rel="stylesheet" href="app.css" />
+  <script src="deliberation-present.js" defer></script>
+</head>
+<body class="deliberation-presentation-page">
+  <main class="deliberation-presentation-shell">
+    <header class="deliberation-presentation-hero">
+      <div>
+        <p class="eyebrow">全班思辨</p>
+        <h1 id="dpTitle">逐層思辨</h1>
+        <p id="dpSource" class="subtle"></p>
+      </div>
+      <div class="deliberation-presentation-status">
+        <span id="dpStage" class="stage-badge">第 1 層 / 1</span>
+        <span id="dpRound" class="status-chip">等待同步</span>
+      </div>
+    </header>
+
+    <section class="deliberation-presentation-grid">
+      <article class="panel deliberation-presentation-content">
+        <span class="summary-label">目前情境</span>
+        <h2 id="dpLayerTitle">等待老師開啟投影</h2>
+        <p id="dpLayerContent"></p>
+        <div class="deliberation-presentation-question">
+          <span>核心提問</span>
+          <p id="dpLayerQuestion"></p>
+        </div>
+        <div class="deliberation-presentation-fixed">
+          <span>固定判斷題</span>
+          <p id="dpFixedQuestion"></p>
+        </div>
+        <p id="dpProgress" class="subtle">已提交 0 / 0</p>
+      </article>
+
+      <article class="panel deliberation-presentation-results">
+        <div id="dpWaitingResults" class="centered-card">
+          <div class="big-icon">🔒</div>
+          <h2>結果尚未公布</h2>
+          <p>作答結束前不顯示票數，避免跟隨多數。</p>
+        </div>
+        <div id="dpPublishedResults" class="hidden">
+          <span class="summary-label">全班判斷分布</span>
+          <div id="dpDistribution" class="stage-distribution-list"></div>
+          <span class="summary-label deliberation-reason-heading">匿名理由</span>
+          <div id="dpReasons" class="deliberation-reason-list"></div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

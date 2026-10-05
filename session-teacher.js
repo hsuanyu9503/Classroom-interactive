@@ -1,4 +1,4 @@
-/* V2.7.5 | Teacher Session / History / Summary / Presentation */
+/* V2.8.0 | Teacher Session / History / Summary / Presentation */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -12,6 +12,9 @@
   let presentationChannel = null;
   let presentationChannelSessionId = "";
   let presentationView = "content";
+  let deliberationPresentationWindow = null;
+  let deliberationPresentationChannel = null;
+  let deliberationPresentationSessionId = "";
 
   function setTeacherRealtimeStatus(status, detail = "") {
     const badge = $("sessionRealtimeStatus");
@@ -102,6 +105,91 @@
       try { localStorage.removeItem(presentationStorageKey(sessionId)); } catch {}
     }
     updatePresentationControls();
+  }
+
+  function deliberationPresentationChannelName(sessionId) {
+    return `classroom-deliberation-presentation:${sessionId}`;
+  }
+
+  function deliberationPresentationStorageKey(sessionId) {
+    return `classroom-deliberation-presentation-state:${sessionId}`;
+  }
+
+  function closeDeliberationPresentation() {
+    const sessionId=activeSession?.id || deliberationPresentationSessionId || "";
+    try { deliberationPresentationChannel?.close?.(); } catch {}
+    deliberationPresentationChannel=null;
+    deliberationPresentationSessionId="";
+    try {
+      if (deliberationPresentationWindow && !deliberationPresentationWindow.closed) deliberationPresentationWindow.close?.();
+    } catch {}
+    deliberationPresentationWindow=null;
+    if (sessionId) {
+      try { localStorage.removeItem(deliberationPresentationStorageKey(sessionId)); } catch {}
+    }
+  }
+
+  function ensureDeliberationPresentationChannel() {
+    if (!activeSession?.id || activeSession.activityMode !== "layered-deliberation") return null;
+    if (deliberationPresentationChannel && deliberationPresentationSessionId===activeSession.id) return deliberationPresentationChannel;
+    try { deliberationPresentationChannel?.close?.(); } catch {}
+    deliberationPresentationChannel=null;
+    deliberationPresentationSessionId=activeSession.id;
+    if (typeof BroadcastChannel==="function") {
+      deliberationPresentationChannel=new BroadcastChannel(deliberationPresentationChannelName(activeSession.id));
+    }
+    return deliberationPresentationChannel;
+  }
+
+  function buildDeliberationPresentationState(snapshot) {
+    const stage=Math.max(1,Number(snapshot?.current_stage)||1);
+    const total=Math.max(1,Number(snapshot?.stage_count)||1);
+    const data=snapshot?.deliberation_data || {};
+    const layers=Array.isArray(data.l)?data.l:[];
+    const layer=layers[stage-1] || {};
+    const current=(snapshot?.responses || []).filter(r=>r.mode==="layered-deliberation" && r.stage_key===`layer-${stage}`);
+    const counts={A:0,B:0,C:0,D:0,U:0};
+    current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
+    const published=(snapshot?.round_state || "")==="published";
+    return {
+      schema:"classroom-deliberation-presentation",
+      version:1,
+      at:new Date().toISOString(),
+      title:activeSession?.title || snapshot?.title || "逐層思辨",
+      stage,total,
+      roundState:snapshot?.round_state || "open",
+      sourceNote:data.src || "",
+      fixedQuestion:data.q || "",
+      layer:{title:layer.t || `第 ${stage} 層`,content:layer.c || "",question:layer.q || ""},
+      participantCount:Number(snapshot?.participant_count)||0,
+      submittedCount:new Set(current.map(r=>r.participant_id)).size,
+      published,
+      distribution:published ? counts : null,
+      reasons:published ? current.map(r=>String(r.payload?.reason || "").trim()).filter(Boolean) : []
+    };
+  }
+
+  function publishDeliberationPresentation(snapshot) {
+    if (!activeSession || activeSession.activityMode!=="layered-deliberation" || !snapshot) return;
+    const state=buildDeliberationPresentationState(snapshot);
+    try { localStorage.setItem(deliberationPresentationStorageKey(activeSession.id),JSON.stringify(state)); } catch {}
+    try { ensureDeliberationPresentationChannel()?.postMessage(state); } catch {}
+  }
+
+  function openDeliberationPresentation() {
+    if (!activeSession || activeSession.activityMode!=="layered-deliberation") return;
+    ensureDeliberationPresentationChannel();
+    try {
+      let url;
+      try { url=new URL("deliberation-present.html",window.location.href); }
+      catch { url=new URL("deliberation-present.html",document.baseURI); }
+      url.hash=`session=${encodeURIComponent(activeSession.id)}`;
+      deliberationPresentationWindow=window.open(url.toString(),`deliberation-${activeSession.id}`);
+      if (!deliberationPresentationWindow) throw new Error("瀏覽器封鎖了投影視窗");
+      if (latestTeacherSnapshot) setTimeout(()=>publishDeliberationPresentation(latestTeacherSnapshot),150);
+    } catch (error) {
+      showSessionToast(error.message || "無法開啟逐層思辨投影");
+    }
   }
 
   function presentationChannelName(sessionId) {
@@ -254,6 +342,7 @@
     if (mode === "element-type") return "要素 → 類型";
     if (mode === "progressive-reveal") return "逐層揭露";
     if (mode === "open-classification") return "開放分類";
+    if (mode === "layered-deliberation") return "逐層思辨";
     if (mode === "open-tags") return "開放式討論";
     if (!mode) return "—";
     return "探索式揭密";
@@ -327,7 +416,7 @@
       <div>
         <strong>${escapeHtml(activity.title)}</strong>
         <p>${escapeHtml(activity.subtitle || "沒有副標題")}</p>
-        <small>${activityModeLabel(activity.template)} · ${activity.template === "progressive-reveal" ? `${activity.taskCount} 層線索` : activity.template === "open-classification" ? "初次＋重新判斷" : `${activity.taskCount} 個任務`}</small>
+        <small>${activityModeLabel(activity.template)} · ${activity.template === "progressive-reveal" ? `${activity.taskCount} 層線索` : activity.template === "open-classification" ? "初次＋重新判斷" : activity.template === "layered-deliberation" ? `${activity.taskCount} 層情境 · 需雲端 Session` : `${activity.taskCount} 個任務`}</small>
       </div>`;
     if (!$("sessionTitleInput").value.trim() || $("sessionTitleInput").dataset.autoTitle === "1") {
       $("sessionTitleInput").value = activity.title;
@@ -594,6 +683,9 @@
         const courseId = $("sessionCourseSelect").value;
         if (!courseId) throw new Error("請先選擇一門完整課程");
         const snapshot = await window.ClassroomCourseAPI.buildSnapshot(courseId);
+        if ((snapshot.resources?.activities || []).some(item=>item.template === "layered-deliberation")) {
+          throw new Error("V2.8.0 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
+        }
         const encoded = await window.ClassroomCourseAPI.encodeSnapshot(snapshot);
         const steps = flattenCourseSnapshot(snapshot);
         if (!steps.length) throw new Error("這門課還沒有可執行的教學節點");
@@ -620,7 +712,9 @@
           title,
           activityEncoded:snapshot.encoded,
           activityMode:snapshot.template,
-          stageCount:snapshot.stageCount || 1
+          stageCount:snapshot.stageCount || 1,
+          shellEncoded:snapshot.shellEncoded || "",
+          deliberationData:snapshot.deliberationData || null
         });
         activeCourseSnapshot = null;
       }
@@ -668,6 +762,7 @@
     $("courseSessionControl").classList.toggle("hidden",activeSession.sessionKind !== "course");
     $("progressiveSessionControl").classList.toggle("hidden",activeSession.activityMode !== "progressive-reveal");
     $("openClassificationSessionControl").classList.toggle("hidden",activeSession.activityMode !== "open-classification");
+    $("deliberationSessionControl")?.classList.toggle("hidden",activeSession.activityMode !== "layered-deliberation");
 
     let joinUrl = "";
     let joinUrlError = "";
@@ -722,6 +817,7 @@
     clearInterval(refreshTimer);
     stopSessionRealtime();
     closePresentationSync();
+    closeDeliberationPresentation();
     if (lostId) window.ClassroomSessionAPI.removeTeacherHistory?.(lostId);
     activeSession = null;
     activeCourseSnapshot = null;
@@ -744,6 +840,7 @@
       activeSession.activityMode = snapshot.activity_mode ?? activeSession.activityMode ?? "";
       activeSession.currentStage = snapshot.current_stage || 1;
       activeSession.stageCount = snapshot.stage_count || 1;
+      activeSession.roundState = snapshot.round_state || activeSession.roundState || "";
       activeSession.currentNodeRef = snapshot.current_node_ref || activeSession.currentNodeRef || "";
       activeSession.revision = snapshot.revision || activeSession.revision || 1;
       activeSession.courseEncoded = snapshot.course_encoded || activeSession.courseEncoded || "";
@@ -769,6 +866,8 @@
       await renderCourseControl(snapshot);
       renderProgressiveControl(snapshot);
       renderOpenClassificationControl(snapshot);
+      renderDeliberationControl(snapshot);
+      publishDeliberationPresentation(snapshot);
       await renderSessionSummary(snapshot);
       await publishPresentationState(snapshot);
       renderHistory();
@@ -829,6 +928,7 @@
               <small>${participant.last_submitted_at ? `最後作答：${formatTime(participant.last_submitted_at)}` : `加入：${formatTime(participant.joined_at)}`}</small>
               ${activeSession?.activityMode === "progressive-reveal" ? `<div class="participant-judgement-history">${buildParticipantHistory(participant.id,responses)}</div>` : ""}
               ${activeSession?.activityMode === "open-classification" ? `<div class="participant-judgement-history">${buildOpenParticipantHistory(participant.id,responses)}</div>` : ""}
+              ${activeSession?.activityMode === "layered-deliberation" ? `<div class="participant-judgement-history">${buildDeliberationParticipantHistory(participant.id,responses)}</div>` : ""}
             </div>
             <span class="participant-response-count">${participant.response_count || 0} 筆</span>`;
         }
@@ -886,6 +986,7 @@
 
     $("progressiveSessionControl").classList.toggle("hidden",activeSession.activityMode !== "progressive-reveal");
     $("openClassificationSessionControl").classList.toggle("hidden",activeSession.activityMode !== "open-classification");
+    $("deliberationSessionControl")?.classList.toggle("hidden",activeSession.activityMode !== "layered-deliberation");
   }
 
   function nodeTypeLabel(type) {
@@ -977,6 +1078,128 @@
     const finalName = final.payload?.selectedTypeName || final.selected_type || "—";
     const reason = final.payload?.changeReason || "";
     return `<span>初次 ${escapeHtml(initialName)}</span><span class="history-arrow">→</span><span>最終 ${escapeHtml(finalName)}</span>${reason ? `<span class="open-history-reason">${escapeHtml(reason)}</span>` : ""}`;
+  }
+
+
+  const DELIBERATION_OPTION_LABELS = {
+    A:"完全不能接受",
+    B:"不太能接受",
+    C:"大致能接受",
+    D:"完全能接受",
+    U:"資訊不足，暫不判斷"
+  };
+
+  function buildDeliberationParticipantHistory(participantId,responses) {
+    const items=(responses || [])
+      .filter(r=>r.participant_id===participantId && r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""))
+      .sort((a,b)=>Number(a.stage_key.split("-")[1])-Number(b.stage_key.split("-")[1]));
+    if (!items.length) return "";
+    return items.map(r=>{
+      const stage=Number(r.stage_key.split("-")[1]);
+      return `<span class="history-mini-pill">第 ${stage} 層 ${escapeHtml(r.selected_type || "—")}</span>`;
+    }).join("");
+  }
+
+  function renderDeliberationDistribution(list,responses) {
+    if (!list) return;
+    list.innerHTML="";
+    const counts=new Map([["A",0],["B",0],["C",0],["D",0],["U",0]]);
+    responses.forEach(r=>{
+      const key=String(r.selected_type || "");
+      if (counts.has(key)) counts.set(key,counts.get(key)+1);
+    });
+    const total=[...counts.values()].reduce((a,b)=>a+b,0);
+    if (!total) {
+      list.innerHTML='<div class="empty-v15">本層還沒有學生提交。</div>';
+      return;
+    }
+    const max=Math.max(...counts.values(),1);
+    counts.forEach((count,key)=>{
+      const row=document.createElement("div");
+      row.className="stage-distribution-row";
+      row.innerHTML=`<span><b>${key}</b> ${escapeHtml(DELIBERATION_OPTION_LABELS[key])}</span><div><i style="width:${count ? Math.max(8,(count/max)*100) : 0}%"></i></div><strong>${count}</strong>`;
+      list.appendChild(row);
+    });
+  }
+
+  function renderDeliberationControl(snapshot) {
+    const panel=$("deliberationSessionControl");
+    if (!panel || activeSession?.activityMode !== "layered-deliberation" || activeSession.status === "closed") {
+      panel?.classList.add("hidden");
+      return;
+    }
+    panel.classList.remove("hidden");
+
+    const stage=Math.max(1,Math.min(Number(snapshot.current_stage)||1,Number(snapshot.stage_count)||1));
+    const total=Math.max(1,Number(snapshot.stage_count)||1);
+    const state=snapshot.round_state || activeSession.roundState || "open";
+    activeSession.roundState=state;
+
+    const data=snapshot.deliberation_data || {};
+    const layers=Array.isArray(data.l) ? data.l : [];
+    const layer=layers[stage-1] || {};
+    $("deliberationStageBadge").textContent=`第 ${stage} 層 / ${total}`;
+    $("deliberationTeacherLayerTitle").textContent=layer.t || `第 ${stage} 層`;
+    $("deliberationTeacherLayerContent").textContent=layer.c || "—";
+    $("deliberationTeacherCoreQuestion").textContent=layer.q || "—";
+    $("deliberationTeacherNote").textContent=layer.n || "";
+    $("deliberationTeacherNoteWrap").classList.toggle("hidden",!layer.n);
+
+    const current=(snapshot.responses || []).filter(r=>
+      r.mode==="layered-deliberation" &&
+      r.stage_key===`layer-${stage}` &&
+      (!r.node_ref || activeSession.sessionKind !== "course")
+    );
+    const unique=new Set(current.map(r=>r.participant_id)).size;
+    $("deliberationSubmissionText").textContent=`本層已提交 ${unique} / ${snapshot.participant_count || 0}`;
+    $("deliberationRoundStateText").textContent=state==="open" ? "🟢 開放作答" : state==="locked" ? "🔒 已結束作答" : "📊 已公布結果";
+
+    $("deliberationOpenBtn").disabled=state==="open";
+    $("deliberationLockBtn").disabled=state!=="open";
+    $("deliberationPublishBtn").disabled=state==="published";
+    $("deliberationNextBtn").disabled=state!=="published" || stage>=total;
+    $("deliberationNextBtn").textContent=stage>=total ? "已到最後一層" : "下一層 →";
+
+    renderDeliberationDistribution($("deliberationTeacherDistribution"),current);
+    const reasons=$("deliberationTeacherReasons");
+    reasons.innerHTML="";
+    const reasonItems=current.map(r=>String(r.payload?.reason || "").trim()).filter(Boolean);
+    if (!reasonItems.length) reasons.innerHTML='<div class="empty-v15">本層還沒有可顯示的理由。</div>';
+    else reasonItems.forEach(text=>{
+      const item=document.createElement("div");
+      item.className="deliberation-reason-item";
+      item.textContent=text;
+      reasons.appendChild(item);
+    });
+  }
+
+  async function setDeliberationRound(roundState) {
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return;
+    try {
+      await window.ClassroomSessionAPI.setDeliberationState(activeSession,{
+        stage:activeSession.currentStage || 1,
+        roundState
+      });
+      await refreshActiveSession();
+    } catch (error) {
+      showSessionToast(error.message || "更新逐層思辨狀態失敗");
+    }
+  }
+
+  async function nextDeliberationLayer() {
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return;
+    if (activeSession.roundState !== "published") {
+      showSessionToast("請先公布本層結果，再進入下一層");
+      return;
+    }
+    const target=Math.min((activeSession.currentStage || 1)+1,activeSession.stageCount || 1);
+    if (target === activeSession.currentStage) return;
+    try {
+      await window.ClassroomSessionAPI.setDeliberationState(activeSession,{stage:target,roundState:"open"});
+      await refreshActiveSession();
+    } catch (error) {
+      showSessionToast(error.message || "公開下一層失敗");
+    }
   }
 
   function renderProgressiveControl(snapshot) {
@@ -1140,6 +1363,31 @@
         list.appendChild(row);
       });
       details.appendChild(section);
+    } else if (activeSession.activityMode === "layered-deliberation") {
+      const responses=(snapshot.responses || []).filter(r=>r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""));
+      const completedByParticipant=new Map();
+      responses.forEach(r=>{
+        if (!completedByParticipant.has(r.participant_id)) completedByParticipant.set(r.participant_id,new Set());
+        completedByParticipant.get(r.participant_id).add(r.stage_key);
+      });
+      const totalStages=Math.max(1,Number(snapshot.stage_count)||1);
+      const completedPairs=[...completedByParticipant.values()].reduce((sum,set)=>sum+set.size,0);
+      const possible=participants*totalStages;
+      $("summaryCompletionRate").textContent=participants ? `${Math.round((completedPairs/Math.max(1,possible))*100)}%` : "—";
+      const section=document.createElement("section");
+      section.className="summary-section";
+      section.innerHTML=`<div class="summary-section-head"><strong>逐層判斷分布</strong><span>${totalStages} 層</span></div><div class="summary-node-list"></div>`;
+      const list=section.querySelector(".summary-node-list");
+      for (let stage=1;stage<=totalStages;stage++) {
+        const current=responses.filter(r=>r.stage_key===`layer-${stage}`);
+        const row=document.createElement("div");
+        row.className="summary-node-row";
+        const counts={A:0,B:0,C:0,D:0,U:0};
+        current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
+        row.innerHTML=`<div class="summary-node-main"><strong>第 ${stage} 層</strong><small>A ${counts.A} · B ${counts.B} · C ${counts.C} · D ${counts.D} · U ${counts.U}</small></div><b>${new Set(current.map(r=>r.participant_id)).size} / ${participants}</b>`;
+        list.appendChild(row);
+      }
+      details.appendChild(section);
     } else {
       const responses=snapshot.responses || [];
       const responders=new Set(responses.map(item=>item.participant_id)).size;
@@ -1154,7 +1402,7 @@
       const name=item.payload?.selectedTypeName || item.selected_type || "";
       if (name) counts.set(name,(counts.get(name)||0)+1);
     });
-    if (counts.size) {
+    if (counts.size && activeSession.activityMode !== "layered-deliberation") {
       const section=document.createElement("section");
       section.className="summary-section";
       const total=[...counts.values()].reduce((a,b)=>a+b,0);
@@ -1201,6 +1449,7 @@
         clearInterval(refreshTimer);
         stopSessionRealtime();
         closePresentationSync();
+        closeDeliberationPresentation();
         activeSession = null;
         activeCourseSnapshot = null;
         latestTeacherSnapshot = null;
@@ -1328,10 +1577,16 @@
   $("nextStageBtn")?.addEventListener("click",()=>changeStage(1));
   $("openPreviousPhaseBtn")?.addEventListener("click",()=>changeOpenPhase(-1));
   $("openNextPhaseBtn")?.addEventListener("click",()=>changeOpenPhase(1));
+  $("deliberationOpenBtn")?.addEventListener("click",()=>setDeliberationRound("open"));
+  $("deliberationLockBtn")?.addEventListener("click",()=>setDeliberationRound("locked"));
+  $("deliberationPublishBtn")?.addEventListener("click",()=>setDeliberationRound("published"));
+  $("openDeliberationPresentationBtn")?.addEventListener("click",openDeliberationPresentation);
+  $("deliberationNextBtn")?.addEventListener("click",nextDeliberationLayer);
 
   window.addEventListener("beforeunload",()=>{
     clearInterval(refreshTimer);
     stopSessionRealtime();
+    try { deliberationPresentationChannel?.close?.(); } catch {}
   });
 
   window.ClassroomSessionManager={refresh,refreshActiveSession};
