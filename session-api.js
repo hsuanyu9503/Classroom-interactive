@@ -360,6 +360,12 @@
     saveTeacherHistory(history);
   }
 
+  function removeTeacherHistory(sessionId) {
+    const cleanId = String(sessionId || "").trim();
+    if (!cleanId) return;
+    saveTeacherHistory(loadTeacherHistory().filter(item => item.id !== cleanId));
+  }
+
   function updateTeacherHistory(sessionMeta, snapshot = null) {
     if (!sessionMeta?.id) return;
     const history = loadTeacherHistory();
@@ -838,6 +844,38 @@
     return true;
   }
 
+  async function deleteSession(sessionMeta) {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if ((sessionMeta.status || "") !== "closed") throw new Error("請先結束 Session，再進行刪除");
+
+    if (sessionMeta.mode === "cloud") {
+      await rpc("delete_classroom_session", {
+        p_session_id:sessionMeta.id,
+        p_teacher_token:sessionMeta.teacherToken
+      });
+      removeTeacherHistory(sessionMeta.id);
+      return true;
+    }
+
+    const sessions = loadLocalSessions();
+    const index = sessions.findIndex(item =>
+      item.id === sessionMeta.id && item.teacherToken === sessionMeta.teacherToken
+    );
+    if (index < 0) {
+      // 舊 History 可能已沒有本機 Session 實體；仍允許清除歷史項目。
+      removeTeacherHistory(sessionMeta.id);
+      return true;
+    }
+    if ((sessions[index].status || "active") !== "closed") {
+      throw new Error("請先結束 Session，再進行刪除");
+    }
+
+    sessions.splice(index,1);
+    saveLocalSessions(sessions);
+    removeTeacherHistory(sessionMeta.id);
+    return true;
+  }
+
   async function studentState() {
     const context = getParticipantContext();
     if (!context) throw new Error("尚未加入課堂 Session");
@@ -924,8 +962,9 @@
   window.ClassroomSessionAPI = {
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
     createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage,
-    setCourseNode, submitCourseProgress, closeSession, studentState, buildJoinUrl,
-    loadTeacherHistory, updateTeacherHistory, getParticipantContext, updateParticipantContext, configFromUrlFragment,
+    setCourseNode, submitCourseProgress, closeSession, deleteSession, studentState, buildJoinUrl,
+    loadTeacherHistory, updateTeacherHistory, removeTeacherHistory,
+    getParticipantContext, updateParticipantContext, configFromUrlFragment,
     publishRealtime, subscribeRealtime
   };
 })();

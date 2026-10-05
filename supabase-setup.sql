@@ -1,4 +1,4 @@
--- V2.7.2 SQL FIX
+-- V2.7.3 SQL SETUP
 -- 修正 get_student_session_state() 中：
 --   select s.*, p.id into v_session, v_participant_id
 -- 造成 PostgreSQL 42601：
@@ -1099,3 +1099,51 @@ revoke all on function public.get_student_session_state(uuid,text) from public;
 grant execute on function public.join_classroom_session(text,text,text) to anon, authenticated;
 grant execute on function public.get_teacher_session(uuid,text) to anon, authenticated;
 grant execute on function public.get_student_session_state(uuid,text) to anon, authenticated;
+
+
+-- =========================================================
+-- V2.7.3：刪除「已結束」的 Session
+-- classroom_sessions 的關聯表皆使用 ON DELETE CASCADE，
+-- 因此 participants / responses / course progress 會一併刪除。
+-- =========================================================
+create or replace function public.delete_classroom_session(
+  p_session_id uuid,
+  p_teacher_token text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text;
+begin
+  select status into v_status
+  from public.classroom_sessions
+  where id = p_session_id
+    and teacher_token = p_teacher_token
+  limit 1;
+
+  if v_status is null then
+    raise exception 'invalid teacher token';
+  end if;
+
+  if v_status <> 'closed' then
+    raise exception 'session must be closed before deletion';
+  end if;
+
+  delete from public.classroom_sessions
+  where id = p_session_id
+    and teacher_token = p_teacher_token
+    and status = 'closed';
+
+  if not found then
+    raise exception 'session deletion failed';
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.delete_classroom_session(uuid,text) from public;
+grant execute on function public.delete_classroom_session(uuid,text) to anon, authenticated;

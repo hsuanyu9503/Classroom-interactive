@@ -1,4 +1,4 @@
-/* V2.7.2 | Teacher Session / History / Summary / Presentation */
+/* V2.7.3 | Teacher Session / History / Summary / Presentation */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -86,6 +86,22 @@
         scheduleTeacherPolling(status === "connected" ? 12000 : 3000);
       }
     });
+  }
+
+  function closePresentationSync() {
+    const sessionId = activeSession?.id || presentationChannelSessionId || "";
+    try { presentationChannel?.close?.(); } catch {}
+    presentationChannel = null;
+    presentationChannelSessionId = "";
+    try {
+      if (presentationWindow && !presentationWindow.closed) presentationWindow.close?.();
+    } catch {}
+    presentationWindow = null;
+    presentationView = "content";
+    if (sessionId) {
+      try { localStorage.removeItem(presentationStorageKey(sessionId)); } catch {}
+    }
+    updatePresentationControls();
   }
 
   function presentationChannelName(sessionId) {
@@ -1063,6 +1079,53 @@
     if (!details.children.length) details.innerHTML='<div class="empty-v15">這次 Session 沒有足夠資料產生更多摘要。</div>';
   }
 
+  async function deleteHistorySession(item, button = null) {
+    if (!item?.id) return;
+    if ((item.status || "") !== "closed") {
+      showSessionToast("進行中的 Session 不能刪除，請先結束");
+      return;
+    }
+
+    const title = item.title || item.code || "這筆 Session";
+    const confirmed = confirm(
+      `確定要刪除「${title}」嗎？\n\n` +
+      `相關的參與紀錄、學生作答與課程進度也會一併刪除。\n` +
+      `此操作無法復原。`
+    );
+    if (!confirmed) return;
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "刪除中…";
+    }
+
+    try {
+      const deletingActive = activeSession?.id === item.id;
+      await window.ClassroomSessionAPI.deleteSession(item);
+
+      if (deletingActive) {
+        clearInterval(refreshTimer);
+        stopSessionRealtime();
+        closePresentationSync();
+        activeSession = null;
+        activeCourseSnapshot = null;
+        latestTeacherSnapshot = null;
+        $("activeSessionCard")?.classList.add("hidden");
+        $("sessionSummaryCard")?.classList.add("hidden");
+      }
+
+      renderHistory();
+      await renderTeachHome();
+      showSessionToast("Session 已刪除");
+    } catch (error) {
+      showSessionToast(error.message || "刪除 Session 失敗");
+      if (button) {
+        button.disabled = false;
+        button.textContent = "🗑 刪除";
+      }
+    }
+  }
+
   function renderHistory() {
     const list=$("sessionHistoryList");
     const history=window.ClassroomSessionAPI.loadTeacherHistory();
@@ -1072,6 +1135,9 @@
       return;
     }
     history.forEach(item=>{
+      const wrapper=document.createElement("div");
+      wrapper.className="session-history-row";
+
       const row=document.createElement("button");
       row.type="button";
       row.className="session-history-item";
@@ -1086,7 +1152,19 @@
         </span>
         <span class="history-status ${statusClass}">${actionLabel}</span>`;
       row.addEventListener("click",()=>openHistorySession(item));
-      list.appendChild(row);
+      wrapper.appendChild(row);
+
+      if (status === "closed") {
+        const deleteButton=document.createElement("button");
+        deleteButton.type="button";
+        deleteButton.className="history-delete-btn";
+        deleteButton.textContent="🗑 刪除";
+        deleteButton.setAttribute("aria-label",`刪除 ${item.title || item.code || "Session"}`);
+        deleteButton.addEventListener("click",()=>deleteHistorySession(item,deleteButton));
+        wrapper.appendChild(deleteButton);
+      }
+
+      list.appendChild(wrapper);
     });
   }
 

@@ -3035,3 +3035,50 @@ html{
     width:100%;
   }
 }
+
+
+/* =========================================================
+   V2.7.3 — Closed Session deletion
+   ========================================================= */
+.session-history-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:stretch;
+  gap:8px;
+}
+.session-history-row .session-history-item{
+  min-width:0;
+}
+.history-delete-btn{
+  min-width:84px;
+  padding:0 12px;
+  border:1px solid #efd0d0;
+  border-radius:14px;
+  background:#fff7f7;
+  color:#a54848;
+  font:inherit;
+  font-size:12px;
+  font-weight:900;
+  cursor:pointer;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease;
+}
+.history-delete-btn:hover{
+  background:#fff0f0;
+  border-color:#e7bcbc;
+}
+.history-delete-btn:active{
+  transform:translateY(1px);
+}
+.history-delete-btn:disabled{
+  opacity:.55;
+  cursor:wait;
+}
+@media(max-width:560px){
+  .session-history-row{
+    grid-template-columns:1fr;
+  }
+  .history-delete-btn{
+    min-height:42px;
+    width:100%;
+  }
+}
