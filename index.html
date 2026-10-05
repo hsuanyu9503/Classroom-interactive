@@ -19,7 +19,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.8.1</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.9.1</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -627,6 +627,7 @@
           </div>
           <div class="active-session-actions">
             <button id="exportTeacherHandoffBtn" class="btn btn-secondary hidden" type="button">🔁 匯出接手檔</button>
+            <button id="exportDeliberationResultsBtn" class="btn btn-secondary hidden" type="button">⬇ 匯出思辨結果</button>
             <button id="refreshSessionBtn" class="btn btn-secondary" type="button">↻ 更新資料</button>
             <button id="closeSessionBtn" class="btn btn-danger-soft" type="button">結束 Session</button>
           </div>
@@ -790,7 +791,7 @@
             <div class="deliberation-results-panel">
               <span class="summary-label">本層判斷分布（教師可隨時查看）</span>
               <div id="deliberationTeacherDistribution" class="stage-distribution-list"></div>
-              <span class="summary-label deliberation-reason-heading">匿名理由</span>
+              <span class="summary-label deliberation-reason-heading">匿名理由（可控制是否公開）</span>
               <div id="deliberationTeacherReasons" class="deliberation-reason-list"></div>
             </div>
           </div>
@@ -877,7 +878,7 @@
       <section class="release-center-card" aria-labelledby="releaseCenterTitle">
         <div class="release-center-head">
           <div>
-            <span class="section-kicker">V2.7 RELEASE CENTER</span>
+            <span class="section-kicker">V2.9 RELEASE CENTER</span>
             <h3 id="releaseCenterTitle">正式上線檢查</h3>
             <p>確認這個瀏覽器的教材、備份與跨裝置 Session 是否已準備好。</p>
           </div>

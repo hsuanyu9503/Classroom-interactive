@@ -1,4 +1,4 @@
--- V2.8.1 SQL SETUP
+-- V2.9.1 SQL SETUP
 -- 修正 get_student_session_state() 中：
 --   select s.*, p.id into v_session, v_participant_id
 -- 造成 PostgreSQL 42601：
@@ -42,9 +42,14 @@ create table if not exists public.student_responses (
   selected_elements jsonb not null default '[]'::jsonb,
   selected_type text,
   payload jsonb not null default '{}'::jsonb,
+  is_hidden boolean not null default false,
   submitted_at timestamptz not null default now(),
   unique(session_id, participant_id, task_index, stage_key)
 );
+
+-- V2.9.1：既有資料庫安全升級；必須在任何引用 is_hidden 的 RPC 建立前執行。
+alter table public.student_responses
+  add column if not exists is_hidden boolean not null default false;
 
 
 -- V1.8：教師同步逐層揭露狀態（也可安全套用在既有 V1.7 資料庫）
@@ -240,6 +245,7 @@ begin
     ),
     'responses', coalesce((
       select jsonb_agg(jsonb_build_object(
+        'response_id', r.id,
         'participant_id', r.participant_id,
         'student_code', p.student_code,
         'task_index', r.task_index,
@@ -248,6 +254,7 @@ begin
         'selected_elements', r.selected_elements,
         'selected_type', r.selected_type,
         'payload', r.payload,
+        'is_hidden', coalesce(r.is_hidden,false),
         'submitted_at', r.submitted_at
       ) order by r.submitted_at)
       from public.student_responses r
@@ -866,6 +873,7 @@ begin
 
     'responses', coalesce((
       select jsonb_agg(jsonb_build_object(
+        'response_id', r.id,
         'participant_id', r.participant_id,
         'student_code', p.student_code,
         'node_ref', coalesce(r.node_ref,''),
@@ -875,6 +883,7 @@ begin
         'selected_elements', r.selected_elements,
         'selected_type', r.selected_type,
         'payload', r.payload,
+        'is_hidden', coalesce(r.is_hidden,false),
         'submitted_at', r.submitted_at
       ) order by r.submitted_at)
       from public.student_responses r
@@ -1492,6 +1501,7 @@ begin
 
     'responses', coalesce((
       select jsonb_agg(jsonb_build_object(
+        'response_id', r.id,
         'participant_id', r.participant_id,
         'student_code', p.student_code,
         'node_ref', coalesce(r.node_ref,''),
@@ -1501,6 +1511,7 @@ begin
         'selected_elements', r.selected_elements,
         'selected_type', r.selected_type,
         'payload', r.payload,
+        'is_hidden', coalesce(r.is_hidden,false),
         'submitted_at', r.submitted_at
       ) order by r.submitted_at)
       from public.student_responses r
@@ -1601,6 +1612,7 @@ begin
         'selected_type', r.selected_type,
         'selected_elements', r.selected_elements,
         'payload', r.payload,
+        'is_hidden', coalesce(r.is_hidden,false),
         'submitted_at', r.submitted_at
       ) order by r.submitted_at)
       from public.student_responses r
@@ -1680,6 +1692,7 @@ begin
           where r.session_id = v_session.id
             and r.mode = 'layered-deliberation'
             and r.stage_key = ('layer-' || v_session.current_stage::text)
+            and coalesce(r.is_hidden,false) = false
             and length(trim(coalesce(r.payload->>'reason',''))) > 0
         ),'[]'::jsonb) else '[]'::jsonb end
       )
@@ -1699,3 +1712,48 @@ grant execute on function public.set_deliberation_round(uuid,text,integer,text) 
 grant execute on function public.submit_classroom_response(uuid,text,integer,text,text,jsonb,text,jsonb,text) to anon, authenticated;
 grant execute on function public.get_teacher_session(uuid,text) to anon, authenticated;
 grant execute on function public.get_student_session_state(uuid,text) to anon, authenticated;
+
+
+-- =========================================================
+-- V2.9.1：教師匿名理由顯示／隱藏
+-- 只影響理由是否送往學生結果與投影；A/B/C/D/U 分布不受影響。
+-- =========================================================
+create or replace function public.set_deliberation_reason_visibility(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_response_id uuid,
+  p_hidden boolean
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1
+    from public.classroom_sessions s
+    where s.id = p_session_id
+      and s.teacher_token = p_teacher_token
+      and s.activity_mode = 'layered-deliberation'
+  ) then
+    raise exception 'invalid teacher token or deliberation session';
+  end if;
+
+  update public.student_responses r
+  set is_hidden = coalesce(p_hidden,false)
+  where r.id = p_response_id
+    and r.session_id = p_session_id
+    and r.mode = 'layered-deliberation'
+    and r.stage_key ~ '^layer-[0-9]+$';
+
+  if not found then
+    raise exception 'deliberation response not found';
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.set_deliberation_reason_visibility(uuid,text,uuid,boolean) from public;
+grant execute on function public.set_deliberation_reason_visibility(uuid,text,uuid,boolean) to anon, authenticated;

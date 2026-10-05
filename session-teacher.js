@@ -1,4 +1,4 @@
-/* V2.8.1 | Teacher Session / History / Summary / Presentation */
+/* V2.9.0 | Teacher Session / History / Summary / Presentation */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -165,7 +165,7 @@
       submittedCount:new Set(current.map(r=>r.participant_id)).size,
       published,
       distribution:published ? counts : null,
-      reasons:published ? current.map(r=>String(r.payload?.reason || "").trim()).filter(Boolean) : []
+      reasons:published ? current.filter(r=>!r.is_hidden).map(r=>String(r.payload?.reason || "").trim()).filter(Boolean) : []
     };
   }
 
@@ -684,7 +684,7 @@
         if (!courseId) throw new Error("請先選擇一門完整課程");
         const snapshot = await window.ClassroomCourseAPI.buildSnapshot(courseId);
         if ((snapshot.resources?.activities || []).some(item=>item.template === "layered-deliberation")) {
-          throw new Error("V2.8.1 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
+          throw new Error("V2.9.0 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
         }
         const encoded = await window.ClassroomCourseAPI.encodeSnapshot(snapshot);
         const steps = flattenCourseSnapshot(snapshot);
@@ -754,6 +754,12 @@
     if (handoffButton) {
       const canHandoff=activeSession.mode === "cloud" && activeSession.status !== "closed";
       handoffButton.classList.toggle("hidden",!canHandoff); handoffButton.disabled=!canHandoff;
+    }
+    const deliberationExportButton=$("exportDeliberationResultsBtn");
+    if (deliberationExportButton) {
+      const canExport=activeSession.activityMode === "layered-deliberation";
+      deliberationExportButton.classList.toggle("hidden",!canExport);
+      deliberationExportButton.disabled=!canExport;
     }
     $("sessionActivityMode").textContent = activeSession.sessionKind === "course"
       ? "📚 完整課程"
@@ -855,6 +861,11 @@
         const canHandoff=activeSession.mode === "cloud" && activeSession.status === "active";
         $("exportTeacherHandoffBtn").classList.toggle("hidden",!canHandoff);
         $("exportTeacherHandoffBtn").disabled=!canHandoff;
+      }
+      if ($("exportDeliberationResultsBtn")) {
+        const canExport=activeSession.activityMode === "layered-deliberation";
+        $("exportDeliberationResultsBtn").classList.toggle("hidden",!canExport);
+        $("exportDeliberationResultsBtn").disabled=!canExport;
       }
       $("sessionActivityMode").textContent = activeSession.sessionKind === "course"
         ? "📚 完整課程"
@@ -1163,14 +1174,139 @@
     renderDeliberationDistribution($("deliberationTeacherDistribution"),current);
     const reasons=$("deliberationTeacherReasons");
     reasons.innerHTML="";
-    const reasonItems=current.map(r=>String(r.payload?.reason || "").trim()).filter(Boolean);
+    const reasonItems=current.filter(r=>String(r.payload?.reason || "").trim());
     if (!reasonItems.length) reasons.innerHTML='<div class="empty-v15">本層還沒有可顯示的理由。</div>';
-    else reasonItems.forEach(text=>{
+    else reasonItems.forEach(response=>{
       const item=document.createElement("div");
-      item.className="deliberation-reason-item";
-      item.textContent=text;
+      item.className=`deliberation-reason-item moderation-item${response.is_hidden ? " hidden-from-projection" : ""}`;
+      const content=document.createElement("div");
+      content.className="moderation-reason-content";
+      const text=document.createElement("p");
+      text.textContent=String(response.payload?.reason || "").trim();
+      content.appendChild(text);
+      const meta=document.createElement("small");
+      meta.textContent=response.is_hidden ? "🙈 已隱藏：學生結果與投影不顯示" : "👁 目前會在公布結果中匿名顯示";
+      content.appendChild(meta);
+      item.appendChild(content);
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="btn btn-secondary moderation-toggle-btn";
+      button.textContent=response.is_hidden ? "👁 恢復顯示" : "🙈 隱藏理由";
+      button.disabled=!response.response_id;
+      button.addEventListener("click",()=>toggleDeliberationReasonVisibility(response,button));
+      item.appendChild(button);
       reasons.appendChild(item);
     });
+  }
+
+  async function toggleDeliberationReasonVisibility(response,button=null) {
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return;
+    if (!response?.response_id) {
+      showSessionToast("這筆理由缺少回應識別碼，請更新 Supabase SQL");
+      return;
+    }
+    const nextHidden=!Boolean(response.is_hidden);
+    const oldText=button?.textContent || "";
+    if (button) { button.disabled=true; button.textContent="更新中…"; }
+    try {
+      await window.ClassroomSessionAPI.setDeliberationReasonVisibility(activeSession,response.response_id,nextHidden);
+      await refreshActiveSession(true);
+      showSessionToast(nextHidden ? "這則匿名理由已從學生結果與投影隱藏" : "這則匿名理由已恢復公開");
+    } catch (error) {
+      showSessionToast(error.message || "匿名理由顯示設定失敗");
+      if (button) { button.disabled=false; button.textContent=oldText; }
+    }
+  }
+
+  function csvCell(value) {
+    const text=String(value ?? "").replace(/\r?\n/g,"\n");
+    return `"${text.replace(/"/g,'""')}"`;
+  }
+
+  function deliberationOptionLabel(code) {
+    return DELIBERATION_OPTION_LABELS[String(code || "")] || "";
+  }
+
+  function buildDeliberationCsv(snapshot) {
+    const data=snapshot?.deliberation_data || {};
+    const layers=Array.isArray(data.l) ? data.l : [];
+    const participants=[...(snapshot?.participants || [])].sort((a,b)=>
+      String(a.joined_at || "").localeCompare(String(b.joined_at || "")) ||
+      String(a.student_code || "").localeCompare(String(b.student_code || ""),"zh-Hant")
+    );
+    const anonymous=new Map();
+    participants.forEach((p,index)=>anonymous.set(p.id,`P${String(index+1).padStart(2,"0")}`));
+    (snapshot?.responses || []).forEach(r=>{
+      if (!anonymous.has(r.participant_id)) anonymous.set(r.participant_id,`P${String(anonymous.size+1).padStart(2,"0")}`);
+    });
+    const responses=(snapshot?.responses || []).filter(r=>r.mode === "layered-deliberation");
+    const headers=[
+      "場次代碼","活動名稱","匿名參與者","層次","層次標題","本層新增資訊","核心提問",
+      "選項代碼","選項文字","原始理由","還需要知道什麼","理由公開狀態","討論後補記","原始提交時間",
+      "最後反思：關鍵層次","最後反思：事實／假設／價值","最後反思：具體回應","最後反思：審美延伸"
+    ];
+    const rows=[headers];
+    anonymous.forEach((anonId,participantId)=>{
+      const reflection=responses.find(r=>r.participant_id===participantId && r.stage_key==="reflection")?.payload || {};
+      for (let stage=1;stage<=Math.max(layers.length,Number(snapshot?.stage_count)||0);stage++) {
+        const layer=layers[stage-1] || {};
+        const original=responses.find(r=>r.participant_id===participantId && r.stage_key===`layer-${stage}`);
+        const post=responses.find(r=>r.participant_id===participantId && r.stage_key===`layer-${stage}-post`);
+        rows.push([
+          activeSession?.code || snapshot?.code || "",
+          activeSession?.title || snapshot?.title || "逐層思辨",
+          anonId,
+          stage,
+          layer.t || `第 ${stage} 層`,
+          layer.c || "",
+          layer.q || "",
+          original?.selected_type || "",
+          deliberationOptionLabel(original?.selected_type),
+          original?.payload?.reason || "",
+          original?.payload?.needToKnow || "",
+          original ? (original.is_hidden ? "已隱藏" : "公開") : "",
+          post?.payload?.note || "",
+          original?.submitted_at || "",
+          reflection.key || "",
+          reflection.value || "",
+          reflection.action || "",
+          reflection.extension || ""
+        ]);
+      }
+    });
+    return "\ufeff" + rows.map(row=>row.map(csvCell).join(",")).join("\r\n");
+  }
+
+  function downloadTextFile(filename,text,type="text/plain;charset=utf-8") {
+    const blob=new Blob([text],{type});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download=filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  async function exportDeliberationResults() {
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return;
+    const button=$("exportDeliberationResultsBtn");
+    const oldText=button?.textContent || "";
+    if (button) { button.disabled=true; button.textContent="整理中…"; }
+    try {
+      const snapshot=await window.ClassroomSessionAPI.teacherSnapshot(activeSession);
+      const responseCount=(snapshot.responses || []).filter(r=>r.mode === "layered-deliberation").length;
+      if (!snapshot.participant_count && !responseCount) throw new Error("目前還沒有可匯出的參與或作答資料");
+      const csv=buildDeliberationCsv(snapshot);
+      const safeCode=String(activeSession.code || "session").replace(/[^A-Za-z0-9_-]/g,"");
+      downloadTextFile(`deliberation-results-${safeCode}.csv`,csv,"text/csv;charset=utf-8");
+      showSessionToast("已匯出匿名逐層思辨結果 CSV");
+    } catch (error) {
+      showSessionToast(error.message || "逐層思辨結果匯出失敗");
+    } finally {
+      if (button) { button.disabled=false; button.textContent=oldText || "⬇ 匯出思辨結果"; }
+    }
   }
 
   async function setDeliberationRound(roundState) {
@@ -1564,6 +1700,7 @@
   $("importTeacherHandoffBtn")?.addEventListener("click",()=>$("teacherHandoffFileInput")?.click());
   $("teacherHandoffFileInput")?.addEventListener("change",event=>importTeacherHandoffFile(event.target.files?.[0] || null));
   $("exportTeacherHandoffBtn")?.addEventListener("click",exportTeacherHandoff);
+  $("exportDeliberationResultsBtn")?.addEventListener("click",exportDeliberationResults);
   $("createSessionBtn")?.addEventListener("click",createSession);
   $("refreshSessionBtn")?.addEventListener("click",()=>refreshActiveSession());
   $("copySessionUrlBtn")?.addEventListener("click",copyJoinUrl);

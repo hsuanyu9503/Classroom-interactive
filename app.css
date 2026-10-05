@@ -3432,3 +3432,91 @@ html{
     min-height:auto;
   }
 }
+
+
+/* =========================================================
+   V2.9.0 — Deliberation reason moderation + result export
+   ========================================================= */
+.deliberation-reason-item.moderation-item{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.moderation-reason-content{
+  min-width:0;
+  flex:1 1 auto;
+}
+.moderation-reason-content p{
+  margin:0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.moderation-reason-content small{
+  display:block;
+  margin-top:6px;
+  color:#748096;
+  line-height:1.45;
+}
+.deliberation-reason-item.hidden-from-projection{
+  opacity:.72;
+  border-style:dashed;
+}
+.deliberation-reason-item.hidden-from-projection .moderation-reason-content p{
+  text-decoration:line-through;
+  text-decoration-thickness:1px;
+}
+.moderation-toggle-btn{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+@media(max-width:700px){
+  .deliberation-reason-item.moderation-item{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .moderation-toggle-btn{
+    width:100%;
+  }
+}
+
+
+/* =========================================================
+   V2.9.1 — Teacher workspace outer-width refinement
+   Keep the teacher workspace away from viewport edges and align the
+   hero, workflow controls, context bar and editors to one content axis.
+   Student/player layouts intentionally keep their existing widths.
+   ========================================================= */
+.teacher-page{
+  --teacher-shell-max:1360px;
+  --teacher-shell-gutter:32px;
+}
+.teacher-page .topbar,
+.teacher-page .teacher-workflow-nav,
+.teacher-page .workflow-context-bar,
+.teacher-page .v15-layout,
+.teacher-page .activity-template-toolbar,
+.teacher-page .workspace-view[data-workspace-view="activities"] > .layout{
+  width:min(var(--teacher-shell-max),calc(100% - (var(--teacher-shell-gutter) * 2)));
+  max-width:none;
+  margin-left:auto;
+  margin-right:auto;
+}
+.teacher-page .topbar{
+  margin-top:22px;
+  margin-bottom:20px;
+}
+.teacher-page .workspace-view[data-workspace-view="activities"] > .layout{
+  padding-left:0;
+  padding-right:0;
+}
+@media(max-width:900px){
+  .teacher-page{--teacher-shell-gutter:20px}
+}
+@media(max-width:640px){
+  .teacher-page{--teacher-shell-gutter:12px}
+  .teacher-page .topbar{
+    margin-top:12px;
+    margin-bottom:16px;
+  }
+}

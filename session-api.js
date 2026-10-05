@@ -709,7 +709,7 @@
     const config = getConfig();
     if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
     return {
-      schema:"classroom-teacher-handoff", version:1, appVersion:"2.8.1", exportedAt:new Date().toISOString(),
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.9.1", exportedAt:new Date().toISOString(),
       warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
       cloud:{url:config.url,key:config.key},
       session:{
@@ -830,6 +830,22 @@
     sessionMeta.currentStage = session.currentStage;
     saveLocalSessions(sessions);
     return session.currentStage;
+  }
+
+  async function setDeliberationReasonVisibility(sessionMeta,responseId,hidden) {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if (sessionMeta.activityMode !== "layered-deliberation") throw new Error("目前不是逐層思辨 Session");
+    if (sessionMeta.mode !== "cloud") throw new Error("匿名理由審核需要 Supabase 雲端 Session");
+    const cleanId=String(responseId || "").trim();
+    if (!cleanId) throw new Error("找不到這筆匿名理由");
+    const result=await rpc("set_deliberation_reason_visibility",{
+      p_session_id:sessionMeta.id,
+      p_teacher_token:sessionMeta.teacherToken,
+      p_response_id:cleanId,
+      p_hidden:Boolean(hidden)
+    });
+    publishRealtime(sessionMeta.id,"reason-visibility");
+    return result;
   }
 
   async function setDeliberationState(sessionMeta,{stage=null,roundState=null}={}) {
@@ -1092,7 +1108,7 @@
 
   window.ClassroomSessionAPI = {
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
-    createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage, setDeliberationState,
+    createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage, setDeliberationState, setDeliberationReasonVisibility,
     setCourseNode, submitCourseProgress, closeSession, deleteSession, studentState, buildJoinUrl,
     createTeacherHandoff, claimTeacherHandoff, validateTeacherHandoffPackage,
     loadTeacherHistory, updateTeacherHistory, removeTeacherHistory,
