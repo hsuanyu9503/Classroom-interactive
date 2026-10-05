@@ -60,6 +60,9 @@ async function decodeActivity(encoded) {
       deliberation:{
         sourceNote:raw.d.src||"",
         fixedQuestion:raw.d.q||"",
+        chartType:raw.d.chart === "pie" ? "pie" : "bar",
+        reasonRequired:raw.d.req?.reason !== false,
+        needToKnowRequired:Boolean(raw.d.req?.need),
         options:Array.isArray(raw.d.o)?raw.d.o:[],
         layers:Array.isArray(raw.d.l)?raw.d.l:[],
         reflection:raw.d.r||{}
@@ -236,7 +239,7 @@ function renderSessionBadge() {
     badge.classList.add("hidden");
     return;
   }
-  badge.textContent = `📡 已加入課堂 · 座號 ${context.studentCode}`;
+  badge.textContent = `📡 已加入課堂 · ${context.studentCode}`;
   badge.classList.remove("hidden");
 }
 
@@ -431,9 +434,12 @@ function normalizeDeliberationOptions(options) {
   return list.map(item=>({id:item.i || item.id,label:item.l || item.label || DELIBERATION_LABELS[item.i] || item.i}));
 }
 
-function renderDeliberationDistribution(list, distribution) {
+function renderDeliberationDistribution(list, distribution, chartType = null, options = null) {
   list.innerHTML="";
-  const counts=new Map([["A",0],["B",0],["C",0],["D",0],["U",0]]);
+  const normalized=normalizeDeliberationOptions(
+    options || deliberationState?.deliberation?.options || activity?.deliberation?.options
+  );
+  const counts=new Map(normalized.map(option=>[option.id,0]));
   (distribution || []).forEach(item=>{
     const id=String(item.id || "");
     if (counts.has(id)) counts.set(id,Number(item.count)||0);
@@ -443,11 +449,38 @@ function renderDeliberationDistribution(list, distribution) {
     list.innerHTML='<div class="empty-v15">目前沒有可顯示的全班結果。</div>';
     return;
   }
+  const type=chartType || activity?.deliberation?.chartType || "bar";
+  list.classList.toggle("answer-chart-pie-mode",type==="pie");
+  const palette=["#5b67d8","#7b62d7","#9b68cf","#c06fb7","#76839a","#4f94a8","#d48b49","#4f9b71","#b35b75","#8a6a4d"];
+  if (type === "pie") {
+    let cursor=0;
+    const slices=[];
+    normalized.forEach((option,index)=>{
+      const count=counts.get(option.id)||0;
+      const start=cursor;
+      cursor += count/total*100;
+      slices.push(`${palette[index%palette.length]} ${start}% ${cursor}%`);
+    });
+    const wrap=document.createElement("div");wrap.className="answer-pie-layout";
+    const pie=document.createElement("div");pie.className="answer-pie";
+    pie.style.background=`conic-gradient(${slices.join(",")})`;
+    pie.innerHTML=`<div><strong>${total}</strong><span>份回答</span></div>`;
+    const legend=document.createElement("div");legend.className="answer-pie-legend";
+    normalized.forEach((option,index)=>{
+      const count=counts.get(option.id)||0;
+      const item=document.createElement("div");
+      item.innerHTML=`<i style="--legend-color:${palette[index%palette.length]}"></i><span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><strong>${count}</strong><small>${Math.round(count/total*100)}%</small>`;
+      legend.appendChild(item);
+    });
+    wrap.append(pie,legend);list.appendChild(wrap);return;
+  }
   const max=Math.max(...counts.values(),1);
-  counts.forEach((count,id)=>{
+  normalized.forEach(option=>{
+    const count=counts.get(option.id)||0;
     const row=document.createElement("div");
-    row.className="stage-distribution-row";
-    row.innerHTML=`<span><b>${escapeHtml(id)}</b> ${escapeHtml(DELIBERATION_LABELS[id])}</span><div><i style="width:${count?Math.max(8,(count/max)*100):0}%"></i></div><strong>${count}</strong>`;
+    row.className="stage-distribution-row answer-bar-row";
+    const pct=Math.round(count/total*100);
+    row.innerHTML=`<span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><div><i style="width:${count?Math.max(6,(count/max)*100):0}%"></i></div><strong>${count}<small>${pct}%</small></strong>`;
     list.appendChild(row);
   });
 }
@@ -471,7 +504,8 @@ function renderDeliberationHistory() {
     const changed=previous && previous!==r.selected_type;
     const row=document.createElement("div");
     row.className=`deliberation-history-row ${changed?"changed":""}`;
-    row.innerHTML=`<span>第 ${stage} 層</span><strong>${escapeHtml(r.selected_type || "—")} ${escapeHtml(DELIBERATION_LABELS[r.selected_type] || "")}</strong><small>${changed?"改變":"維持／起始"}</small>`;
+    const option=normalizeDeliberationOptions(deliberationState?.deliberation?.options || activity?.deliberation?.options).find(item=>item.id===r.selected_type);
+    row.innerHTML=`<span>第 ${stage} 層</span><strong>${escapeHtml(r.selected_type || "—")} ${escapeHtml(option?.label || DELIBERATION_LABELS[r.selected_type] || "")}</strong><small>${changed?"改變":"維持／起始"}</small>`;
     list.appendChild(row);
     previous=r.selected_type || previous;
   }
@@ -547,6 +581,11 @@ function renderDeliberationState() {
     released.appendChild(card);
   });
 
+  const reasonRequired=activity?.deliberation?.reasonRequired !== false;
+  const needRequired=Boolean(activity?.deliberation?.needToKnowRequired);
+  el("deliberationReasonRequirement").textContent=reasonRequired ? "必填" : "選填";
+  el("deliberationNeedRequirement").textContent=needRequired ? "必填" : "選填";
+
   const grid=el("deliberationChoiceGrid");
   grid.innerHTML="";
   normalizeDeliberationOptions(d.options || activity.deliberation?.options).forEach(option=>{
@@ -579,7 +618,12 @@ function renderDeliberationState() {
   const published=round==="published";
   el("deliberationPublishedPanel").classList.toggle("hidden",!published);
   if (published) {
-    renderDeliberationDistribution(el("deliberationStudentDistribution"),d.distribution || []);
+    renderDeliberationDistribution(
+      el("deliberationStudentDistribution"),
+      d.distribution || [],
+      activity?.deliberation?.chartType || "bar",
+      d.options || activity?.deliberation?.options
+    );
     const reasons=el("deliberationStudentReasons");reasons.innerHTML="";
     const reasonItems=Array.isArray(d.anonymous_reasons)?d.anonymous_reasons:[];
     if (!reasonItems.length) reasons.innerHTML='<div class="empty-v15">目前沒有匿名理由。</div>';
@@ -612,7 +656,8 @@ async function submitDeliberationAnswer() {
   const reason=el("deliberationReasonInput").value.trim();
   const needToKnow=el("deliberationNeedInput").value.trim();
   if (!choice) { showToast("請先選擇你的判斷"); return; }
-  if (!reason) { showToast("請填寫本層最影響你的理由"); return; }
+  if (activity?.deliberation?.reasonRequired !== false && !reason) { showToast("請填寫本層最影響你的理由"); return; }
+  if (activity?.deliberation?.needToKnowRequired && !needToKnow) { showToast("請填寫你還需要知道什麼"); return; }
 
   if (isSessionPlay()) {
     try {

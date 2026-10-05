@@ -1,4 +1,4 @@
-/* V2.9.0 | Activity Editor + layered deliberation + teaching backup */
+/* V2.11.1 | Activity Editor + layered deliberation + custom choices */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -29,6 +29,11 @@ const deliberationEditorSection = el("deliberationEditorSection");
 const deliberationLayersEditor = el("deliberationLayersEditor");
 const deliberationSourceNote = el("deliberationSourceNote");
 const deliberationFixedQuestion = el("deliberationFixedQuestion");
+const deliberationOptionsEditor = el("deliberationOptionsEditor");
+const addDeliberationOptionBtn = el("addDeliberationOptionBtn");
+const deliberationChartType = el("deliberationChartType");
+const deliberationReasonRequired = el("deliberationReasonRequired");
+const deliberationNeedRequired = el("deliberationNeedRequired");
 const deliberationReflectionKey = el("deliberationReflectionKey");
 const deliberationReflectionValue = el("deliberationReflectionValue");
 const deliberationReflectionAction = el("deliberationReflectionAction");
@@ -175,15 +180,100 @@ function defaultDeliberationLayers() {
   ];
 }
 
+
+function defaultDeliberationOptions() {
+  return [
+    {id:"A",label:"完全不能接受"},
+    {id:"B",label:"不太能接受"},
+    {id:"C",label:"大致能接受"},
+    {id:"D",label:"完全能接受"},
+    {id:"U",label:"資訊不足，暫不判斷"}
+  ];
+}
+
+function normalizeDeliberationOptionsData(options) {
+  const source=Array.isArray(options) ? options : [];
+  const cleaned=[];
+  const used=new Set();
+  source.forEach((item,index)=>{
+    if (cleaned.length>=10) return;
+    let id=String(item?.id ?? item?.i ?? "").trim().toUpperCase();
+    let label=String(item?.label ?? item?.l ?? "").trim();
+    if (!id || used.has(id)) return;
+    if (!label) label=`選項 ${index+1}`;
+    used.add(id);
+    cleaned.push({id,label});
+  });
+  return cleaned.length>=2 ? cleaned : defaultDeliberationOptions();
+}
+
+function nextDeliberationOptionCode() {
+  const used=new Set(
+    [...(deliberationOptionsEditor?.querySelectorAll(".deliberation-option-row") || [])]
+      .map(row=>row.dataset.optionId)
+      .filter(Boolean)
+  );
+  for (let i=0;i<26;i++) {
+    const code=String.fromCharCode(65+i);
+    if (!used.has(code)) return code;
+  }
+  let n=1;
+  while (used.has(`O${n}`)) n++;
+  return `O${n}`;
+}
+
+function refreshDeliberationOptionRows() {
+  const rows=[...(deliberationOptionsEditor?.querySelectorAll(".deliberation-option-row") || [])];
+  rows.forEach((row,index)=>{
+    row.querySelector(".deliberation-option-order").textContent=`選項 ${index+1}`;
+    const remove=row.querySelector(".deliberation-option-remove");
+    if (remove) remove.disabled=rows.length<=2;
+  });
+  if (addDeliberationOptionBtn) addDeliberationOptionBtn.disabled=rows.length>=10;
+}
+
+function addDeliberationOption(option=null) {
+  if (!deliberationOptionsEditor) return;
+  const count=deliberationOptionsEditor.querySelectorAll(".deliberation-option-row").length;
+  if (count>=10) { showToast("逐層思辨最多 10 個選項"); return; }
+  const id=String(option?.id || option?.i || nextDeliberationOptionCode()).trim().toUpperCase();
+  const label=String(option?.label || option?.l || "").trim();
+  const row=document.createElement("div");
+  row.className="deliberation-option-row";
+  row.dataset.optionId=id;
+  row.innerHTML=`
+    <span class="deliberation-option-order">選項 ${count+1}</span>
+    <span class="deliberation-option-code">${escapeHtml(id)}</span>
+    <input class="deliberation-option-label" type="text" maxlength="80" placeholder="輸入選項內容" value="${escapeHtml(label)}">
+    <button class="btn btn-danger-soft deliberation-option-remove" type="button">移除</button>
+  `;
+  row.querySelector(".deliberation-option-remove").addEventListener("click",()=>{
+    if (deliberationOptionsEditor.querySelectorAll(".deliberation-option-row").length<=2) {
+      showToast("逐層思辨至少需要 2 個選項");
+      return;
+    }
+    row.remove();
+    refreshDeliberationOptionRows();
+  });
+  deliberationOptionsEditor.appendChild(row);
+  refreshDeliberationOptionRows();
+}
+
+function readDeliberationOptionsEditor() {
+  return [...(deliberationOptionsEditor?.querySelectorAll(".deliberation-option-row") || [])].map(row=>({
+    id:String(row.dataset.optionId || "").trim().toUpperCase(),
+    label:row.querySelector(".deliberation-option-label")?.value.trim() || ""
+  }));
+}
+
 function newDeliberationActivityData() {
   return {
     sourceNote:"依當事人貼文敘述整理；店員對平台修改限制的說法屬其回覆，不當成已驗證的平台規則。",
     fixedQuestion:"就目前資訊，你認為這段影片繼續公開，有多能被接受？",
-    options:[
-      {id:"A",label:"完全不能接受"},{id:"B",label:"不太能接受"},
-      {id:"C",label:"大致能接受"},{id:"D",label:"完全能接受"},
-      {id:"U",label:"資訊不足，暫不判斷"}
-    ],
+    options:defaultDeliberationOptions(),
+    chartType:"bar",
+    reasonRequired:true,
+    needToKnowRequired:false,
     layers:defaultDeliberationLayers(),
     reflection:{
       key:"哪一層最影響你？為什麼？",
@@ -263,7 +353,11 @@ function loadActivities() {
         ? (activity.openClassification || null)
         : null,
       deliberation: template === "layered-deliberation"
-        ? (activity.deliberation || newDeliberationActivityData())
+        ? {
+            ...newDeliberationActivityData(),
+            ...(activity.deliberation || {}),
+            options:normalizeDeliberationOptionsData(activity.deliberation?.options)
+          }
         : null
     };
   });
@@ -911,6 +1005,14 @@ function loadDeliberationEditor(data = null) {
   const d=data || newDeliberationActivityData();
   deliberationSourceNote.value=d.sourceNote || "";
   deliberationFixedQuestion.value=d.fixedQuestion || "";
+  if (deliberationOptionsEditor) {
+    deliberationOptionsEditor.innerHTML="";
+    normalizeDeliberationOptionsData(d.options).forEach(addDeliberationOption);
+    refreshDeliberationOptionRows();
+  }
+  deliberationChartType.value=["bar","pie"].includes(d.chartType) ? d.chartType : "bar";
+  deliberationReasonRequired.checked=d.reasonRequired !== false;
+  deliberationNeedRequired.checked=Boolean(d.needToKnowRequired);
   deliberationReflectionKey.value=d.reflection?.key || "";
   deliberationReflectionValue.value=d.reflection?.value || "";
   deliberationReflectionAction.value=d.reflection?.action || "";
@@ -923,11 +1025,10 @@ function readDeliberationEditor() {
   return {
     sourceNote:deliberationSourceNote.value.trim(),
     fixedQuestion:deliberationFixedQuestion.value.trim(),
-    options:[
-      {id:"A",label:"完全不能接受"},{id:"B",label:"不太能接受"},
-      {id:"C",label:"大致能接受"},{id:"D",label:"完全能接受"},
-      {id:"U",label:"資訊不足，暫不判斷"}
-    ],
+    options:readDeliberationOptionsEditor(),
+    chartType:deliberationChartType.value === "pie" ? "pie" : "bar",
+    reasonRequired:Boolean(deliberationReasonRequired.checked),
+    needToKnowRequired:Boolean(deliberationNeedRequired.checked),
     layers:[...deliberationLayersEditor.querySelectorAll(".deliberation-layer-card")].map((card,index)=>({
       id:card.dataset.layerId || `layer-${index+1}`,
       title:card.querySelector(".deliberation-layer-title").value.trim(),
@@ -1087,6 +1188,10 @@ function validateActivity(activity) {
   if (activity.template === "layered-deliberation") {
     const d=activity.deliberation;
     if (!d?.fixedQuestion?.trim()) return "逐層思辨尚未設定固定判斷題";
+    if (!Array.isArray(d.options) || d.options.length < 2) return "逐層思辨至少需要 2 個判斷選項";
+    if (d.options.length > 10) return "逐層思辨最多只能設定 10 個判斷選項";
+    if (d.options.some(option=>!String(option.label || "").trim())) return "逐層思辨的每個判斷選項都需要填寫內容";
+    if (new Set(d.options.map(option=>String(option.id || ""))).size !== d.options.length) return "逐層思辨的選項代碼不可重複";
     if (!Array.isArray(d.layers) || d.layers.length < 2) return "逐層思辨至少需要 2 層情境";
     for (let i=0;i<d.layers.length;i++) {
       const layer=d.layers[i];
@@ -1273,6 +1378,8 @@ function buildDeliberationSnapshot(activity,{includeLayers=true,includeTeacherNo
   return {
     src:d.sourceNote || "",
     q:d.fixedQuestion || "",
+    chart:d.chartType === "pie" ? "pie" : "bar",
+    req:{reason:d.reasonRequired !== false,need:Boolean(d.needToKnowRequired)},
     o:(d.options || []).map(option=>({i:option.id,l:option.label})),
     l:includeLayers ? (d.layers || []).map((layer,index)=>({
       i:String(index+1), id:layer.id || `layer-${index+1}`, t:layer.title || `第 ${index+1} 層`,
@@ -1534,6 +1641,7 @@ window.ClassroomActivityEditor = {
 el("addCaseBtn").addEventListener("click", () => addCase());
 el("addElementTypeTaskBtn").addEventListener("click", () => addModeATask());
 el("addDeliberationLayerBtn")?.addEventListener("click", () => addDeliberationLayer());
+addDeliberationOptionBtn?.addEventListener("click", () => addDeliberationOption());
 el("saveBtn").addEventListener("click", () => saveCurrent(true));
 
 el("duplicateBtn").addEventListener("click", () => {
@@ -1643,7 +1751,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.9.1",
+    appVersion:"2.11.1",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),

@@ -1,4 +1,4 @@
-/* V2.9.0 | Teacher Session / History / Summary / Presentation */
+/* V2.11.0 | Teacher Session + charted deliberation statistics */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -148,7 +148,8 @@
     const layers=Array.isArray(data.l)?data.l:[];
     const layer=layers[stage-1] || {};
     const current=(snapshot?.responses || []).filter(r=>r.mode==="layered-deliberation" && r.stage_key===`layer-${stage}`);
-    const counts={A:0,B:0,C:0,D:0,U:0};
+    const options=normalizeTeacherDeliberationOptions(data.o);
+    const counts=Object.fromEntries(options.map(option=>[option.id,0]));
     current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
     const published=(snapshot?.round_state || "")==="published";
     return {
@@ -160,6 +161,8 @@
       roundState:snapshot?.round_state || "open",
       sourceNote:data.src || "",
       fixedQuestion:data.q || "",
+      chartType:data.chart === "pie" ? "pie" : "bar",
+      options,
       layer:{title:layer.t || `第 ${stage} 層`,content:layer.c || "",question:layer.q || ""},
       participantCount:Number(snapshot?.participant_count)||0,
       submittedCount:new Set(current.map(r=>r.participant_id)).size,
@@ -684,7 +687,7 @@
         if (!courseId) throw new Error("請先選擇一門完整課程");
         const snapshot = await window.ClassroomCourseAPI.buildSnapshot(courseId);
         if ((snapshot.resources?.activities || []).some(item=>item.template === "layered-deliberation")) {
-          throw new Error("V2.9.0 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
+          throw new Error("V2.11.0 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
         }
         const encoded = await window.ClassroomCourseAPI.encodeSnapshot(snapshot);
         const steps = flattenCourseSnapshot(snapshot);
@@ -808,7 +811,7 @@
       const size = typeof getQrRenderSize === "function" ? getQrRenderSize(joinUrl.length) : 400;
       qr.classList.add("session-qr-cloud");
       new QRCode(qr,{text:joinUrl,width:size,height:size,correctLevel:QRCode.CorrectLevel.L});
-      qrNotice.textContent = `${typeof getQrQualityLabel === "function" ? getQrQualityLabel(joinUrl.length) : "學生掃碼後輸入座號即可加入。"} · 加入網址 ${joinUrl.length} 字元`;
+      qrNotice.textContent = `${typeof getQrQualityLabel === "function" ? getQrQualityLabel(joinUrl.length) : "學生掃碼後輸入座號、姓名或暱稱即可加入。"} · 加入網址 ${joinUrl.length} 字元`;
       if (joinHelp) joinHelp.textContent = activeSession.sessionKind === "course"
         ? "學生只需要加入一次；之後完整課程會跟著老師目前的教學節點同步。"
         : "學生可掃描 QR Code，或開啟加入連結後輸入這組課堂代碼。";
@@ -1100,6 +1103,19 @@
     U:"資訊不足，暫不判斷"
   };
 
+  function normalizeTeacherDeliberationOptions(options) {
+    const fallback=Object.entries(DELIBERATION_OPTION_LABELS).map(([id,label])=>({id,label}));
+    const source=Array.isArray(options)&&options.length ? options : fallback;
+    return source.map(item=>({
+      id:String(item?.i ?? item?.id ?? "").trim(),
+      label:String(item?.l ?? item?.label ?? DELIBERATION_OPTION_LABELS[item?.i] ?? item?.i ?? "").trim()
+    })).filter(item=>item.id);
+  }
+
+  function deliberationOptionsFromSnapshot(snapshot) {
+    return normalizeTeacherDeliberationOptions(snapshot?.deliberation_data?.o);
+  }
+
   function buildDeliberationParticipantHistory(participantId,responses) {
     const items=(responses || [])
       .filter(r=>r.participant_id===participantId && r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""))
@@ -1111,10 +1127,11 @@
     }).join("");
   }
 
-  function renderDeliberationDistribution(list,responses) {
+  function renderDeliberationDistribution(list,responses,chartType="bar",options=null) {
     if (!list) return;
     list.innerHTML="";
-    const counts=new Map([["A",0],["B",0],["C",0],["D",0],["U",0]]);
+    const normalized=normalizeTeacherDeliberationOptions(options);
+    const counts=new Map(normalized.map(option=>[option.id,0]));
     responses.forEach(r=>{
       const key=String(r.selected_type || "");
       if (counts.has(key)) counts.set(key,counts.get(key)+1);
@@ -1124,14 +1141,38 @@
       list.innerHTML='<div class="empty-v15">本層還沒有學生提交。</div>';
       return;
     }
+    list.classList.toggle("answer-chart-pie-mode",chartType==="pie");
+    const palette=["#5b67d8","#7b62d7","#9b68cf","#c06fb7","#76839a","#4f94a8","#d48b49","#4f9b71","#b35b75","#8a6a4d"];
+    if (chartType === "pie") {
+      let cursor=0;const slices=[];
+      normalized.forEach((option,index)=>{
+        const count=counts.get(option.id)||0;
+        const start=cursor;
+        cursor+=count/total*100;
+        slices.push(`${palette[index%palette.length]} ${start}% ${cursor}%`);
+      });
+      const wrap=document.createElement("div");wrap.className="answer-pie-layout";
+      const pie=document.createElement("div");pie.className="answer-pie";pie.style.background=`conic-gradient(${slices.join(",")})`;
+      pie.innerHTML=`<div><strong>${total}</strong><span>份回答</span></div>`;
+      const legend=document.createElement("div");legend.className="answer-pie-legend";
+      normalized.forEach((option,index)=>{
+        const count=counts.get(option.id)||0;
+        const item=document.createElement("div");
+        item.innerHTML=`<i style="--legend-color:${palette[index%palette.length]}"></i><span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><strong>${count}</strong><small>${Math.round(count/total*100)}%</small>`;
+        legend.appendChild(item);
+      });
+      wrap.append(pie,legend);list.appendChild(wrap);return;
+    }
     const max=Math.max(...counts.values(),1);
-    counts.forEach((count,key)=>{
-      const row=document.createElement("div");
-      row.className="stage-distribution-row";
-      row.innerHTML=`<span><b>${key}</b> ${escapeHtml(DELIBERATION_OPTION_LABELS[key])}</span><div><i style="width:${count ? Math.max(8,(count/max)*100) : 0}%"></i></div><strong>${count}</strong>`;
+    normalized.forEach(option=>{
+      const count=counts.get(option.id)||0;
+      const row=document.createElement("div");row.className="stage-distribution-row answer-bar-row";
+      const pct=Math.round(count/total*100);
+      row.innerHTML=`<span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><div><i style="width:${count ? Math.max(6,(count/max)*100) : 0}%"></i></div><strong>${count}<small>${pct}%</small></strong>`;
       list.appendChild(row);
     });
   }
+
 
   function renderDeliberationControl(snapshot) {
     const panel=$("deliberationSessionControl");
@@ -1171,7 +1212,12 @@
     $("deliberationNextBtn").disabled=state!=="published" || stage>=total;
     $("deliberationNextBtn").textContent=stage>=total ? "已到最後一層" : "下一層 →";
 
-    renderDeliberationDistribution($("deliberationTeacherDistribution"),current);
+    renderDeliberationDistribution(
+      $("deliberationTeacherDistribution"),
+      current,
+      data.chart === "pie" ? "pie" : "bar",
+      data.o
+    );
     const reasons=$("deliberationTeacherReasons");
     reasons.innerHTML="";
     const reasonItems=current.filter(r=>String(r.payload?.reason || "").trim());
@@ -1223,8 +1269,10 @@
     return `"${text.replace(/"/g,'""')}"`;
   }
 
-  function deliberationOptionLabel(code) {
-    return DELIBERATION_OPTION_LABELS[String(code || "")] || "";
+  function deliberationOptionLabel(code,options=null) {
+    const id=String(code || "");
+    const match=normalizeTeacherDeliberationOptions(options).find(option=>option.id===id);
+    return match?.label || DELIBERATION_OPTION_LABELS[id] || "";
   }
 
   function buildDeliberationCsv(snapshot) {
@@ -1261,7 +1309,7 @@
           layer.c || "",
           layer.q || "",
           original?.selected_type || "",
-          deliberationOptionLabel(original?.selected_type),
+          deliberationOptionLabel(original?.selected_type,data.o),
           original?.payload?.reason || "",
           original?.payload?.needToKnow || "",
           original ? (original.is_hidden ? "已隱藏" : "公開") : "",
@@ -1518,9 +1566,11 @@
         const current=responses.filter(r=>r.stage_key===`layer-${stage}`);
         const row=document.createElement("div");
         row.className="summary-node-row";
-        const counts={A:0,B:0,C:0,D:0,U:0};
+        const options=deliberationOptionsFromSnapshot(snapshot);
+        const counts=Object.fromEntries(options.map(option=>[option.id,0]));
         current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
-        row.innerHTML=`<div class="summary-node-main"><strong>第 ${stage} 層</strong><small>A ${counts.A} · B ${counts.B} · C ${counts.C} · D ${counts.D} · U ${counts.U}</small></div><b>${new Set(current.map(r=>r.participant_id)).size} / ${participants}</b>`;
+        const summary=options.map(option=>`${option.id} ${counts[option.id] || 0}`).join(" · ");
+        row.innerHTML=`<div class="summary-node-main"><strong>第 ${stage} 層</strong><small>${escapeHtml(summary)}</small></div><b>${new Set(current.map(r=>r.participant_id)).size} / ${participants}</b>`;
         list.appendChild(row);
       }
       details.appendChild(section);

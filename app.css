@@ -3520,3 +3520,122 @@ html{
     margin-bottom:16px;
   }
 }
+
+
+/* =========================================================
+   V2.10.0 — Deliberation chart + response settings
+   ========================================================= */
+.deliberation-response-settings{
+  margin:16px 0;
+  padding:16px;
+  border:1px solid #e2e5ef;
+  border-radius:18px;
+  background:#fafbff;
+}
+.deliberation-response-settings h4{margin:3px 0 0;color:#35415a;font-size:17px}
+.deliberation-setting-grid{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(240px,1fr) minmax(240px,1fr);gap:12px;margin-top:14px;align-items:stretch}
+.deliberation-check-setting{display:flex;align-items:flex-start;gap:10px;padding:13px 14px;border:1px solid #e2e5ef;border-radius:14px;background:#fff;cursor:pointer}
+.deliberation-check-setting input{margin-top:3px;accent-color:#6964d8}
+.deliberation-check-setting span{display:grid;gap:4px;color:#3f4b63}
+.deliberation-check-setting small{color:#8791a2;line-height:1.45}
+
+.answer-bar-row{grid-template-columns:minmax(145px,1fr) minmax(120px,2fr) 58px;gap:12px;font-size:13px}
+.answer-bar-row>div{height:14px}
+.answer-bar-row>strong{display:grid;justify-items:end;line-height:1.05;font-size:16px}
+.answer-bar-row>strong small{margin-top:4px;color:#8a93a5;font-size:10px;font-weight:800}
+.answer-pie-layout{display:grid;grid-template-columns:minmax(160px,210px) minmax(0,1fr);gap:22px;align-items:center;padding:8px 0}
+.answer-pie{width:min(210px,100%);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px rgba(71,79,105,.08)}
+.answer-pie>div{width:54%;aspect-ratio:1;border-radius:50%;display:grid;place-content:center;text-align:center;background:#fff;box-shadow:0 5px 18px rgba(55,65,90,.13)}
+.answer-pie>div strong{font-size:28px;color:#37415a}
+.answer-pie>div span{font-size:11px;color:#8b95a7;font-weight:800}
+.answer-pie-legend{display:grid;gap:7px}
+.answer-pie-legend>div{display:grid;grid-template-columns:12px minmax(0,1fr) 28px 38px;gap:8px;align-items:center;padding:7px 9px;border:1px solid #edf0f5;border-radius:11px;background:#fff;font-size:12px}
+.answer-pie-legend i{width:10px;height:10px;border-radius:50%;background:var(--legend-color)}
+.answer-pie-legend>div>strong{text-align:right;color:#3e4961}
+.answer-pie-legend>div>small{text-align:right;color:#8a93a5;font-weight:800}
+.deliberation-presentation-results .answer-pie{max-width:250px}
+.deliberation-presentation-results .answer-pie-layout{grid-template-columns:minmax(190px,250px) minmax(260px,1fr)}
+
+@media(max-width:900px){
+  .deliberation-setting-grid{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .answer-bar-row{grid-template-columns:minmax(105px,1fr) minmax(80px,1.45fr) 48px;gap:7px;font-size:11px}
+  .answer-pie-layout,.deliberation-presentation-results .answer-pie-layout{grid-template-columns:1fr;justify-items:center}
+  .answer-pie-legend{width:100%}
+  .answer-pie{width:min(200px,72vw)}
+}
+
+/* V2.10.0 projection pie responsive fix */
+.answer-pie-layout,.answer-pie-legend,.answer-pie-legend>div,.answer-pie-legend>div>span,
+.deliberation-presentation-results{min-width:0;max-width:100%}
+.answer-pie-legend>div>span{overflow-wrap:anywhere}
+.deliberation-presentation-results .answer-pie-layout{grid-template-columns:minmax(150px,190px) minmax(0,1fr);gap:14px;width:100%}
+@media(max-width:1100px){
+  .deliberation-presentation-results .answer-pie-layout{grid-template-columns:1fr;justify-items:center}
+  .deliberation-presentation-results .answer-pie-legend{width:100%}
+}
+
+
+/* =========================================================
+   V2.11.0 — Custom deliberation choices
+   ========================================================= */
+.deliberation-options-settings{
+  margin:16px 0;
+  padding:16px;
+  border:1px solid #e2e5ef;
+  border-radius:18px;
+  background:#fafbff;
+}
+.deliberation-options-settings .mode-a-config-head p{
+  margin:5px 0 0;
+  color:#7c8799;
+  line-height:1.5;
+  font-size:12px;
+}
+.deliberation-options-editor{
+  display:grid;
+  gap:9px;
+  margin:14px 0 10px;
+}
+.deliberation-option-row{
+  display:grid;
+  grid-template-columns:72px 44px minmax(0,1fr) auto;
+  gap:9px;
+  align-items:center;
+  padding:9px 10px;
+  border:1px solid #e4e8f0;
+  border-radius:13px;
+  background:#fff;
+}
+.deliberation-option-order{
+  color:#7c8799;
+  font-size:11px;
+  font-weight:800;
+}
+.deliberation-option-code{
+  display:grid;
+  place-items:center;
+  min-height:36px;
+  border-radius:9px;
+  background:#f0f1ff;
+  color:#5d5bc7;
+  font-weight:900;
+}
+.deliberation-option-label{
+  width:100%;
+  min-width:0;
+}
+.deliberation-option-remove:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+@media(max-width:640px){
+  .deliberation-option-row{
+    grid-template-columns:54px 38px minmax(0,1fr);
+  }
+  .deliberation-option-remove{
+    grid-column:1 / -1;
+    width:100%;
+  }
+}

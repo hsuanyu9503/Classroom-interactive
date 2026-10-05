@@ -14,7 +14,7 @@
       <div class="join-icon">📡</div>
       <p class="eyebrow">加入課堂 Session</p>
       <h1>準備開始今天的活動</h1>
-      <p class="subtle">輸入老師提供的課堂代碼與你的座號，就可以進入活動。</p>
+      <p class="subtle">輸入老師提供的課堂代碼，以及你的姓名、暱稱或座號，就可以進入活動。</p>
 
       <form id="joinForm" class="join-form">
         <label class="field">
@@ -22,9 +22,9 @@
           <input id="joinCode" type="text" maxlength="5" inputmode="text" autocomplete="off" placeholder="ABCDE" required />
         </label>
         <label class="field">
-          <span>座號</span>
-          <input id="studentCode" type="text" maxlength="12" inputmode="numeric" autocomplete="off" placeholder="例如：08" required />
-          <small class="field-help">這一版先以座號辨識學生，不需要建立帳號。</small>
+          <span>姓名／暱稱／座號</span>
+          <input id="studentCode" type="text" maxlength="24" inputmode="text" autocomplete="off" placeholder="例如：小宇、Yu、08" required />
+          <small class="field-help">可依老師約定填姓名、暱稱或座號；同一場次請使用不重複的識別名稱。</small>
         </label>
         <button id="joinSubmitBtn" class="btn btn-primary join-submit" type="submit">加入課堂</button>
       </form>

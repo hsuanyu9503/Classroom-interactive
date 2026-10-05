@@ -1,4 +1,4 @@
--- V2.9.1 SQL SETUP
+-- V2.11.1 SQL SETUP
 -- 修正 get_student_session_state() 中：
 --   select s.*, p.id into v_session, v_participant_id
 -- 造成 PostgreSQL 42601：
@@ -1252,6 +1252,7 @@ as $$
 declare
   v_id uuid;
   v_layers integer;
+  v_options integer;
 begin
   if length(trim(p_code)) <> 5 then
     raise exception 'invalid session code';
@@ -1262,6 +1263,22 @@ begin
   if length(trim(coalesce(p_activity_shell_encoded,''))) = 0 then
     raise exception 'missing activity shell';
   end if;
+  if jsonb_typeof(coalesce(p_deliberation_data->'o','[]'::jsonb)) <> 'array' then
+    raise exception 'invalid deliberation options';
+  end if;
+  v_options := jsonb_array_length(coalesce(p_deliberation_data->'o','[]'::jsonb));
+  if v_options < 2 or v_options > 10 then
+    raise exception 'deliberation requires between two and ten options';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_deliberation_data->'o','[]'::jsonb)) option_item
+    where length(trim(coalesce(option_item->>'i',option_item->>'id',''))) = 0
+       or length(trim(coalesce(option_item->>'l',option_item->>'label',''))) = 0
+  ) then
+    raise exception 'invalid deliberation option';
+  end if;
+
   if jsonb_typeof(coalesce(p_deliberation_data->'l','[]'::jsonb)) <> 'array' then
     raise exception 'invalid deliberation layers';
   end if;
@@ -1337,7 +1354,7 @@ begin
 end;
 $$;
 
--- V2.8.1：覆寫作答 RPC，伺服器端限制逐層思辨的作答時機。
+-- V2.11.1：覆寫作答 RPC，伺服器端限制逐層思辨作答時機，依活動設定驗證文字必填規則與自訂選項。
 create or replace function public.submit_classroom_response(
   p_session_id uuid,
   p_participant_token text,
@@ -1363,9 +1380,10 @@ declare
   v_round_state text;
   v_requested_stage integer;
   v_stage_key text;
+  v_deliberation_data jsonb;
 begin
-  select p.id, s.status, s.activity_mode, s.current_stage, s.stage_count, s.round_state
-  into v_participant_id, v_status, v_activity_mode, v_current_stage, v_stage_count, v_round_state
+  select p.id, s.status, s.activity_mode, s.current_stage, s.stage_count, s.round_state, s.deliberation_data
+  into v_participant_id, v_status, v_activity_mode, v_current_stage, v_stage_count, v_round_state, v_deliberation_data
   from public.session_participants p
   join public.classroom_sessions s on s.id = p.session_id
   where p.session_id = p_session_id
@@ -1400,11 +1418,20 @@ begin
       if v_requested_stage <> v_current_stage or v_round_state <> 'open' then
         raise exception 'deliberation response is locked';
       end if;
-      if coalesce(p_selected_type,'') not in ('A','B','C','D','U') then
+      if not exists (
+        select 1
+        from jsonb_array_elements(coalesce(v_deliberation_data->'o','[]'::jsonb)) as option_item
+        where coalesce(option_item->>'i',option_item->>'id','') = coalesce(p_selected_type,'')
+      ) then
         raise exception 'invalid deliberation choice';
       end if;
-      if length(trim(coalesce(p_payload->>'reason',''))) = 0 then
+      if coalesce((v_deliberation_data->'req'->>'reason')::boolean,true)
+         and length(trim(coalesce(p_payload->>'reason',''))) = 0 then
         raise exception 'reason required';
+      end if;
+      if coalesce((v_deliberation_data->'req'->>'need')::boolean,false)
+         and length(trim(coalesce(p_payload->>'needToKnow',''))) = 0 then
+        raise exception 'need to know required';
       end if;
     else
       raise exception 'invalid deliberation stage key';
@@ -1716,7 +1743,7 @@ grant execute on function public.get_student_session_state(uuid,text) to anon, a
 
 -- =========================================================
 -- V2.9.1：教師匿名理由顯示／隱藏
--- 只影響理由是否送往學生結果與投影；A/B/C/D/U 分布不受影響。
+-- 只影響理由是否送往學生結果與投影；選項分布不受影響。
 -- =========================================================
 create or replace function public.set_deliberation_reason_visibility(
   p_session_id uuid,

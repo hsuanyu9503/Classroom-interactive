@@ -638,7 +638,7 @@ async function loadCourse() {
       if (targetIndex >= 0) currentStepIndex = targetIndex;
       lastCourseRevision = Number(context.revision || 0);
       const badge = $("courseSessionBadge");
-      badge.textContent = `📡 已加入完整課程 · 座號 ${context.studentCode}`;
+      badge.textContent = `📡 已加入完整課程 · ${context.studentCode}`;
       badge.classList.remove("hidden");
     }
 

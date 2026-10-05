@@ -531,7 +531,7 @@
   async function joinSession(code, studentCode, cloudConfig = null) {
     const cleanCode = String(code || "").trim().toUpperCase();
     const cleanStudent = String(studentCode || "").trim();
-    if (!cleanCode || !cleanStudent) throw new Error("請輸入課堂代碼與座號");
+    if (!cleanCode || !cleanStudent) throw new Error("請輸入課堂代碼與座號、姓名或暱稱");
 
     const config = cloudConfig || configFromUrlFragment();
     const participantToken = randomToken();
@@ -709,7 +709,7 @@
     const config = getConfig();
     if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
     return {
-      schema:"classroom-teacher-handoff", version:1, appVersion:"2.9.1", exportedAt:new Date().toISOString(),
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.11.1", exportedAt:new Date().toISOString(),
       warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
       cloud:{url:config.url,key:config.key},
       session:{

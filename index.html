@@ -19,7 +19,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.9.1</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.11.1</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -440,15 +440,42 @@
             <textarea id="deliberationFixedQuestion" rows="3">就目前資訊，你認為這段影片繼續公開，有多能被接受？</textarea>
           </label>
         </div>
-        <div class="deliberation-option-note">
-          <strong>固定選項</strong>
-          <span>A 完全不能接受</span>
-          <span>B 不太能接受</span>
-          <span>C 大致能接受</span>
-          <span>D 完全能接受</span>
-          <span>U 資訊不足，暫不判斷</span>
-          <small>U 是獨立選項，不納入平均分數；本模式不計分、不排名。</small>
-        </div>
+        <section class="mode-a-config-block deliberation-options-settings">
+          <div class="mode-a-config-head">
+            <div>
+              <span class="section-kicker">CHOICES</span>
+              <h4>判斷選項</h4>
+              <p>設定學生每一層可選擇的答案。至少 2 個、最多 10 個；選項代碼會自動產生並固定保存。</p>
+            </div>
+            <button id="addDeliberationOptionBtn" class="btn btn-secondary" type="button">＋ 新增選項</button>
+          </div>
+          <div id="deliberationOptionsEditor" class="deliberation-options-editor"></div>
+          <small class="field-help">選項沒有分數高低；統計只呈現各選項的人數與比例。</small>
+        </section>
+        <section class="mode-a-config-block deliberation-response-settings">
+          <div class="mode-a-config-head">
+            <div>
+              <span class="section-kicker">RESPONSE & CHART</span>
+              <h4>作答與統計設定</h4>
+            </div>
+          </div>
+          <div class="deliberation-response-settings-grid">
+            <label class="field">
+              <span>答案統計圖</span>
+              <select id="deliberationChartType">
+                <option value="bar">長條圖</option>
+                <option value="pie">圓餅圖</option>
+              </select>
+              <small class="field-help">教師端、學生公布結果與全班投影會使用這個圖表類型。</small>
+            </label>
+            <div class="field deliberation-required-settings">
+              <span>本層文字回答</span>
+              <label class="mini-check"><input id="deliberationReasonRequired" type="checkbox" checked><span>「我的理由」必填</span></label>
+              <label class="mini-check"><input id="deliberationNeedRequired" type="checkbox"><span>「我還需要知道什麼」必填</span></label>
+              <small class="field-help">判斷選項本身仍固定必選；只有文字欄位可調整必填狀態。</small>
+            </div>
+          </div>
+        </section>
         <div id="deliberationLayersEditor" class="deliberation-layers-editor"></div>
         <section class="mode-a-config-block deliberation-reflection-editor">
           <div class="mode-a-config-head">
@@ -535,7 +562,7 @@
           <div>
             <span class="section-kicker">CLASSROOM SESSION</span>
             <h2>課堂連線與學生加入</h2>
-            <p class="subtle">用於正式課堂互動：學生輸入座號加入，作答可回傳教師端，並支援逐層同步與全班統計。跨裝置使用需先完成 Supabase 雲端設定。</p>
+            <p class="subtle">用於正式課堂互動：學生輸入姓名、暱稱或座號加入，作答可回傳教師端，並支援逐層同步與全班統計。跨裝置使用需先完成 Supabase 雲端設定。</p>
           </div>
           <span id="cloudModeBadge" class="cloud-mode-badge local">本機測試模式</span>
         </div>
