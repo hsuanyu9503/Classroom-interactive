@@ -1,4 +1,4 @@
-/* V2.11.1 | Activity Editor + layered deliberation + custom choices */
+/* V2.12.0 | Activity Editor + layered deliberation + custom choices */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -27,6 +27,9 @@ const openClassificationTaskTemplate = el("openClassificationTaskTemplate");
 const openClassificationTaskEditor = el("openClassificationTaskEditor");
 const deliberationEditorSection = el("deliberationEditorSection");
 const deliberationLayersEditor = el("deliberationLayersEditor");
+const deliberationLayerCount = el("deliberationLayerCount");
+const decreaseDeliberationLayerBtn = el("decreaseDeliberationLayerBtn");
+const increaseDeliberationLayerBtn = el("increaseDeliberationLayerBtn");
 const deliberationSourceNote = el("deliberationSourceNote");
 const deliberationFixedQuestion = el("deliberationFixedQuestion");
 const deliberationOptionsEditor = el("deliberationOptionsEditor");
@@ -968,8 +971,63 @@ function refreshOpenClassificationLibraryReferences() {
 
 
 // ---------- 逐層思辨 ----------
-function addDeliberationLayer(layer = null) {
-  const data = layer || {id:createId(),title:`第 ${deliberationLayersEditor.children.length + 1} 層`,content:"",question:"",teacherNote:""};
+const DELIBERATION_MIN_LAYERS = 2;
+const DELIBERATION_MAX_LAYERS = 20;
+
+function getDeliberationLayerCount() {
+  return deliberationLayersEditor?.querySelectorAll(".deliberation-layer-card").length || 0;
+}
+
+function syncDeliberationLayerCountControls() {
+  const count=getDeliberationLayerCount();
+  if (deliberationLayerCount) deliberationLayerCount.value=String(count);
+  if (decreaseDeliberationLayerBtn) decreaseDeliberationLayerBtn.disabled=count<=DELIBERATION_MIN_LAYERS;
+  if (increaseDeliberationLayerBtn) increaseDeliberationLayerBtn.disabled=count>=DELIBERATION_MAX_LAYERS;
+  const addButton=el("addDeliberationLayerBtn");
+  if (addButton) addButton.disabled=count>=DELIBERATION_MAX_LAYERS;
+  deliberationLayersEditor?.querySelectorAll(".deliberation-remove-layer").forEach(button=>{
+    button.disabled=count<=DELIBERATION_MIN_LAYERS;
+  });
+}
+
+function setDeliberationLayerCount(value,{confirmTrim=true}={}) {
+  const current=getDeliberationLayerCount();
+  const requested=Math.round(Number(value));
+  const target=Math.max(
+    DELIBERATION_MIN_LAYERS,
+    Math.min(DELIBERATION_MAX_LAYERS, Number.isFinite(requested) ? requested : current || DELIBERATION_MIN_LAYERS)
+  );
+
+  if (target===current) {
+    syncDeliberationLayerCountControls();
+    return true;
+  }
+
+  if (target<current) {
+    const removeCount=current-target;
+    if (confirmTrim && !confirm(`將刪除最後 ${removeCount} 層情境及其中內容，確定要調整為 ${target} 層嗎？`)) {
+      syncDeliberationLayerCountControls();
+      return false;
+    }
+    const cards=[...deliberationLayersEditor.querySelectorAll(".deliberation-layer-card")];
+    cards.slice(target).forEach(card=>card.remove());
+  } else {
+    for (let i=current;i<target;i++) addDeliberationLayer(null,{skipSync:true});
+  }
+
+  refreshDeliberationLayerNumbers();
+  syncDeliberationLayerCountControls();
+  return true;
+}
+
+function addDeliberationLayer(layer = null,{skipSync=false}={}) {
+  const current=getDeliberationLayerCount();
+  if (current>=DELIBERATION_MAX_LAYERS) {
+    if (!skipSync) showToast(`逐層思辨最多 ${DELIBERATION_MAX_LAYERS} 層`);
+    syncDeliberationLayerCountControls();
+    return null;
+  }
+  const data = layer || {id:createId(),title:`第 ${current + 1} 層`,content:"",question:"",teacherNote:""};
   const card=document.createElement("article");
   card.className="case-card deliberation-layer-card";
   card.dataset.layerId=data.id || createId();
@@ -988,11 +1046,19 @@ function addDeliberationLayer(layer = null) {
     card.querySelector("h3").textContent=card.querySelector(".deliberation-layer-title").value.trim() || "未命名層次";
   });
   card.querySelector(".deliberation-remove-layer").addEventListener("click",()=>{
-    if (deliberationLayersEditor.children.length <= 2) { showToast("逐層思辨至少保留 2 層"); return; }
-    card.remove(); refreshDeliberationLayerNumbers();
+    if (getDeliberationLayerCount() <= DELIBERATION_MIN_LAYERS) {
+      showToast(`逐層思辨至少保留 ${DELIBERATION_MIN_LAYERS} 層`);
+      return;
+    }
+    if (!confirm("確定要刪除這一層情境及其中內容嗎？")) return;
+    card.remove();
+    refreshDeliberationLayerNumbers();
+    syncDeliberationLayerCountControls();
   });
   deliberationLayersEditor.appendChild(card);
   refreshDeliberationLayerNumbers();
+  if (!skipSync) syncDeliberationLayerCountControls();
+  return card;
 }
 
 function refreshDeliberationLayerNumbers() {
@@ -1018,7 +1084,11 @@ function loadDeliberationEditor(data = null) {
   deliberationReflectionAction.value=d.reflection?.action || "";
   deliberationReflectionExtension.value=d.reflection?.extension || "";
   deliberationLayersEditor.innerHTML="";
-  (d.layers?.length ? d.layers : defaultDeliberationLayers()).forEach(addDeliberationLayer);
+  const sourceLayers=(d.layers?.length ? d.layers : defaultDeliberationLayers()).slice(0,DELIBERATION_MAX_LAYERS);
+  sourceLayers.forEach(layer=>addDeliberationLayer(layer,{skipSync:true}));
+  while (getDeliberationLayerCount()<DELIBERATION_MIN_LAYERS) addDeliberationLayer(null,{skipSync:true});
+  refreshDeliberationLayerNumbers();
+  syncDeliberationLayerCountControls();
 }
 
 function readDeliberationEditor() {
@@ -1192,7 +1262,8 @@ function validateActivity(activity) {
     if (d.options.length > 10) return "逐層思辨最多只能設定 10 個判斷選項";
     if (d.options.some(option=>!String(option.label || "").trim())) return "逐層思辨的每個判斷選項都需要填寫內容";
     if (new Set(d.options.map(option=>String(option.id || ""))).size !== d.options.length) return "逐層思辨的選項代碼不可重複";
-    if (!Array.isArray(d.layers) || d.layers.length < 2) return "逐層思辨至少需要 2 層情境";
+    if (!Array.isArray(d.layers) || d.layers.length < DELIBERATION_MIN_LAYERS) return `逐層思辨至少需要 ${DELIBERATION_MIN_LAYERS} 層情境`;
+    if (d.layers.length > DELIBERATION_MAX_LAYERS) return `逐層思辨最多只能設定 ${DELIBERATION_MAX_LAYERS} 層情境`;
     for (let i=0;i<d.layers.length;i++) {
       const layer=d.layers[i];
       if (!layer.title?.trim()) return `第 ${i+1} 層尚未填寫標題`;
@@ -1641,6 +1712,16 @@ window.ClassroomActivityEditor = {
 el("addCaseBtn").addEventListener("click", () => addCase());
 el("addElementTypeTaskBtn").addEventListener("click", () => addModeATask());
 el("addDeliberationLayerBtn")?.addEventListener("click", () => addDeliberationLayer());
+decreaseDeliberationLayerBtn?.addEventListener("click", () => setDeliberationLayerCount(getDeliberationLayerCount()-1));
+increaseDeliberationLayerBtn?.addEventListener("click", () => setDeliberationLayerCount(getDeliberationLayerCount()+1,{confirmTrim:false}));
+deliberationLayerCount?.addEventListener("change", () => setDeliberationLayerCount(deliberationLayerCount.value));
+deliberationLayerCount?.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    setDeliberationLayerCount(deliberationLayerCount.value);
+    deliberationLayerCount.blur();
+  }
+});
 addDeliberationOptionBtn?.addEventListener("click", () => addDeliberationOption());
 el("saveBtn").addEventListener("click", () => saveCurrent(true));
 
@@ -1751,7 +1832,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.11.1",
+    appVersion:"2.12.0",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),

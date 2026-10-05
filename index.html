@@ -19,7 +19,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.11.1</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.12.0</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -428,7 +428,16 @@
             <h3>逐層思辨活動</h3>
             <p class="field-help">正式上課需使用 Supabase 雲端 Session。未公開層次與教師備註不會傳送到學生端。</p>
           </div>
-          <button id="addDeliberationLayerBtn" class="btn btn-secondary" type="button">＋ 新增情境層</button>
+          <div class="deliberation-layer-toolbar">
+            <div class="deliberation-layer-count-control" aria-label="情境層數設定">
+              <span>情境層數</span>
+              <button id="decreaseDeliberationLayerBtn" class="icon-btn layer-count-btn" type="button" aria-label="減少一層">−</button>
+              <input id="deliberationLayerCount" type="number" min="2" max="20" step="1" value="6" inputmode="numeric" aria-label="情境層數">
+              <button id="increaseDeliberationLayerBtn" class="icon-btn layer-count-btn" type="button" aria-label="增加一層">＋</button>
+              <small>2～20 層</small>
+            </div>
+            <button id="addDeliberationLayerBtn" class="btn btn-secondary" type="button">＋ 新增情境層</button>
+          </div>
         </div>
         <div class="deliberation-meta-grid">
           <label class="field">
