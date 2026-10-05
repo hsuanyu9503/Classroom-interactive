@@ -280,7 +280,9 @@
   function updateBackToTopVisibility() {
     const button = $("backToTopBtn");
     if (!button) return;
-    button.classList.toggle("show", window.scrollY > 520);
+    const canShow = currentWorkflow === "prepare" && window.scrollY > 520;
+    button.classList.toggle("show", canShow);
+    button.setAttribute("aria-hidden", canShow ? "false" : "true");
   }
 
   function workflowForView(view) {
@@ -384,6 +386,8 @@
     document.querySelectorAll("[data-workflow-nav]").forEach(nav=>{
       nav.classList.toggle("hidden",nav.dataset.workflowNav !== currentWorkflow);
     });
+
+    updateBackToTopVisibility();
 
     if (currentWorkflow === "teach") {
       $("workflowEyebrow").textContent = "TEACH WORKSPACE";

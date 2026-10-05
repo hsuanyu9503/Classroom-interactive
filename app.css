@@ -2885,3 +2885,153 @@ html{
     flex:1 1 180px;
   }
 }
+
+
+/* =========================================================
+   V2.7.1 — Teach page overlap fix
+   ========================================================= */
+
+/* The floating escape button is for very long PREP editors only.
+   On TEACH pages it could cover ACTIVE SESSION controls on short screens. */
+.teacher-page[data-workflow="teach"] .back-to-top-btn{
+  display:none !important;
+}
+
+/* Active Session header must tolerate long course names and three status chips. */
+.active-session-top > div:first-child{
+  min-width:0;
+  flex:1 1 auto;
+}
+.active-session-top h2,
+.active-session-top p,
+.session-status-row > *{
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.active-session-actions{
+  display:flex;
+  flex:0 1 auto;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  min-width:0;
+}
+.active-session-actions .btn{
+  max-width:100%;
+  white-space:normal;
+}
+
+/* Short screens and tablet widths get a fully stacked ACTIVE SESSION header.
+   This avoids the narrow 821–1024px band where title/status/actions compete. */
+@media (max-width:1024px), (max-height:720px){
+  .active-session-top{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .active-session-actions{
+    width:100%;
+    justify-content:flex-start;
+  }
+  .session-status-row{
+    width:100%;
+  }
+}
+
+/* On phones the actions become easy-to-tap rows rather than squeezed pills. */
+@media (max-width:560px){
+  .active-session-actions .btn{
+    flex:1 1 140px;
+  }
+  .session-status-row{
+    align-items:flex-start;
+  }
+  .session-status-row > *{
+    width:max-content;
+    max-width:100%;
+  }
+}
+
+
+/* =========================================================
+   V2.7.2 — Mobile Session intrinsic-width containment
+   ========================================================= */
+/*
+   Long Course / Session names can give grid/flex children a large intrinsic
+   min-content width. Grid items default to min-width:auto, so a 390px phone
+   could be widened to ~450px even though the outer workspace was responsive.
+*/
+.session-workspace,
+.session-workspace > *,
+.session-config-card,
+.active-session-card,
+.session-history-card,
+.teach-home-dashboard,
+.session-create-grid,
+.session-create-grid > *,
+.session-kind-selector,
+.session-kind-selector > *,
+.session-activity-preview,
+.active-session-top,
+.active-session-top > *,
+.session-live-grid,
+.session-live-grid > *,
+.course-session-control,
+.course-session-control > *,
+.session-history-item,
+.session-history-item > *{
+  min-width:0;
+  max-width:100%;
+}
+
+.session-workspace > .panel{
+  width:100%;
+}
+
+.session-config-card input,
+.session-config-card select,
+.session-config-card textarea,
+.session-config-card .field,
+.session-config-card .cloud-mode-badge,
+.session-config-card .btn,
+.active-session-card .btn{
+  min-width:0;
+  max-width:100%;
+}
+
+.session-config-card input,
+.session-config-card select,
+.session-config-card textarea{
+  width:100%;
+}
+
+.session-config-card select,
+.session-config-card option{
+  text-overflow:ellipsis;
+}
+
+.session-activity-preview > div:last-child,
+.history-main,
+.participant-main,
+.course-session-control-main{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+
+.session-activity-preview strong,
+.session-activity-preview p,
+.session-activity-preview small,
+.session-history-item strong,
+.session-history-item small{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+@media(max-width:560px){
+  .session-kind-option,
+  .cloud-mode-badge,
+  .session-create-actions .btn{
+    width:100%;
+  }
+}

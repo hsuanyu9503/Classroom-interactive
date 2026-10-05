@@ -1,4 +1,4 @@
-/* V2.7.0 | Teacher Session / History / Summary / Presentation */
+/* V2.7.2 | Teacher Session / History / Summary / Presentation */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
