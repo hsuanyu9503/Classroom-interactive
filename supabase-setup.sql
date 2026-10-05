@@ -1,3 +1,11 @@
+-- V2.7.2 SQL FIX
+-- 修正 get_student_session_state() 中：
+--   select s.*, p.id into v_session, v_participant_id
+-- 造成 PostgreSQL 42601：
+--   record variable cannot be part of multiple-item INTO list
+--
+-- 本檔可直接整份重新執行；既有 schema 採 IF NOT EXISTS / CREATE OR REPLACE，可安全重跑。
+
 -- 課堂互動工具 V1.7
 -- 在 Supabase SQL Editor 執行一次。
 -- 前端只能使用 Publishable key（或舊版 anon key），絕對不要使用 secret/service-role key。
@@ -302,10 +310,17 @@ declare
   v_session public.classroom_sessions%rowtype;
   v_participant_id uuid;
 begin
-  select s.*, p.id into v_session, v_participant_id
+  -- PostgreSQL 不允許 %ROWTYPE 變數與 scalar 變數一起放在同一個多目標 INTO。
+  -- 因此分兩步取得 participant id 與完整 session row。
+  select p.id into v_participant_id
+  from public.session_participants p
+  where p.session_id = p_session_id
+    and p.participant_token = p_participant_token
+  limit 1;
+
+  select s.* into v_session
   from public.classroom_sessions s
-  join public.session_participants p on p.session_id = s.id
-  where s.id = p_session_id and p.participant_token = p_participant_token
+  where s.id = p_session_id
   limit 1;
 
   if v_session.id is null or v_participant_id is null then
@@ -905,11 +920,17 @@ declare
   v_session public.classroom_sessions%rowtype;
   v_participant_id uuid;
 begin
-  select s.*, p.id into v_session, v_participant_id
-  from public.classroom_sessions s
-  join public.session_participants p on p.session_id = s.id
-  where s.id = p_session_id
+  -- PostgreSQL 不允許 %ROWTYPE 變數與 scalar 變數一起放在同一個多目標 INTO。
+  -- 因此分兩步取得 participant id 與完整 session row。
+  select p.id into v_participant_id
+  from public.session_participants p
+  where p.session_id = p_session_id
     and p.participant_token = p_participant_token
+  limit 1;
+
+  select s.* into v_session
+  from public.classroom_sessions s
+  where s.id = p_session_id
   limit 1;
 
   if v_session.id is null or v_participant_id is null then
