@@ -1,4 +1,4 @@
-/* V2.7.3 | Teacher Core: workflow + Course/Type/Work libraries */
+/* V2.7.5 | Teacher Core: workflow + Course/Type/Work libraries */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2

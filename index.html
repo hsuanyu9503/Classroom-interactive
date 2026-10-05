@@ -19,7 +19,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.7.3</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.7.5</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -513,6 +513,14 @@
               <button id="clearCloudConfigBtn" class="btn btn-secondary" type="button">清除設定</button>
               <button id="saveCloudConfigBtn" class="btn btn-primary" type="button">儲存並測試</button>
             </div>
+            <div class="teacher-handoff-import">
+              <div>
+                <strong>🔁 教師 Session 接手</strong>
+                <small>新裝置可匯入原裝置產生的接手檔；成功後會直接取得同一個雲端 Session 的教師控制權。</small>
+              </div>
+              <button id="importTeacherHandoffBtn" class="btn btn-secondary" type="button">匯入教師接手檔</button>
+              <input id="teacherHandoffFileInput" class="hidden" type="file" accept=".json,application/json" />
+            </div>
           </div>
         </details>
 
@@ -566,6 +574,7 @@
             </div>
           </div>
           <div class="active-session-actions">
+            <button id="exportTeacherHandoffBtn" class="btn btn-secondary hidden" type="button">🔁 匯出接手檔</button>
             <button id="refreshSessionBtn" class="btn btn-secondary" type="button">↻ 更新資料</button>
             <button id="closeSessionBtn" class="btn btn-danger-soft" type="button">結束 Session</button>
           </div>

@@ -3082,3 +3082,14 @@ html{
     width:100%;
   }
 }
+
+
+/* =========================================================
+   V2.7.4 — Teacher Session handoff
+   ========================================================= */
+.teacher-handoff-import{margin-top:14px;padding:13px 14px;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #dfe5ef;border-radius:15px;background:#fff}
+.teacher-handoff-import>div{min-width:0}
+.teacher-handoff-import strong{display:block;color:#35415a;font-size:13px}
+.teacher-handoff-import small{display:block;margin-top:4px;color:#7f8a9c;line-height:1.55}
+.teacher-handoff-import .btn{flex:0 0 auto}
+@media(max-width:700px){.teacher-handoff-import{align-items:stretch;flex-direction:column}.teacher-handoff-import .btn{width:100%}}

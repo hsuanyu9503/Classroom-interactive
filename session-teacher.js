@@ -1,4 +1,4 @@
-/* V2.7.3 | Teacher Session / History / Summary / Presentation */
+/* V2.7.5 | Teacher Session / History / Summary / Presentation */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -375,6 +375,69 @@
     document.querySelector(".session-config-card")?.scrollIntoView({behavior:"smooth",block:"start"});
   }
 
+  function downloadJsonFile(filename, payload) {
+    const blob = new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = filename;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  async function exportTeacherHandoff() {
+    if (!activeSession) return;
+    const button = $("exportTeacherHandoffBtn");
+    if (activeSession.mode !== "cloud" || activeSession.status !== "active") {
+      showSessionToast("只有進行中的雲端 Session 可以建立接手檔"); return;
+    }
+    if (!confirm("要匯出教師接手檔嗎？\\n\\n這個檔案包含目前 Session 的教師控制憑證與 Supabase Publishable key。\\n請只交給你自己的新裝置，不要傳給學生或公開分享。")) return;
+    const oldText = button?.textContent || "";
+    if (button) { button.disabled=true; button.textContent="建立中…"; }
+    try {
+      const payload = await window.ClassroomSessionAPI.createTeacherHandoff(activeSession);
+      const code = String(activeSession.code || "session").replace(/[^A-Za-z0-9_-]/g,"");
+      downloadJsonFile(`classroom-teacher-handoff-${code}.json`,payload);
+      showSessionToast("教師接手檔已匯出");
+    } catch (error) { showSessionToast(error.message || "無法建立教師接手檔"); }
+    finally { if (button) { button.disabled=false; button.textContent=oldText || "🔁 匯出接手檔"; } }
+  }
+
+  async function importTeacherHandoffFile(file) {
+    const fileInput = $("teacherHandoffFileInput");
+    const resetFileInput = () => { if (fileInput) fileInput.value = ""; };
+    if (!file) { resetFileInput(); return; }
+
+    let payload;
+    try {
+      payload = JSON.parse(await file.text());
+      window.ClassroomSessionAPI.validateTeacherHandoffPackage(payload);
+    } catch (error) {
+      showSessionToast(error.message || "教師接手檔格式錯誤");
+      resetFileInput();
+      return;
+    }
+
+    if (!confirm("確定要在這台裝置接手這個 Session 嗎？\n\n接手成功後，Supabase 會立即更換 teacherToken；舊裝置原本的教師控制權會失效。")) {
+      resetFileInput();
+      return;
+    }
+
+    const button=$("importTeacherHandoffBtn"); const oldText=button?.textContent || "";
+    if (button) { button.disabled=true; button.textContent="接手中…"; }
+    try {
+      const result = await window.ClassroomSessionAPI.claimTeacherHandoff(payload);
+      clearInterval(refreshTimer); stopSessionRealtime(); closePresentationSync();
+      activeSession=result.sessionMeta; activeCourseSnapshot=null;
+      renderCloudState(); await renderActiveSession(); renderHistory(); await renderTeachHome();
+      $("activeSessionCard")?.scrollIntoView({behavior:"smooth",block:"start"});
+      showSessionToast("已接手同一個雲端 Session");
+    } catch (error) { showSessionToast(error.message || "教師 Session 接手失敗"); }
+    finally {
+      if (button) { button.disabled=false; button.textContent=oldText || "匯入教師接手檔"; }
+      resetFileInput();
+    }
+  }
+
   async function openHistorySession(item) {
     if (!item) return;
     activeSession = {...item};
@@ -593,6 +656,11 @@
     $("activeSessionTitle").textContent = activeSession.title;
     $("activeSessionCode").textContent = activeSession.code;
     $("activeSessionMode").textContent = activeSession.mode === "cloud" ? "☁️ 雲端 Session" : "🧪 本機測試 Session";
+    const handoffButton=$("exportTeacherHandoffBtn");
+    if (handoffButton) {
+      const canHandoff=activeSession.mode === "cloud" && activeSession.status !== "closed";
+      handoffButton.classList.toggle("hidden",!canHandoff); handoffButton.disabled=!canHandoff;
+    }
     $("sessionActivityMode").textContent = activeSession.sessionKind === "course"
       ? "📚 完整課程"
       : activityModeLabel(activeSession.activityMode);
@@ -649,6 +717,22 @@
     startSessionRealtime();
   }
 
+  async function handleTeacherControlLost() {
+    const lostId = activeSession?.id || "";
+    clearInterval(refreshTimer);
+    stopSessionRealtime();
+    closePresentationSync();
+    if (lostId) window.ClassroomSessionAPI.removeTeacherHistory?.(lostId);
+    activeSession = null;
+    activeCourseSnapshot = null;
+    latestTeacherSnapshot = null;
+    $("activeSessionCard")?.classList.add("hidden");
+    $("sessionSummaryCard")?.classList.add("hidden");
+    renderHistory();
+    await renderTeachHome();
+    showSessionToast("這個 Session 的教師控制權已轉移到其他裝置");
+  }
+
   async function refreshActiveSession(silent=false) {
     if (!activeSession) return;
     const button = $("refreshSessionBtn");
@@ -670,6 +754,11 @@
       $("activeSessionStatus").textContent = activeSession.status === "active" ? "進行中" : "已結束";
       $("activeSessionStatus").classList.toggle("active",activeSession.status === "active");
       $("closeSessionBtn").disabled = activeSession.status === "closed";
+      if ($("exportTeacherHandoffBtn")) {
+        const canHandoff=activeSession.mode === "cloud" && activeSession.status === "active";
+        $("exportTeacherHandoffBtn").classList.toggle("hidden",!canHandoff);
+        $("exportTeacherHandoffBtn").disabled=!canHandoff;
+      }
       $("sessionActivityMode").textContent = activeSession.sessionKind === "course"
         ? "📚 完整課程"
         : activityModeLabel(activeSession.activityMode);
@@ -691,7 +780,12 @@
         setTeacherRealtimeStatus("closed");
       }
     } catch (error) {
-      showSessionToast(error.message || "更新 Session 失敗");
+      const message = error.message || "更新 Session 失敗";
+      if (/invalid teacher token|session unavailable or teacher token invalid/i.test(message)) {
+        await handleTeacherControlLost();
+      } else {
+        showSessionToast(message);
+      }
     } finally {
       if (!silent) button.disabled = false;
     }
@@ -1218,6 +1312,9 @@
   $("sessionTitleInput")?.addEventListener("input",()=>{$("sessionTitleInput").dataset.autoTitle="0";});
   $("saveCloudConfigBtn")?.addEventListener("click",saveCloudConfig);
   $("clearCloudConfigBtn")?.addEventListener("click",clearCloudConfig);
+  $("importTeacherHandoffBtn")?.addEventListener("click",()=>$("teacherHandoffFileInput")?.click());
+  $("teacherHandoffFileInput")?.addEventListener("change",event=>importTeacherHandoffFile(event.target.files?.[0] || null));
+  $("exportTeacherHandoffBtn")?.addEventListener("click",exportTeacherHandoff);
   $("createSessionBtn")?.addEventListener("click",createSession);
   $("refreshSessionBtn")?.addEventListener("click",()=>refreshActiveSession());
   $("copySessionUrlBtn")?.addEventListener("click",copyJoinUrl);

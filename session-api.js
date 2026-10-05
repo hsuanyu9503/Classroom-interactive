@@ -645,6 +645,90 @@
     return {ok:true};
   }
 
+  function validateTeacherHandoffPackage(payload) {
+    if (!payload || payload.schema !== "classroom-teacher-handoff" || Number(payload.version) !== 1) {
+      throw new Error("這不是有效的教師 Session 接手檔");
+    }
+    const session = payload.session || {};
+    const cloud = payload.cloud || {};
+    if (!session.id || !session.teacherToken || !cloud.url || !cloud.key) {
+      throw new Error("教師接手檔內容不完整");
+    }
+    if (String(cloud.key).startsWith("sb_secret_")) {
+      throw new Error("接手檔包含不可使用的 Supabase secret key");
+    }
+    if (!/^https:\/\/.+\.supabase\.co$/i.test(String(cloud.url).replace(/\/+$/,""))) {
+      throw new Error("教師接手檔中的 Supabase Project URL 無效");
+    }
+    return {
+      schema:"classroom-teacher-handoff",
+      version:1,
+      appVersion:String(payload.appVersion || ""),
+      exportedAt:payload.exportedAt || "",
+      cloud:{url:String(cloud.url).trim().replace(/\/+$/,""),key:String(cloud.key).trim()},
+      session:{
+        id:String(session.id).trim(), code:String(session.code || "").trim(),
+        title:String(session.title || "課堂 Session").trim(), teacherToken:String(session.teacherToken).trim(),
+        sessionKind:session.sessionKind === "course" ? "course" : "activity",
+        activityMode:String(session.activityMode || ""), courseId:String(session.courseId || "")
+      }
+    };
+  }
+
+  async function createTeacherHandoff(sessionMeta) {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if (sessionMeta.mode !== "cloud") throw new Error("只有 Supabase 雲端 Session 可以跨裝置接手");
+    const snapshot = await teacherSnapshot(sessionMeta);
+    if ((snapshot?.status || sessionMeta.status || "") !== "active") throw new Error("只有進行中的雲端 Session 可以建立教師接手檔");
+    const config = getConfig();
+    if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
+    return {
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.7.5", exportedAt:new Date().toISOString(),
+      warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
+      cloud:{url:config.url,key:config.key},
+      session:{
+        id:sessionMeta.id, code:sessionMeta.code || snapshot?.code || "", title:sessionMeta.title || snapshot?.title || "課堂 Session",
+        teacherToken:sessionMeta.teacherToken, sessionKind:snapshot?.session_kind || sessionMeta.sessionKind || "activity",
+        activityMode:snapshot?.activity_mode ?? sessionMeta.activityMode ?? "", courseId:snapshot?.course_id || sessionMeta.courseId || ""
+      }
+    };
+  }
+
+  async function claimTeacherHandoff(payload) {
+    const handoff = validateTeacherHandoffPackage(payload);
+    const newTeacherToken = randomToken();
+    const claimed = await rpc("claim_classroom_session", {
+      p_session_id:handoff.session.id,
+      p_teacher_token:handoff.session.teacherToken,
+      p_new_teacher_token:newTeacherToken
+    }, handoff.cloud);
+    const claimMeta = typeof claimed === "string" ? JSON.parse(claimed) : (claimed || {});
+    const sessionMeta = {
+      id:handoff.session.id, code:claimMeta.code || handoff.session.code, title:claimMeta.title || handoff.session.title,
+      teacherToken:newTeacherToken, mode:"cloud",
+      sessionKind:claimMeta.session_kind || handoff.session.sessionKind || "activity",
+      activityMode:claimMeta.activity_mode ?? handoff.session.activityMode ?? "",
+      stageCount:Number(claimMeta.stage_count || 1), courseId:claimMeta.course_id || handoff.session.courseId || "",
+      courseEncoded:claimMeta.course_encoded || "", currentNodeRef:claimMeta.current_node_ref || "",
+      revision:Number(claimMeta.revision || 1), status:claimMeta.status || "active",
+      createdAt:claimMeta.created_at || new Date().toISOString()
+    };
+    // token 已在伺服器完成輪替後，先把新控制憑證落地保存。
+    // 即使下一個 snapshot 請求剛好斷線，也不會遺失新的 teacherToken。
+    saveConfig(handoff.cloud.url,handoff.cloud.key);
+    rememberTeacherSession(sessionMeta,claimMeta);
+
+    let snapshot = null;
+    let snapshotWarning = "";
+    try {
+      snapshot = await teacherSnapshot(sessionMeta);
+      rememberTeacherSession(sessionMeta,snapshot);
+    } catch (error) {
+      snapshotWarning = error.message || "已接手控制權，但暫時無法同步 Session 資料";
+    }
+    return {sessionMeta,snapshot,snapshotWarning};
+  }
+
   async function teacherSnapshot(sessionMeta) {
     if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
 
@@ -963,6 +1047,7 @@
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
     createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage,
     setCourseNode, submitCourseProgress, closeSession, deleteSession, studentState, buildJoinUrl,
+    createTeacherHandoff, claimTeacherHandoff, validateTeacherHandoffPackage,
     loadTeacherHistory, updateTeacherHistory, removeTeacherHistory,
     getParticipantContext, updateParticipantContext, configFromUrlFragment,
     publishRealtime, subscribeRealtime

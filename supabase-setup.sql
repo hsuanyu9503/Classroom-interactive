@@ -1,4 +1,4 @@
--- V2.7.3 SQL SETUP
+-- V2.7.5 SQL SETUP
 -- 修正 get_student_session_state() 中：
 --   select s.*, p.id into v_session, v_participant_id
 -- 造成 PostgreSQL 42601：
@@ -1147,3 +1147,56 @@ $$;
 
 revoke all on function public.delete_classroom_session(uuid,text) from public;
 grant execute on function public.delete_classroom_session(uuid,text) to anon, authenticated;
+
+
+-- =========================================================
+-- V2.7.4：教師跨裝置 Session 接手
+-- 新裝置驗證舊 teacherToken 後，立即輪替成新的 teacherToken。
+-- =========================================================
+create or replace function public.claim_classroom_session(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_new_teacher_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.classroom_sessions%rowtype;
+begin
+  if length(trim(coalesce(p_new_teacher_token,''))) < 20 then
+    raise exception 'invalid new teacher token';
+  end if;
+
+  update public.classroom_sessions
+  set teacher_token = p_new_teacher_token
+  where id = p_session_id
+    and teacher_token = p_teacher_token
+    and status = 'active'
+  returning * into v_session;
+
+  if v_session.id is null then
+    raise exception 'session unavailable or teacher token invalid';
+  end if;
+
+  return jsonb_build_object(
+    'id', v_session.id,
+    'code', v_session.code,
+    'title', v_session.title,
+    'status', v_session.status,
+    'session_kind', v_session.session_kind,
+    'activity_mode', v_session.activity_mode,
+    'stage_count', v_session.stage_count,
+    'course_id', v_session.course_id,
+    'course_encoded', v_session.course_encoded,
+    'current_node_ref', v_session.current_node_ref,
+    'revision', v_session.revision,
+    'created_at', v_session.created_at
+  );
+end;
+$$;
+
+revoke all on function public.claim_classroom_session(uuid,text,text) from public;
+grant execute on function public.claim_classroom_session(uuid,text,text) to anon, authenticated;
