@@ -3702,3 +3702,33 @@ html{
   .deliberation-layer-count-control{flex:1 1 100%;justify-content:center}
   .deliberation-layer-toolbar > .btn{width:100%}
 }
+
+
+/* =========================================================
+   V2.12.1 — Footer credit
+   ========================================================= */
+body{
+  display:flex;
+  flex-direction:column;
+}
+
+.app-credit{
+  width:100%;
+  margin:0 auto 14px;
+  margin-top:auto;
+  padding:28px 16px 0;
+  text-align:center;
+  color:#9aa3b2;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.02em;
+  line-height:1.5;
+}
+@media(max-width:640px){
+  .app-credit{
+    margin:0 auto 10px;
+    margin-top:auto;
+    padding-top:22px;
+    font-size:11px;
+  }
+}

@@ -1,4 +1,4 @@
-/* V2.12.0 | Activity Editor + layered deliberation + custom choices */
+/* V2.12.1 | Activity Editor + layered deliberation + custom choices */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -1832,7 +1832,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.12.0",
+    appVersion:"2.12.1",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),

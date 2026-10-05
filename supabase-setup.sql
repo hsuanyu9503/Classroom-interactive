@@ -1,4 +1,4 @@
--- V2.12.0 SQL SETUP
+-- V2.12.1 SQL SETUP
 -- 修正 get_student_session_state() 中：
 --   select s.*, p.id into v_session, v_participant_id
 -- 造成 PostgreSQL 42601：
@@ -1354,7 +1354,7 @@ begin
 end;
 $$;
 
--- V2.12.0：覆寫作答 RPC，伺服器端限制逐層思辨作答時機，依活動設定驗證文字必填規則與自訂選項。
+-- V2.12.1：覆寫作答 RPC，伺服器端限制逐層思辨作答時機，依活動設定驗證文字必填規則與自訂選項。
 create or replace function public.submit_classroom_response(
   p_session_id uuid,
   p_participant_token text,
