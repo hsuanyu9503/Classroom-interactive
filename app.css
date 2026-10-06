@@ -3208,8 +3208,9 @@ html{
   font-size:22px;
 }
 .deliberation-choice span{
-  font-size:12px;
-  line-height:1.4;
+  font-size:14px;
+  line-height:1.45;
+  font-weight:800;
 }
 .deliberation-choice.selected{
   outline:2px solid currentColor;
@@ -3602,7 +3603,7 @@ html{
 }
 .deliberation-option-row{
   display:grid;
-  grid-template-columns:72px 44px minmax(0,1fr) auto;
+  grid-template-columns:72px minmax(0,1fr) auto;
   gap:9px;
   align-items:center;
   padding:9px 10px;
@@ -3634,7 +3635,7 @@ html{
 }
 @media(max-width:640px){
   .deliberation-option-row{
-    grid-template-columns:54px 38px minmax(0,1fr);
+    grid-template-columns:54px minmax(0,1fr);
   }
   .deliberation-option-remove{
     grid-column:1 / -1;
@@ -4279,7 +4280,7 @@ select:focus{
 
 
 /* =========================================================
-   V2.17.2 — Slido-style live statistics
+   V2.17.3 — Slido-style live statistics
    ========================================================= */
 .live-stats-list{display:grid;gap:10px}
 .live-stats-toolbar{

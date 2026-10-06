@@ -40,9 +40,7 @@
         const dot=document.createElement("i");
         dot.style.setProperty("--legend-color",palette[index%palette.length]);
         const label=document.createElement("span");
-        const code=document.createElement("b");
-        code.textContent=option.id;
-        label.append(code,document.createTextNode(` ${option.label}`));
+        label.textContent=option.label;
         const strong=document.createElement("strong");
         strong.textContent=String(count);
         const pct=document.createElement("small");
@@ -56,7 +54,7 @@
     const max=Math.max(...ranked.map(([,count])=>count),1);
     ranked.forEach(([option,count],index)=>{
       const row=document.createElement("div");row.className="stage-distribution-row answer-bar-row";
-      const label=document.createElement("span");label.textContent=`${option.id} ${option.label}`;
+      const label=document.createElement("span");label.textContent=option.label;
       const bar=document.createElement("div");const fill=document.createElement("i");
       const targetWidth=count?Math.max(6,(count/max)*100):0;
       fill.style.width="0%";

@@ -1,4 +1,4 @@
-/* V2.17.2 | Teacher Session + student inspector + reason identity controls */
+/* V2.17.3 | Teacher Session + student inspector + reason identity controls */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -26,7 +26,7 @@
     const text=String(value ?? "").trim();
     let paletteIndex=Math.abs(Number(fallbackIndex)||0)%LIVE_STATS_PALETTE.length;
 
-    // V2.17.2：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
+    // V2.17.3：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
     // 這可保證 Realtime 更新、新選項首次出現或學生改答案時，既有選項永遠不換色。
     if (/^\d+$/.test(text)) {
       paletteIndex=Number(text)%LIVE_STATS_PALETTE.length;
@@ -999,7 +999,7 @@
 
       latestTeacherSnapshot = snapshot;
       window.ClassroomSessionAPI.updateTeacherHistory?.(activeSession,snapshot);
-      renderParticipants(snapshot.participants || [],snapshot.responses || [],snapshot.progress || []);
+      renderParticipants(snapshot.participants || [],snapshot.responses || [],snapshot.progress || [],snapshot);
       renderStudentInspector(snapshot);
       await renderCourseControl(snapshot);
       renderProgressiveControl(snapshot);
@@ -1028,7 +1028,7 @@
     }
   }
 
-  function renderParticipants(participants,responses=[],progress=[]) {
+  function renderParticipants(participants,responses=[],progress=[],snapshot=null) {
     const list = $("sessionParticipantList");
     const select = $("studentInspectSelect");
     list.innerHTML = "";
@@ -1082,7 +1082,7 @@
               <small>${participant.last_submitted_at ? `最後作答：${formatTime(participant.last_submitted_at)}` : `加入：${formatTime(participant.joined_at)}`}</small>
               ${activeSession?.activityMode === "progressive-reveal" ? `<div class="participant-judgement-history">${buildParticipantHistory(participant.id,responses)}</div>` : ""}
               ${activeSession?.activityMode === "open-classification" ? `<div class="participant-judgement-history">${buildOpenParticipantHistory(participant.id,responses)}</div>` : ""}
-              ${activeSession?.activityMode === "layered-deliberation" ? `<div class="participant-judgement-history">${buildDeliberationParticipantHistory(participant.id,responses)}</div>` : ""}
+              ${activeSession?.activityMode === "layered-deliberation" ? `<div class="participant-judgement-history">${buildDeliberationParticipantHistory(participant.id,responses,snapshot?.deliberation_data?.o)}</div>` : ""}
             </div>
             <div class="participant-row-actions"><span class="participant-response-count">${participant.response_count || 0} 筆</span>${inspectButton}</div>`;
         }
@@ -1127,7 +1127,7 @@
     if (!code) return "";
     if (response?.mode === "layered-deliberation") {
       const label=deliberationOptionLabel(code,snapshot?.deliberation_data?.o);
-      return label ? `${code} ${label}` : code;
+      return label || "未命名選項";
     }
     return String(response?.payload?.selectedTypeName || code);
   }
@@ -1371,14 +1371,15 @@
     return normalizeTeacherDeliberationOptions(snapshot?.deliberation_data?.o);
   }
 
-  function buildDeliberationParticipantHistory(participantId,responses) {
+  function buildDeliberationParticipantHistory(participantId,responses,options=null) {
     const items=(responses || [])
       .filter(r=>r.participant_id===participantId && r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""))
       .sort((a,b)=>Number(a.stage_key.split("-")[1])-Number(b.stage_key.split("-")[1]));
     if (!items.length) return "";
     return items.map(r=>{
       const stage=Number(r.stage_key.split("-")[1]);
-      return `<span class="history-mini-pill">第 ${stage} 層 ${escapeHtml(r.selected_type || "—")}</span>`;
+      const label=deliberationOptionLabel(r.selected_type,options) || "未命名選項";
+      return `<span class="history-mini-pill">第 ${stage} 層 ${escapeHtml(label)}</span>`;
     }).join("");
   }
 
@@ -1392,7 +1393,7 @@
     });
     const entries=normalized.map((option,index)=>({
       id:option.id,
-      label:`${option.id} ${option.label}`,
+      label:option.label,
       count:counts.get(option.id)||0,
       order:index,
       color:LIVE_STATS_PALETTE[index%LIVE_STATS_PALETTE.length]
@@ -1936,7 +1937,7 @@
         const options=deliberationOptionsFromSnapshot(snapshot);
         const counts=Object.fromEntries(options.map(option=>[option.id,0]));
         current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
-        const summary=options.map(option=>`${option.id} ${counts[option.id] || 0}`).join(" · ");
+        const summary=options.map(option=>`${option.label} ${counts[option.id] || 0}`).join(" · ");
         row.innerHTML=`<div class="summary-node-main"><strong>第 ${stage} 層</strong><small>${escapeHtml(summary)}</small></div><b>${new Set(current.map(r=>r.participant_id)).size} / ${participants}</b>`;
         list.appendChild(row);
       }

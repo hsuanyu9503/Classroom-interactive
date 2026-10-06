@@ -633,7 +633,7 @@ function renderDeliberationDistribution(list, distribution, chartType = null, op
     normalized.forEach((option,index)=>{
       const count=counts.get(option.id)||0;
       const item=document.createElement("div");
-      item.innerHTML=`<i style="--legend-color:${palette[index%palette.length]}"></i><span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><strong>${count}</strong><small>${Math.round(count/total*100)}%</small>`;
+      item.innerHTML=`<i style="--legend-color:${palette[index%palette.length]}"></i><span>${escapeHtml(option.label)}</span><strong>${count}</strong><small>${Math.round(count/total*100)}%</small>`;
       legend.appendChild(item);
     });
     wrap.append(pie,legend);list.appendChild(wrap);return;
@@ -645,7 +645,7 @@ function renderDeliberationDistribution(list, distribution, chartType = null, op
     row.className="stage-distribution-row answer-bar-row";
     const pct=Math.round(count/total*100);
     const color=palette[index%palette.length];
-    row.innerHTML=`<span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><div><i style="width:${count?Math.max(6,(count/max)*100):0}%;background:${color}"></i></div><strong>${count}<small>${pct}%</small></strong>`;
+    row.innerHTML=`<span>${escapeHtml(option.label)}</span><div><i style="width:${count?Math.max(6,(count/max)*100):0}%;background:${color}"></i></div><strong>${count}<small>${pct}%</small></strong>`;
     list.appendChild(row);
   });
 }
@@ -670,7 +670,7 @@ function renderDeliberationHistory() {
     const row=document.createElement("div");
     row.className=`deliberation-history-row ${changed?"changed":""}`;
     const option=normalizeDeliberationOptions(deliberationState?.deliberation?.options || activity?.deliberation?.options).find(item=>item.id===r.selected_type);
-    row.innerHTML=`<span>第 ${stage} 層</span><strong>${escapeHtml(r.selected_type || "—")} ${escapeHtml(option?.label || DELIBERATION_LABELS[r.selected_type] || "")}</strong><small>${changed?"改變":"維持／起始"}</small>`;
+    row.innerHTML=`<span>第 ${stage} 層</span><strong>${escapeHtml(option?.label || DELIBERATION_LABELS[r.selected_type] || "未命名選項")}</strong><small>${changed?"改變":"維持／起始"}</small>`;
     list.appendChild(row);
     previous=r.selected_type || previous;
   }
@@ -764,7 +764,7 @@ function renderDeliberationState() {
     button.type="button";
     button.className="deliberation-choice";
     button.dataset.id=option.id;
-    button.innerHTML=`<b>${escapeHtml(option.id)}</b><span>${escapeHtml(option.label)}</span>`;
+    button.innerHTML=`<span>${escapeHtml(option.label)}</span>`;
     button.classList.toggle("selected",deliberationSelectedChoice===option.id || (!deliberationSelectedChoice && own?.selected_type===option.id));
     button.disabled=Boolean(own) || round!=="open";
     button.addEventListener("click",()=>{

@@ -1,4 +1,4 @@
-/* V2.17.2 | Activity Editor + layered deliberation + custom choices */
+/* V2.17.3 | Activity Editor + layered deliberation + custom choices */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -248,7 +248,6 @@ function addDeliberationOption(option=null) {
   row.dataset.optionId=id;
   row.innerHTML=`
     <span class="deliberation-option-order">選項 ${count+1}</span>
-    <span class="deliberation-option-code">${escapeHtml(id)}</span>
     <input class="deliberation-option-label" type="text" maxlength="80" placeholder="輸入選項內容" value="${escapeHtml(label)}">
     <button class="btn btn-danger-soft deliberation-option-remove" type="button">移除</button>
   `;
@@ -1932,7 +1931,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.17.2",
+    appVersion:"2.17.3",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),
