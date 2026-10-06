@@ -4196,3 +4196,18 @@ select:focus{
   font-size:11px;
   line-height:1.55;
 }
+
+
+/* =========================================================
+   V2.15.3 — mobile sync badge wrapping fix
+   ========================================================= */
+.open-classification-interaction .classification-step-head > div{
+  min-width:0;
+  flex:1 1 auto;
+}
+.open-classification-interaction .sync-badge{
+  flex:0 0 auto;
+  white-space:nowrap;
+  word-break:keep-all;
+  overflow-wrap:normal;
+}

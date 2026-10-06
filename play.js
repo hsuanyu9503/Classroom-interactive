@@ -28,7 +28,51 @@ let deliberationLocalResponses = [];
 let sessionRealtime = null;
 let openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
 
+// V2.15.2：依據與分類的判斷依據在學生進入頁面時隨機排列。
+// 同一頁面生命週期內以快取固定順序，避免同步重繪或第二次判斷時選項位置跳動。
+const evidenceOrderCache = new Map();
+
 const el = (id) => document.getElementById(id);
+
+function randomUnit() {
+  if (globalThis.crypto?.getRandomValues) {
+    const buffer = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(buffer);
+    return buffer[0] / 0x100000000;
+  }
+  return Math.random();
+}
+
+function shuffledCopy(items) {
+  const copy = [...(items || [])];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(randomUnit() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+  return copy;
+}
+
+function studentEvidenceOrder(cacheKey, items) {
+  const source = Array.isArray(items) ? items : [];
+  const signature = source.map(item => item?.i || "").join("|");
+  const key = `${cacheKey}:${signature}`;
+
+  if (!evidenceOrderCache.has(key)) {
+    evidenceOrderCache.set(key, shuffledCopy(source).map(item => item?.i || ""));
+  }
+
+  const byId = new Map(source.map(item => [item?.i || "", item]));
+  const ordered = evidenceOrderCache.get(key)
+    .map(id => byId.get(id))
+    .filter(Boolean);
+
+  // 若資料在同一頁面生命週期中被更新，仍補上新加入的項目。
+  const orderedIds = new Set(ordered.map(item => item?.i || ""));
+  source.forEach(item => {
+    if (!orderedIds.has(item?.i || "")) ordered.push(item);
+  });
+  return ordered;
+}
 
 function base64UrlToBytes(value) {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -1216,7 +1260,7 @@ function renderOpenClassificationForm() {
 function renderOpenEvidenceChoices() {
   const grid = el("openEvidenceGrid");
   grid.innerHTML = "";
-  activity.openClassification.elements.forEach(element => {
+  studentEvidenceOrder("open-classification", activity.openClassification.elements).forEach(element => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `evidence-choice ${openSelectedElements.has(element.i) ? "selected" : ""}`;
@@ -1521,7 +1565,7 @@ function renderModeAElementChoices(task) {
   const grid = el("elementChoiceGrid");
   grid.innerHTML = "";
 
-  task.elements.forEach(element => {
+  studentEvidenceOrder(`element-type-${currentCaseIndex}`, task.elements).forEach(element => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "evidence-choice";
