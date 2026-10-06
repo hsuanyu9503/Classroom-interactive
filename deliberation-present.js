@@ -28,7 +28,7 @@
     const total=values.reduce((sum,[,count])=>sum+count,0);
     if (!total) { list.innerHTML='<div class="empty-v15">目前沒有可顯示的全班結果。</div>'; return; }
     list.classList.toggle("answer-chart-pie-mode",chartType==="pie");
-    const palette=["#5b67d8","#7b62d7","#9b68cf","#c06fb7","#76839a","#4f94a8","#d48b49","#4f9b71","#b35b75","#8a6a4d"];
+    const palette=["#3b6fb6","#e38b2c","#2f8f66","#8a5db7","#d65b5b","#2b9cb3","#c59a2b","#c35a8a","#61758a","#8a6846"];
     if (chartType === "pie") {
       let cursor=0;const slices=[];
       values.forEach(([,count],index)=>{const start=cursor;cursor+=count/total*100;slices.push(`${palette[index%palette.length]} ${start}% ${cursor}%`);});
@@ -53,10 +53,13 @@
       wrap.append(pie,legend);list.appendChild(wrap);return;
     }
     const max=Math.max(...values.map(([,count])=>count),1);
-    values.forEach(([option,count])=>{
+    values.forEach(([option,count],index)=>{
       const row=document.createElement("div");row.className="stage-distribution-row answer-bar-row";
       const label=document.createElement("span");label.textContent=`${option.id} ${option.label}`;
-      const bar=document.createElement("div");const fill=document.createElement("i");fill.style.width=`${count?Math.max(6,(count/max)*100):0}%`;bar.appendChild(fill);
+      const bar=document.createElement("div");const fill=document.createElement("i");
+      fill.style.width=`${count?Math.max(6,(count/max)*100):0}%`;
+      fill.style.background=palette[index%palette.length];
+      bar.appendChild(fill);
       const strong=document.createElement("strong");strong.innerHTML=`${count}<small>${Math.round(count/total*100)}%</small>`;
       row.append(label,bar,strong);list.appendChild(row);
     });

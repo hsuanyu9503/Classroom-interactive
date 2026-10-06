@@ -4033,3 +4033,19 @@ select:focus{
     width:100%;
   }
 }
+
+
+/* =========================================================
+   V2.14.1 — High-distinction answer chart palette
+   ========================================================= */
+.answer-pie{
+  outline:3px solid rgba(255,255,255,.96);
+  outline-offset:-3px;
+}
+.answer-pie-legend i{
+  box-shadow:0 0 0 1px rgba(35,45,65,.10);
+}
+.answer-bar-row>div>i{
+  border-radius:999px;
+  transition:width .22s ease;
+}

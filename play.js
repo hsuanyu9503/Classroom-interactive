@@ -571,7 +571,7 @@ function renderDeliberationDistribution(list, distribution, chartType = null, op
   }
   const type=chartType || activity?.deliberation?.chartType || "bar";
   list.classList.toggle("answer-chart-pie-mode",type==="pie");
-  const palette=["#5b67d8","#7b62d7","#9b68cf","#c06fb7","#76839a","#4f94a8","#d48b49","#4f9b71","#b35b75","#8a6a4d"];
+  const palette=["#3b6fb6","#e38b2c","#2f8f66","#8a5db7","#d65b5b","#2b9cb3","#c59a2b","#c35a8a","#61758a","#8a6846"];
   if (type === "pie") {
     let cursor=0;
     const slices=[];
@@ -595,12 +595,13 @@ function renderDeliberationDistribution(list, distribution, chartType = null, op
     wrap.append(pie,legend);list.appendChild(wrap);return;
   }
   const max=Math.max(...counts.values(),1);
-  normalized.forEach(option=>{
+  normalized.forEach((option,index)=>{
     const count=counts.get(option.id)||0;
     const row=document.createElement("div");
     row.className="stage-distribution-row answer-bar-row";
     const pct=Math.round(count/total*100);
-    row.innerHTML=`<span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><div><i style="width:${count?Math.max(6,(count/max)*100):0}%"></i></div><strong>${count}<small>${pct}%</small></strong>`;
+    const color=palette[index%palette.length];
+    row.innerHTML=`<span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><div><i style="width:${count?Math.max(6,(count/max)*100):0}%;background:${color}"></i></div><strong>${count}<small>${pct}%</small></strong>`;
     list.appendChild(row);
   });
 }
