@@ -19,6 +19,9 @@ let openFinalResponse = null;
 let openPollTimer = null;
 let deliberationPollTimer = null;
 let deliberationSelectedChoice = "";
+let deliberationSelectedReasons = new Set();
+let deliberationReasonOtherSelected = false;
+let deliberationReasonOtherText = "";
 let deliberationDraftStage = 0;
 let deliberationState = null;
 let deliberationLocalResponses = [];
@@ -61,6 +64,10 @@ async function decodeActivity(encoded) {
         sourceNote:raw.d.src||"",
         fixedQuestion:raw.d.q||"",
         chartType:raw.d.chart === "pie" ? "pie" : "bar",
+        reasonMode:(raw.d.req?.rm === "choices" || raw.d.req?.reasonMode === "choices") ? "choices" : "text",
+        reasonChoices:Array.isArray(raw.d.req?.rc)
+          ? raw.d.req.rc
+          : Array.isArray(raw.d.req?.reasonChoices) ? raw.d.req.reasonChoices : [],
         reasonRequired:raw.d.req?.reason !== false,
         needToKnowRequired:Boolean(raw.d.req?.need),
         options:Array.isArray(raw.d.o)?raw.d.o:[],
@@ -434,6 +441,119 @@ function normalizeDeliberationOptions(options) {
   return list.map(item=>({id:item.i || item.id,label:item.l || item.label || DELIBERATION_LABELS[item.i] || item.i}));
 }
 
+function normalizeDeliberationReasonChoices(choices) {
+  const list=Array.isArray(choices) ? choices : [];
+  return list.map((item,index)=>({
+    id:String(item?.i ?? item?.id ?? `reason-${index+1}`),
+    label:String(item?.l ?? item?.label ?? "").trim()
+  })).filter(item=>item.id && item.label);
+}
+
+function deliberationReasonMode() {
+  return activity?.deliberation?.reasonMode === "choices" ? "choices" : "text";
+}
+
+function deliberationReasonChoices() {
+  return normalizeDeliberationReasonChoices(activity?.deliberation?.reasonChoices);
+}
+
+function renderDeliberationReasonControls({own=null,stageChanged=false,round="open"}={}) {
+  const mode=deliberationReasonMode();
+  const required=activity?.deliberation?.reasonRequired !== false;
+  const locked=Boolean(own) || round!=="open";
+  const textField=el("deliberationReasonTextField");
+  const choiceField=el("deliberationReasonChoiceField");
+  const textInput=el("deliberationReasonInput");
+  const grid=el("deliberationReasonChoiceGrid");
+  const otherCheck=el("deliberationReasonOtherCheck");
+  const otherInput=el("deliberationReasonOtherInput");
+
+  textField?.classList.toggle("hidden",mode!=="text");
+  choiceField?.classList.toggle("hidden",mode!=="choices");
+  if (el("deliberationReasonRequirement")) el("deliberationReasonRequirement").textContent=required ? "必填" : "選填";
+  if (el("deliberationReasonChoiceRequirement")) el("deliberationReasonChoiceRequirement").textContent=required ? "必填" : "選填";
+
+  if (mode==="text") {
+    if (textInput) textInput.disabled=locked;
+    return;
+  }
+
+  if (grid) {
+    grid.innerHTML="";
+    deliberationReasonChoices().forEach(choice=>{
+      const label=document.createElement("label");
+      label.className="deliberation-reason-choice";
+      const input=document.createElement("input");
+      input.type="checkbox";
+      input.value=choice.id;
+      input.checked=deliberationSelectedReasons.has(choice.id);
+      input.disabled=locked;
+      const span=document.createElement("span");
+      span.textContent=choice.label;
+      input.addEventListener("change",()=>{
+        if (input.checked) deliberationSelectedReasons.add(choice.id);
+        else deliberationSelectedReasons.delete(choice.id);
+        label.classList.toggle("selected",input.checked);
+      });
+      label.classList.toggle("selected",input.checked);
+      label.append(input,span);
+      grid.appendChild(label);
+    });
+  }
+
+  if (otherCheck) {
+    otherCheck.checked=deliberationReasonOtherSelected;
+    otherCheck.disabled=locked;
+    otherCheck.onchange=()=>{
+      deliberationReasonOtherSelected=otherCheck.checked;
+      if (!otherCheck.checked) {
+        deliberationReasonOtherText="";
+        if (otherInput) otherInput.value="";
+      }
+      otherCheck.closest(".deliberation-reason-choice")?.classList.toggle("selected",otherCheck.checked);
+      otherInput?.classList.toggle("hidden",!otherCheck.checked);
+      if (otherInput) otherInput.disabled=locked || !otherCheck.checked;
+      if (otherCheck.checked && !locked) otherInput?.focus();
+    };
+    otherCheck.closest(".deliberation-reason-choice")?.classList.toggle("selected",otherCheck.checked);
+  }
+  if (otherInput) {
+    otherInput.value=deliberationReasonOtherText;
+    otherInput.classList.toggle("hidden",!deliberationReasonOtherSelected);
+    otherInput.disabled=locked || !deliberationReasonOtherSelected;
+    otherInput.oninput=()=>{
+      deliberationReasonOtherText=otherInput.value;
+    };
+  }
+}
+
+function buildDeliberationReasonPayload() {
+  const mode=deliberationReasonMode();
+  if (mode==="text") {
+    return {
+      mode,
+      reason:el("deliberationReasonInput").value.trim(),
+      reasonSelections:[],
+      reasonOther:""
+    };
+  }
+
+  const choices=deliberationReasonChoices();
+  const selectedIds=[...deliberationSelectedReasons];
+  const selectedLabels=selectedIds
+    .map(id=>choices.find(choice=>choice.id===id)?.label || "")
+    .filter(Boolean);
+  const other=deliberationReasonOtherSelected ? deliberationReasonOtherText.trim() : "";
+  const parts=[...selectedLabels];
+  if (other) parts.push(`其他：${other}`);
+  return {
+    mode,
+    reason:parts.join("、"),
+    reasonSelections:selectedIds,
+    reasonOther:other
+  };
+}
+
 function renderDeliberationDistribution(list, distribution, chartType = null, options = null) {
   list.innerHTML="";
   const normalized=normalizeDeliberationOptions(
@@ -554,9 +674,15 @@ function renderDeliberationState() {
   if (own) {
     deliberationSelectedChoice=own.selected_type || "";
     el("deliberationReasonInput").value=own.payload?.reason || "";
+    deliberationSelectedReasons=new Set(Array.isArray(own.payload?.reasonSelections) ? own.payload.reasonSelections.map(String) : []);
+    deliberationReasonOtherText=String(own.payload?.reasonOther || "");
+    deliberationReasonOtherSelected=Boolean(deliberationReasonOtherText);
     el("deliberationNeedInput").value=own.payload?.needToKnow || "";
   } else if (stageChanged) {
     deliberationSelectedChoice="";
+    deliberationSelectedReasons=new Set();
+    deliberationReasonOtherSelected=false;
+    deliberationReasonOtherText="";
     el("deliberationReasonInput").value="";
     el("deliberationNeedInput").value="";
   }
@@ -583,8 +709,8 @@ function renderDeliberationState() {
 
   const reasonRequired=activity?.deliberation?.reasonRequired !== false;
   const needRequired=Boolean(activity?.deliberation?.needToKnowRequired);
-  el("deliberationReasonRequirement").textContent=reasonRequired ? "必填" : "選填";
   el("deliberationNeedRequirement").textContent=needRequired ? "必填" : "選填";
+  renderDeliberationReasonControls({own,stageChanged,round});
 
   const grid=el("deliberationChoiceGrid");
   grid.innerHTML="";
@@ -653,17 +779,42 @@ function renderDeliberationState() {
 async function submitDeliberationAnswer() {
   const stage=Math.max(1,Number(deliberationState?.current_stage)||1);
   const choice=deliberationSelectedChoice;
-  const reason=el("deliberationReasonInput").value.trim();
+  const reasonData=buildDeliberationReasonPayload();
+  const reason=reasonData.reason;
   const needToKnow=el("deliberationNeedInput").value.trim();
   if (!choice) { showToast("請先選擇你的判斷"); return; }
-  if (activity?.deliberation?.reasonRequired !== false && !reason) { showToast("請填寫本層最影響你的理由"); return; }
+
+  if (reasonData.mode==="choices") {
+    const hasPreset=reasonData.reasonSelections.length>0;
+    const hasOther=deliberationReasonOtherSelected;
+    if (activity?.deliberation?.reasonRequired !== false && !hasPreset && !hasOther) {
+      showToast("請至少勾選一個理由，或選擇「其他」");
+      return;
+    }
+    if (hasOther && !reasonData.reasonOther) {
+      showToast("請填寫「其他」理由");
+      return;
+    }
+  } else if (activity?.deliberation?.reasonRequired !== false && !reason) {
+    showToast("請填寫本層最影響你的理由");
+    return;
+  }
+
   if (activity?.deliberation?.needToKnowRequired && !needToKnow) { showToast("請填寫你還需要知道什麼"); return; }
+
+  const payload={
+    reason,
+    needToKnow,
+    reasonMode:reasonData.mode,
+    reasonSelections:reasonData.reasonSelections,
+    reasonOther:reasonData.reasonOther
+  };
 
   if (isSessionPlay()) {
     try {
       await window.ClassroomSessionAPI.submitResponse({
         taskIndex:0, stageKey:`layer-${stage}`, mode:"layered-deliberation",
-        selectedType:choice, payload:{reason,needToKnow}
+        selectedType:choice, payload
       });
       await syncDeliberationState(false);
       showToast("本層判斷已提交");
@@ -676,7 +827,7 @@ async function submitDeliberationAnswer() {
   deliberationLocalResponses=deliberationLocalResponses.filter(item=>item.stage_key!==`layer-${stage}`);
   deliberationLocalResponses.push({
     mode:"layered-deliberation",stage_key:`layer-${stage}`,selected_type:choice,
-    payload:{reason,needToKnow},submitted_at:new Date().toISOString()
+    payload,submitted_at:new Date().toISOString()
   });
   deliberationState.responses=deliberationLocalResponses;
   deliberationState.round_state="published";
@@ -743,6 +894,9 @@ function previewNextDeliberationLayer() {
   deliberationState.deliberation.anonymous_reasons=[];
   deliberationState.deliberation.reflection=null;
   deliberationSelectedChoice="";
+  deliberationSelectedReasons=new Set();
+  deliberationReasonOtherSelected=false;
+  deliberationReasonOtherText="";
   renderDeliberationState();
 }
 
@@ -1790,6 +1944,9 @@ function restart() {
   clearInterval(openPollTimer);
   clearInterval(deliberationPollTimer);
   deliberationSelectedChoice="";
+  deliberationSelectedReasons=new Set();
+  deliberationReasonOtherSelected=false;
+  deliberationReasonOtherText="";
   deliberationState=null;
   deliberationLocalResponses=[];
   renderCase();

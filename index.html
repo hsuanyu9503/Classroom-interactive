@@ -19,7 +19,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.13.1</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.14.0</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -477,12 +477,33 @@
               </select>
               <small class="field-help">教師端、學生公布結果與全班投影會使用這個圖表類型。</small>
             </label>
+            <label class="field">
+              <span>理由作答方式</span>
+              <select id="deliberationReasonMode">
+                <option value="text">自由填寫</option>
+                <option value="choices">勾選預設理由（可複選）</option>
+              </select>
+              <small class="field-help">勾選模式會另外提供「其他」讓學生自行補充。</small>
+            </label>
             <div class="field deliberation-required-settings">
-              <span>本層文字回答</span>
+              <span>本層回答要求</span>
               <label class="mini-check"><input id="deliberationReasonRequired" type="checkbox" checked><span>「我的理由」必填</span></label>
               <label class="mini-check"><input id="deliberationNeedRequired" type="checkbox"><span>「我還需要知道什麼」必填</span></label>
-              <small class="field-help">判斷選項本身仍固定必選；只有文字欄位可調整必填狀態。</small>
+              <small class="field-help">判斷選項本身固定必選；理由與補充資訊可分別設定是否必填。</small>
             </div>
+          </div>
+
+          <div id="deliberationReasonChoicesSettings" class="deliberation-reason-choices-settings hidden">
+            <div class="mode-a-config-head">
+              <div>
+                <span class="section-kicker">REASON CHOICES</span>
+                <h4>預設理由</h4>
+                <p>學生可複選；系統會自動在最後提供「其他」＋文字輸入，不需要在這裡另外建立。</p>
+              </div>
+              <button id="addDeliberationReasonChoiceBtn" class="btn btn-secondary" type="button">＋ 新增理由</button>
+            </div>
+            <div id="deliberationReasonChoicesEditor" class="deliberation-reason-choices-editor"></div>
+            <small class="field-help">至少設定 1 個預設理由，最多 12 個。</small>
           </div>
         </section>
         <div id="deliberationLayersEditor" class="deliberation-layers-editor"></div>

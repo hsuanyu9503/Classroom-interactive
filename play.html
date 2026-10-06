@@ -213,7 +213,23 @@
               <div><h3 id="deliberationFixedQuestionText">就目前資訊，你怎麼判斷？</h3><p id="deliberationLayerQuestionText"></p></div>
             </div>
             <div id="deliberationChoiceGrid" class="deliberation-choice-grid"></div>
-            <label class="field"><span>我的理由 <small id="deliberationReasonRequirement">必填</small></span><textarea id="deliberationReasonInput" rows="4" placeholder="本層最影響我的資訊是＿＿，因為＿＿。"></textarea></label>
+
+            <label id="deliberationReasonTextField" class="field">
+              <span>我的理由 <small id="deliberationReasonRequirement">必填</small></span>
+              <textarea id="deliberationReasonInput" rows="4" placeholder="本層最影響我的資訊是＿＿，因為＿＿。"></textarea>
+            </label>
+
+            <div id="deliberationReasonChoiceField" class="field hidden">
+              <span>我的理由 <small id="deliberationReasonChoiceRequirement">必填</small></span>
+              <div id="deliberationReasonChoiceGrid" class="deliberation-reason-choice-grid"></div>
+              <label class="deliberation-reason-choice deliberation-reason-other-choice">
+                <input id="deliberationReasonOtherCheck" type="checkbox">
+                <span>其他</span>
+              </label>
+              <textarea id="deliberationReasonOtherInput" class="hidden" rows="3" placeholder="請填寫其他理由"></textarea>
+              <small class="field-help">可複選；若都不符合，可以勾選「其他」再自行填寫。</small>
+            </div>
+
             <label class="field"><span>我還需要知道什麼？ <small id="deliberationNeedRequirement">選填</small></span><textarea id="deliberationNeedInput" rows="3" placeholder="如果還需要更多資訊，可以寫在這裡。"></textarea></label>
             <div class="classification-step-footer"><span id="deliberationSubmitHint">答案沒有對錯，請留下你此刻真正的判斷。</span><button id="submitDeliberationBtn" class="btn btn-primary" type="button">提交本層判斷</button></div>
           </section>
