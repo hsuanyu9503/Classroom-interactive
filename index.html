@@ -20,7 +20,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.15.3</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.17.2</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -798,7 +798,7 @@
               </div>
             </div>
             <div class="progressive-distribution">
-              <span class="summary-label">本層分類分布</span>
+              <span class="summary-label">即時統計</span>
               <div id="teacherStageDistribution" class="stage-distribution-list"></div>
             </div>
           </div>
@@ -825,7 +825,7 @@
             </div>
 
             <div class="open-distribution-panel">
-              <span class="summary-label">目前分類分布</span>
+              <span class="summary-label">即時統計</span>
               <div id="openClassificationDistribution" class="stage-distribution-list"></div>
             </div>
           </div>
@@ -862,9 +862,21 @@
               </div>
             </div>
             <div class="deliberation-results-panel">
-              <span class="summary-label">本層判斷分布（教師可隨時查看）</span>
+              <span class="summary-label">本層即時統計</span>
               <div id="deliberationTeacherDistribution" class="stage-distribution-list"></div>
-              <span class="summary-label deliberation-reason-heading">匿名理由（可控制是否公開）</span>
+              <div class="deliberation-reason-head-row">
+                <div>
+                  <span class="summary-label deliberation-reason-heading">學生理由（可控制是否公開）</span>
+                  <small>匿名設定只影響教師檢視頁；學生結果與投影仍維持匿名。</small>
+                </div>
+                <label class="reason-identity-control" for="deliberationReasonIdentityMode">
+                  <span>理由顯示</span>
+                  <select id="deliberationReasonIdentityMode">
+                    <option value="anonymous">匿名</option>
+                    <option value="named">顯示學生</option>
+                  </select>
+                </label>
+              </div>
               <div id="deliberationTeacherReasons" class="deliberation-reason-list"></div>
             </div>
           </div>
@@ -880,6 +892,25 @@
           </div>
           <div id="sessionParticipantList" class="session-participant-list">
             <div class="empty-v15">還沒有學生加入。</div>
+          </div>
+
+          <div class="student-inspector">
+            <div class="student-inspector-head">
+              <div>
+                <span class="summary-label">個別學生檢視</span>
+                <strong>查看特定學生的選項與理由</strong>
+                <small>僅教師端可見，不會同步到學生或投影畫面。</small>
+              </div>
+              <label class="student-inspector-select-wrap" for="studentInspectSelect">
+                <span>選擇學生</span>
+                <select id="studentInspectSelect">
+                  <option value="">請選擇學生</option>
+                </select>
+              </label>
+            </div>
+            <div id="studentInspectDetail" class="student-inspector-detail">
+              <div class="empty-v15">選擇一位學生後，即可查看他的作答選項、依據與理由。</div>
+            </div>
           </div>
         </section>
       </section>

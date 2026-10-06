@@ -1,4 +1,4 @@
-/* V2.11.0 | Teacher Session + charted deliberation statistics */
+/* V2.17.2 | Teacher Session + student inspector + reason identity controls */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -15,6 +15,46 @@
   let deliberationPresentationWindow = null;
   let deliberationPresentationChannel = null;
   let deliberationPresentationSessionId = "";
+  let inspectedParticipantId = "";
+  let deliberationReasonIdentityMode = (()=>{
+    try { return localStorage.getItem("classroom-deliberation-reason-identity") === "named" ? "named" : "anonymous"; } catch { return "anonymous"; }
+  })();
+  const liveStatsShown = new Map();
+  const LIVE_STATS_PALETTE=["#3b6fb6","#e38b2c","#2f8f66","#8a5db7","#d65b5b","#2b9cb3","#c59a2b","#c35a8a","#61758a","#8a6846"];
+
+  function stableLiveStatColor(value,fallbackIndex=0) {
+    const text=String(value ?? "").trim();
+    let paletteIndex=Math.abs(Number(fallbackIndex)||0)%LIVE_STATS_PALETTE.length;
+
+    // V2.17.2：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
+    // 這可保證 Realtime 更新、新選項首次出現或學生改答案時，既有選項永遠不換色。
+    if (/^\d+$/.test(text)) {
+      paletteIndex=Number(text)%LIVE_STATS_PALETTE.length;
+    } else if (text) {
+      let hash=2166136261;
+      for (let i=0;i<text.length;i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash,16777619);
+      }
+      paletteIndex=(hash>>>0)%LIVE_STATS_PALETTE.length;
+    }
+    return LIVE_STATS_PALETTE[paletteIndex];
+  }
+
+  function collectLiveClassificationEntries(responses=[]) {
+    const grouped=new Map();
+    responses.forEach(response=>{
+      const label=String(response?.payload?.selectedTypeName || response?.selected_type || "未命名分類").trim() || "未命名分類";
+      const id=String(response?.selected_type || label).trim() || label;
+      const current=grouped.get(id) || {id,label,count:0};
+      current.count += 1;
+      if ((!current.label || current.label==="未命名分類") && label) current.label=label;
+      grouped.set(id,current);
+    });
+    return [...grouped.values()]
+      .sort((a,b)=>a.label.localeCompare(b.label,"zh-Hant") || a.id.localeCompare(b.id,"zh-Hant"))
+      .map((item,index)=>({...item,order:index,color:stableLiveStatColor(item.id,index)}));
+  }
 
   function setTeacherRealtimeStatus(status, detail = "") {
     const badge = $("sessionRealtimeStatus");
@@ -960,6 +1000,7 @@
       latestTeacherSnapshot = snapshot;
       window.ClassroomSessionAPI.updateTeacherHistory?.(activeSession,snapshot);
       renderParticipants(snapshot.participants || [],snapshot.responses || [],snapshot.progress || []);
+      renderStudentInspector(snapshot);
       await renderCourseControl(snapshot);
       renderProgressiveControl(snapshot);
       renderOpenClassificationControl(snapshot);
@@ -989,17 +1030,33 @@
 
   function renderParticipants(participants,responses=[],progress=[]) {
     const list = $("sessionParticipantList");
+    const select = $("studentInspectSelect");
     list.innerHTML = "";
-    if (!participants.length) {
+    const sorted=participants.slice().sort((a,b)=>String(a.student_code).localeCompare(String(b.student_code),"zh-Hant",{numeric:true}));
+
+    if (select) {
+      const previous=inspectedParticipantId || select.value || "";
+      select.innerHTML='<option value="">請選擇學生</option>';
+      sorted.forEach(participant=>{
+        const option=document.createElement("option");
+        option.value=participant.id;
+        option.textContent=participant.student_code || "未命名學生";
+        select.appendChild(option);
+      });
+      inspectedParticipantId=sorted.some(p=>p.id===previous) ? previous : "";
+      select.value=inspectedParticipantId;
+    }
+
+    if (!sorted.length) {
       list.innerHTML = '<div class="empty-v15">還沒有學生加入。</div>';
+      inspectedParticipantId="";
       return;
     }
 
-    participants.slice()
-      .sort((a,b)=>String(a.student_code).localeCompare(String(b.student_code),"zh-Hant",{numeric:true}))
-      .forEach(participant=>{
+    sorted.forEach(participant=>{
         const row = document.createElement("div");
         row.className = "session-participant-row";
+        const inspectButton=`<button class="participant-inspect-btn" type="button" data-participant-id="${escapeHtml(participant.id)}">檢視</button>`;
         if (activeSession?.sessionKind === "course") {
           const currentDone = progress.some(item =>
             item.participant_id === participant.id &&
@@ -1016,7 +1073,7 @@
               <strong>${currentDone ? "✓ 已完成目前步驟" : "進行中"}</strong>
               <small>加入：${formatTime(participant.joined_at)} · 已完成 ${completedTotal} 個節點</small>
             </div>
-            <span class="participant-response-count">${currentDone ? "✓" : "…"}</span>`;
+            <div class="participant-row-actions"><span class="participant-response-count">${currentDone ? "✓" : "…"}</span>${inspectButton}</div>`;
         } else {
           row.innerHTML = `
             <div class="participant-seat">${escapeHtml(participant.student_code)}</div>
@@ -1027,10 +1084,125 @@
               ${activeSession?.activityMode === "open-classification" ? `<div class="participant-judgement-history">${buildOpenParticipantHistory(participant.id,responses)}</div>` : ""}
               ${activeSession?.activityMode === "layered-deliberation" ? `<div class="participant-judgement-history">${buildDeliberationParticipantHistory(participant.id,responses)}</div>` : ""}
             </div>
-            <span class="participant-response-count">${participant.response_count || 0} 筆</span>`;
+            <div class="participant-row-actions"><span class="participant-response-count">${participant.response_count || 0} 筆</span>${inspectButton}</div>`;
         }
+        row.querySelector(".participant-inspect-btn")?.addEventListener("click",()=>selectStudentForInspection(participant.id));
         list.appendChild(row);
       });
+  }
+
+  function selectStudentForInspection(participantId) {
+    inspectedParticipantId=String(participantId || "");
+    const select=$("studentInspectSelect");
+    if (select) select.value=inspectedParticipantId;
+    if (latestTeacherSnapshot) renderStudentInspector(latestTeacherSnapshot);
+    $("studentInspectDetail")?.scrollIntoView({behavior:"smooth",block:"nearest"});
+  }
+
+  function responseModeLabel(mode) {
+    return ({
+      "drag-reveal":"選擇與揭示",
+      "open-tags":"特徵選擇",
+      "element-type":"依據與分類",
+      "progressive-reveal":"逐步揭露",
+      "open-classification":"討論後再判斷",
+      "layered-deliberation":"逐層思辨"
+    })[mode] || mode || "作答";
+  }
+
+  function responseStageLabel(response) {
+    const key=String(response?.stage_key || "");
+    if (key==="initial") return "初次判斷";
+    if (key==="final" && response?.mode === "open-classification") return "最終判斷";
+    if (key==="final") return `第 ${Number(response?.task_index || 0)+1} 題`;
+    if (key==="reflection") return "課後反思";
+    let match=key.match(/^clue-(\d+)$/); if (match) return `第 ${match[1]} 層`;
+    match=key.match(/^layer-(\d+)-post$/); if (match) return `第 ${match[1]} 層・討論後補記`;
+    match=key.match(/^layer-(\d+)$/); if (match) return `第 ${match[1]} 層`;
+    return key && key!=="final" ? key : `第 ${Number(response?.task_index || 0)+1} 題`;
+  }
+
+  function responseSelectedTypeLabel(response,snapshot) {
+    const code=String(response?.selected_type || "").trim();
+    if (!code) return "";
+    if (response?.mode === "layered-deliberation") {
+      const label=deliberationOptionLabel(code,snapshot?.deliberation_data?.o);
+      return label ? `${code} ${label}` : code;
+    }
+    return String(response?.payload?.selectedTypeName || code);
+  }
+
+  function createInspectorLine(label,content,{html=false}={}) {
+    if (content===undefined || content===null || content==="" || (Array.isArray(content)&&!content.length)) return null;
+    const row=document.createElement("div");row.className="student-response-detail-line";
+    const key=document.createElement("span");key.textContent=label;
+    const value=document.createElement("div");
+    if (html) value.innerHTML=content; else value.textContent=String(content);
+    row.append(key,value);return row;
+  }
+
+  function chipListHtml(values) {
+    return `<div class="student-response-chip-list">${values.map(value=>`<span class="student-response-chip">${escapeHtml(String(value))}</span>`).join("")}</div>`;
+  }
+
+  function renderStudentInspector(snapshot) {
+    const detail=$("studentInspectDetail");
+    if (!detail) return;
+    const participants=snapshot?.participants || [];
+    const participant=participants.find(item=>item.id===inspectedParticipantId);
+    if (!participant) {
+      detail.innerHTML='<div class="empty-v15">選擇一位學生後，即可查看他的作答選項、依據與理由。</div>';
+      return;
+    }
+
+    const responses=(snapshot?.responses || [])
+      .filter(item=>item.participant_id===participant.id)
+      .slice().sort((a,b)=>new Date(a.submitted_at||0)-new Date(b.submitted_at||0));
+    detail.innerHTML="";
+    const summary=document.createElement("div");summary.className="student-inspector-summary";
+    summary.innerHTML=`<strong>${escapeHtml(participant.student_code || "未命名學生")}</strong><span>${responses.length} 筆作答</span><span>加入：${escapeHtml(formatTime(participant.joined_at))}</span>`;
+    detail.appendChild(summary);
+
+    if (!responses.length) {
+      detail.insertAdjacentHTML("beforeend",'<div class="empty-v15">這位學生目前還沒有作答紀錄。</div>');
+      return;
+    }
+
+    responses.forEach(response=>{
+      const card=document.createElement("div");card.className="student-response-detail-card";
+      const head=document.createElement("div");head.className="student-response-detail-head";
+      head.innerHTML=`<strong>${escapeHtml(responseModeLabel(response.mode))} · ${escapeHtml(responseStageLabel(response))}</strong><small>${escapeHtml(formatTime(response.submitted_at))}</small>`;
+      const body=document.createElement("div");body.className="student-response-detail-body";
+
+      const selectedType=responseSelectedTypeLabel(response,snapshot);
+      const selectedElements=Array.isArray(response.payload?.elementNames) && response.payload.elementNames.length
+        ? response.payload.elementNames
+        : Array.isArray(response.selected_elements) ? response.selected_elements : [];
+      const selectedLabels=Array.isArray(response.payload?.selectedLabels) ? response.payload.selectedLabels : [];
+      const selectionRows=[];
+      if (response.mode === "open-tags") {
+        selectionRows.push(createInspectorLine("選取標籤",selectedLabels.length ? chipListHtml(selectedLabels) : "",{html:true}));
+      } else if (response.mode === "drag-reveal") {
+        selectionRows.push(createInspectorLine("選取項目",selectedElements.length ? chipListHtml(selectedElements) : "",{html:true}));
+      } else {
+        selectionRows.push(createInspectorLine("選取依據",selectedElements.length ? chipListHtml(selectedElements) : "",{html:true}));
+      }
+      const rows=[
+        createInspectorLine("選項／分類",selectedType),
+        ...selectionRows,
+        createInspectorLine("理由",response.payload?.reason ? `<div class="student-response-reason">${escapeHtml(response.payload.reason)}</div>` : "",{html:true}),
+        createInspectorLine("改變原因",response.payload?.changeReason ? `<div class="student-response-reason">${escapeHtml(response.payload.changeReason)}</div>` : "",{html:true}),
+        createInspectorLine("還想知道",response.payload?.needToKnow),
+        createInspectorLine("討論後補記",response.payload?.note),
+        createInspectorLine("關鍵理解",response.payload?.key),
+        createInspectorLine("價值判斷",response.payload?.value),
+        createInspectorLine("行動選擇",response.payload?.action),
+        createInspectorLine("延伸思考",response.payload?.extension)
+      ].filter(Boolean);
+      rows.forEach(row=>body.appendChild(row));
+      if (!rows.length) body.innerHTML='<div class="empty-v15">這筆作答沒有額外的選項或理由文字。</div>';
+      card.append(head,body);detail.appendChild(card);
+    });
   }
 
   async function renderCourseControl(snapshot) {
@@ -1210,52 +1382,28 @@
     }).join("");
   }
 
-  function renderDeliberationDistribution(list,responses,chartType="bar",options=null) {
+  function renderDeliberationDistribution(list,responses,chartType="bar",options=null,{key="deliberation",totalParticipants=0}={}) {
     if (!list) return;
-    list.innerHTML="";
     const normalized=normalizeTeacherDeliberationOptions(options);
     const counts=new Map(normalized.map(option=>[option.id,0]));
     responses.forEach(r=>{
-      const key=String(r.selected_type || "");
-      if (counts.has(key)) counts.set(key,counts.get(key)+1);
+      const id=String(r.selected_type || "");
+      if (counts.has(id)) counts.set(id,counts.get(id)+1);
     });
-    const total=[...counts.values()].reduce((a,b)=>a+b,0);
-    if (!total) {
-      list.innerHTML='<div class="empty-v15">本層還沒有學生提交。</div>';
-      return;
-    }
-    list.classList.toggle("answer-chart-pie-mode",chartType==="pie");
-    const palette=["#3b6fb6","#e38b2c","#2f8f66","#8a5db7","#d65b5b","#2b9cb3","#c59a2b","#c35a8a","#61758a","#8a6846"];
+    const entries=normalized.map((option,index)=>({
+      id:option.id,
+      label:`${option.id} ${option.label}`,
+      count:counts.get(option.id)||0,
+      order:index,
+      color:LIVE_STATS_PALETTE[index%LIVE_STATS_PALETTE.length]
+    }));
     if (chartType === "pie") {
-      let cursor=0;const slices=[];
-      normalized.forEach((option,index)=>{
-        const count=counts.get(option.id)||0;
-        const start=cursor;
-        cursor+=count/total*100;
-        slices.push(`${palette[index%palette.length]} ${start}% ${cursor}%`);
-      });
-      const wrap=document.createElement("div");wrap.className="answer-pie-layout";
-      const pie=document.createElement("div");pie.className="answer-pie";pie.style.background=`conic-gradient(${slices.join(",")})`;
-      pie.innerHTML=`<div><strong>${total}</strong><span>份回答</span></div>`;
-      const legend=document.createElement("div");legend.className="answer-pie-legend";
-      normalized.forEach((option,index)=>{
-        const count=counts.get(option.id)||0;
-        const item=document.createElement("div");
-        item.innerHTML=`<i style="--legend-color:${palette[index%palette.length]}"></i><span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><strong>${count}</strong><small>${Math.round(count/total*100)}%</small>`;
-        legend.appendChild(item);
-      });
-      wrap.append(pie,legend);list.appendChild(wrap);return;
+      renderLivePieStats(list,entries,{key,totalParticipants,emptyText:"本層還沒有學生提交。"});
+    } else {
+      renderLiveBarStats(list,entries,{key,totalParticipants,emptyText:"本層還沒有學生提交。"});
     }
-    const max=Math.max(...counts.values(),1);
-    normalized.forEach((option,index)=>{
-      const count=counts.get(option.id)||0;
-      const row=document.createElement("div");row.className="stage-distribution-row answer-bar-row";
-      const pct=Math.round(count/total*100);
-      const color=palette[index%palette.length];
-      row.innerHTML=`<span><b>${escapeHtml(option.id)}</b> ${escapeHtml(option.label)}</span><div><i style="width:${count ? Math.max(6,(count/max)*100) : 0}%;background:${color}"></i></div><strong>${count}<small>${pct}%</small></strong>`;
-      list.appendChild(row);
-    });
   }
+
 
 
   function renderDeliberationControl(snapshot) {
@@ -1300,7 +1448,11 @@
       $("deliberationTeacherDistribution"),
       current,
       data.chart === "pie" ? "pie" : "bar",
-      data.o
+      data.o,
+      {
+        key:`deliberation:${activeSession?.id || "session"}:${stage}`,
+        totalParticipants:snapshot.participant_count || 0
+      }
     );
     const reasons=$("deliberationTeacherReasons");
     reasons.innerHTML="";
@@ -1315,7 +1467,11 @@
       text.textContent=String(response.payload?.reason || "").trim();
       content.appendChild(text);
       const meta=document.createElement("small");
-      meta.textContent=response.is_hidden ? "🙈 已隱藏：學生結果與投影不顯示" : "👁 目前會在公布結果中匿名顯示";
+      const identity=document.createElement("span");
+      identity.className="moderation-reason-identity";
+      identity.textContent=deliberationReasonIdentityMode==="named" ? (response.student_code || "未命名學生") : "匿名學生";
+      meta.appendChild(identity);
+      meta.appendChild(document.createTextNode(response.is_hidden ? "🙈 已隱藏：學生結果與投影不顯示" : "👁 目前會在公布結果中匿名顯示"));
       content.appendChild(meta);
       item.appendChild(content);
       const button=document.createElement("button");
@@ -1474,6 +1630,152 @@
     }
   }
 
+  function liveStatsIsShown(key) {
+    return liveStatsShown.has(key) ? liveStatsShown.get(key) : false;
+  }
+
+  function ensureLiveStatsShell(list,key,answered,totalParticipants) {
+    list.classList.add("live-stats-list");
+    list._liveStatsKey=key;
+    let toolbar=list.querySelector(":scope > .live-stats-toolbar");
+    if (!toolbar) {
+      toolbar=document.createElement("div");
+      toolbar.className="live-stats-toolbar";
+      toolbar.innerHTML=`
+        <div class="live-stats-status"><span class="live-dot"></span><strong>LIVE</strong><span class="live-stats-count"></span></div>
+        <button class="btn btn-secondary live-stats-toggle" type="button"></button>`;
+      list.prepend(toolbar);
+      toolbar.querySelector(".live-stats-toggle").addEventListener("click",()=>{
+        const currentKey=list._liveStatsKey || key;
+        liveStatsShown.set(currentKey,!liveStatsIsShown(currentKey));
+        list._rerenderLiveStats?.();
+      });
+    }
+    toolbar.querySelector(".live-stats-count").textContent=`已回答 ${answered} / ${Number(totalParticipants)||0}`;
+    const shown=liveStatsIsShown(key);
+    const button=toolbar.querySelector(".live-stats-toggle");
+    button.textContent=shown ? "🙈 隱藏結果" : "✨ 公布結果";
+    button.classList.toggle("live-stats-reveal",!shown);
+    return shown;
+  }
+
+  function renderLiveBarStats(list,entries,{key,totalParticipants=0,emptyText="目前還沒有學生提交。"}={}) {
+    if (!list) return;
+    const normalized=(entries || []).map((entry,index)=>({
+      id:String(entry.id ?? entry.label ?? index),
+      label:String(entry.label ?? entry.id ?? "未命名選項"),
+      count:Math.max(0,Number(entry.count)||0),
+      order:Number.isFinite(Number(entry.order)) ? Number(entry.order) : index,
+      color:entry.color || stableLiveStatColor(entry.id || entry.label,index)
+    }));
+    const answered=normalized.reduce((sum,item)=>sum+item.count,0);
+    list._rerenderLiveStats=()=>renderLiveBarStats(list,normalized,{key,totalParticipants,emptyText});
+    const shown=ensureLiveStatsShell(list,key,answered,totalParticipants);
+
+    let body=list.querySelector(":scope > .live-stats-body");
+    if (!body) {
+      body=document.createElement("div");
+      body.className="live-stats-body";
+      list.appendChild(body);
+    }
+    body.classList.toggle("results-hidden",!shown);
+
+    const oldPositions=new Map();
+    body.querySelectorAll(".live-stat-row").forEach(row=>oldPositions.set(row.dataset.statId,row.getBoundingClientRect().top));
+    const existing=new Map([...body.querySelectorAll(".live-stat-row")].map(row=>[row.dataset.statId,row]));
+    body.querySelector(":scope > .live-stats-empty")?.remove();
+
+    if (!normalized.length || !answered) {
+      existing.forEach(row=>row.remove());
+      const empty=document.createElement("div");
+      empty.className="empty-v15 live-stats-empty";
+      empty.textContent=emptyText;
+      body.appendChild(empty);
+      return;
+    }
+
+    const max=Math.max(...normalized.map(item=>item.count),1);
+    const sorted=normalized.slice().sort((a,b)=>b.count-a.count || a.order-b.order);
+    const keep=new Set(sorted.map(item=>item.id));
+    existing.forEach((row,id)=>{ if(!keep.has(id)) row.remove(); });
+
+    sorted.forEach(item=>{
+      let row=existing.get(item.id);
+      const isNew=!row;
+      if (!row) {
+        row=document.createElement("div");
+        row.className="stage-distribution-row answer-bar-row live-stat-row";
+        row.dataset.statId=item.id;
+        row.innerHTML=`<span class="live-stat-label"></span><div class="live-stat-track"><i></i></div><strong><span class="live-stat-number">0</span><small>0%</small></strong>`;
+      }
+      const previousCount=Number(row.dataset.count || 0);
+      row.dataset.count=String(item.count);
+      row.querySelector(".live-stat-label").textContent=item.label;
+      const number=row.querySelector(".live-stat-number");
+      const pct=Math.round(item.count/answered*100);
+      number.textContent=shown ? String(item.count) : "—";
+      row.querySelector("strong small").textContent=shown ? `${pct}%` : "隱藏";
+      const fill=row.querySelector(".live-stat-track i");
+      fill.style.background=item.color;
+      const target=shown && item.count ? Math.max(6,(item.count/max)*100) : 0;
+      if (isNew || !shown) fill.style.width="0%";
+      body.appendChild(row);
+      requestAnimationFrame(()=>{ fill.style.width=`${target}%`; });
+      if (!isNew && previousCount!==item.count) {
+        row.classList.remove("live-stat-updated");
+        void row.offsetWidth;
+        row.classList.add("live-stat-updated");
+        setTimeout(()=>row.classList.remove("live-stat-updated"),520);
+      }
+    });
+
+    requestAnimationFrame(()=>{
+      body.querySelectorAll(".live-stat-row").forEach(row=>{
+        const oldTop=oldPositions.get(row.dataset.statId);
+        if (oldTop===undefined) return;
+        const delta=oldTop-row.getBoundingClientRect().top;
+        if (Math.abs(delta)<1) return;
+        row.style.transition="none";
+        row.style.transform=`translateY(${delta}px)`;
+        requestAnimationFrame(()=>{
+          row.style.transition="transform .42s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease";
+          row.style.transform="translateY(0)";
+        });
+      });
+    });
+  }
+
+  function renderLivePieStats(list,entries,{key,totalParticipants=0,emptyText="目前還沒有學生提交。"}={}) {
+    if (!list) return;
+    const normalized=(entries || []).map((entry,index)=>({
+      id:String(entry.id ?? entry.label ?? index),label:String(entry.label ?? entry.id ?? "未命名選項"),
+      count:Math.max(0,Number(entry.count)||0),order:index,color:entry.color || stableLiveStatColor(entry.id || entry.label,index)
+    }));
+    const answered=normalized.reduce((sum,item)=>sum+item.count,0);
+    list._rerenderLiveStats=()=>renderLivePieStats(list,normalized,{key,totalParticipants,emptyText});
+    const shown=ensureLiveStatsShell(list,key,answered,totalParticipants);
+    let body=list.querySelector(":scope > .live-stats-body");
+    if (!body) { body=document.createElement("div");body.className="live-stats-body";list.appendChild(body); }
+    body.classList.toggle("results-hidden",!shown);
+    body.innerHTML="";
+    if (!answered) { body.innerHTML=`<div class="empty-v15 live-stats-empty">${escapeHtml(emptyText)}</div>`;return; }
+    let cursor=0;const slices=[];
+    normalized.forEach(item=>{const start=cursor;cursor+=item.count/answered*100;slices.push(`${item.color} ${start}% ${cursor}%`);});
+    const wrap=document.createElement("div");wrap.className="answer-pie-layout live-pie-layout";
+    const pie=document.createElement("div");pie.className="answer-pie live-answer-pie";
+    pie.style.background=shown ? `conic-gradient(${slices.join(",")})` : "conic-gradient(#e7eaf0 0 100%)";
+    pie.innerHTML=`<div><strong>${shown?answered:"—"}</strong><span>${shown?"份回答":"結果隱藏"}</span></div>`;
+    const legend=document.createElement("div");legend.className="answer-pie-legend";
+    normalized.slice().sort((a,b)=>b.count-a.count || a.order-b.order).forEach(item=>{
+      const pct=Math.round(item.count/answered*100);
+      const node=document.createElement("div");
+      node.innerHTML=`<i style="--legend-color:${item.color}"></i><span>${escapeHtml(item.label)}</span><strong>${shown?item.count:"—"}</strong><small>${shown?pct+"%":"隱藏"}</small>`;
+      legend.appendChild(node);
+    });
+    wrap.append(pie,legend);body.appendChild(wrap);
+    if (shown) { requestAnimationFrame(()=>wrap.classList.add("live-stats-revealed")); }
+  }
+
   function renderProgressiveControl(snapshot) {
     const panel = $("progressiveSessionControl");
     if (!panel || activeSession?.activityMode !== "progressive-reveal" || activeSession.status === "closed") {
@@ -1495,45 +1797,19 @@
     $("nextStageBtn").disabled = stage >= total;
     $("nextStageBtn").textContent = stage >= total ? "已公開全部資訊" : "公開下一項資訊 →";
 
-    const counts = new Map();
-    currentResponses.forEach(r=>{
-      const name = r.payload?.selectedTypeName || r.selected_type || "未命名分類";
-      counts.set(name,(counts.get(name)||0)+1);
-    });
-    const list = $("teacherStageDistribution");
-    list.innerHTML = "";
-    if (!counts.size) {
-      list.innerHTML = '<div class="empty-v15">這一層還沒有學生提交。</div>';
-      return;
-    }
-    const max = Math.max(...counts.values());
-    [...counts.entries()].sort((a,b)=>b[1]-a[1]).forEach(([name,count])=>{
-      const row=document.createElement("div");
-      row.className="stage-distribution-row";
-      row.innerHTML=`<span>${escapeHtml(name)}</span><div><i style="width:${Math.max(8,(count/max)*100)}%"></i></div><strong>${count}</strong>`;
-      list.appendChild(row);
+    renderLiveBarStats($("teacherStageDistribution"),collectLiveClassificationEntries(currentResponses),{
+      key:`progressive:${activeSession?.id || "session"}:${stage}`,
+      totalParticipants:snapshot.participant_count || 0,
+      emptyText:"這一層還沒有學生提交。"
     });
   }
 
-  function renderOpenDistribution(list,responses) {
-    list.innerHTML="";
-    const counts=new Map();
-    responses.forEach(r=>{
-      const name=r.payload?.selectedTypeName || r.selected_type || "未命名分類";
-      counts.set(name,(counts.get(name)||0)+1);
-    });
-    if (!counts.size) {
-      list.innerHTML='<div class="empty-v15">這個階段還沒有學生提交。</div>';
-      return;
-    }
-    const max=Math.max(...counts.values());
-    [...counts.entries()].sort((a,b)=>b[1]-a[1]).forEach(([name,count])=>{
-      const row=document.createElement("div");
-      row.className="stage-distribution-row";
-      row.innerHTML=`<span>${escapeHtml(name)}</span><div><i style="width:${Math.max(8,(count/max)*100)}%"></i></div><strong>${count}</strong>`;
-      list.appendChild(row);
+  function renderOpenDistribution(list,responses,{key="open",totalParticipants=0}={}) {
+    renderLiveBarStats(list,collectLiveClassificationEntries(responses),{
+      key,totalParticipants,emptyText:"這個階段還沒有學生提交。"
     });
   }
+
 
   function renderOpenClassificationControl(snapshot) {
     const panel=$("openClassificationSessionControl");
@@ -1560,7 +1836,10 @@
     $("openNextPhaseBtn").textContent=stage>=(snapshot.stage_count||1)
       ?((snapshot.stage_count||1)>1?"已開放重新判斷":"本活動只有一次判斷")
       :"開放重新判斷 →";
-    renderOpenDistribution($("openClassificationDistribution"),current);
+    renderOpenDistribution($("openClassificationDistribution"),current,{
+      key:`open-classification:${activeSession?.id || "session"}:${stageKey}`,
+      totalParticipants:snapshot.participant_count || 0
+    });
 
     const finals=responses.filter(r=>r.stage_key==="final");
     const summary=$("openChangeSummary");
@@ -1857,6 +2136,18 @@
   $("deliberationPublishBtn")?.addEventListener("click",()=>setDeliberationRound("published"));
   $("openDeliberationPresentationBtn")?.addEventListener("click",openDeliberationPresentation);
   $("deliberationNextBtn")?.addEventListener("click",nextDeliberationLayer);
+  $("studentInspectSelect")?.addEventListener("change",event=>{
+    inspectedParticipantId=String(event.target.value || "");
+    if (latestTeacherSnapshot) renderStudentInspector(latestTeacherSnapshot);
+  });
+  if ($("deliberationReasonIdentityMode")) {
+    $("deliberationReasonIdentityMode").value=deliberationReasonIdentityMode;
+    $("deliberationReasonIdentityMode").addEventListener("change",event=>{
+      deliberationReasonIdentityMode=event.target.value==="named" ? "named" : "anonymous";
+      try { localStorage.setItem("classroom-deliberation-reason-identity",deliberationReasonIdentityMode); } catch {}
+      if (latestTeacherSnapshot) renderDeliberationControl(latestTeacherSnapshot);
+    });
+  }
 
   window.addEventListener("beforeunload",()=>{
     clearInterval(refreshTimer);

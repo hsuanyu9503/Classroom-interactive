@@ -1687,10 +1687,17 @@ function submitElementType() {
   renderResultType("studentTypeResult", task.types.find(type => type.i === modeASelectedType));
   renderResultType("referenceTypeResult", task.types.find(type => type.i === task.correctTypeId));
 
+  const elementNames = task.elements
+    .filter(element => modeASelectedElements.has(element.i))
+    .map(element => element.n);
+  const selectedTypeName = task.types.find(type => type.i === modeASelectedType)?.n || modeASelectedType;
+
   recordSessionResponse("element-type", {
     selectedElements: studentElements,
     selectedType: modeASelectedType,
     payload: {
+      elementNames,
+      selectedTypeName,
       exactElements,
       exactType,
       referenceElementIds: task.correctElementIds,

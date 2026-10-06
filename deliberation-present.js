@@ -32,7 +32,7 @@
     if (chartType === "pie") {
       let cursor=0;const slices=[];
       values.forEach(([,count],index)=>{const start=cursor;cursor+=count/total*100;slices.push(`${palette[index%palette.length]} ${start}% ${cursor}%`);});
-      const wrap=document.createElement("div");wrap.className="answer-pie-layout presentation-pie-layout";
+      const wrap=document.createElement("div");wrap.className="answer-pie-layout presentation-pie-layout live-pie-layout";
       const pie=document.createElement("div");pie.className="answer-pie";pie.style.background=`conic-gradient(${slices.join(",")})`;pie.innerHTML=`<div><strong>${total}</strong><span>份回答</span></div>`;
       const legend=document.createElement("div");legend.className="answer-pie-legend";
       values.forEach(([option,count],index)=>{
@@ -50,18 +50,21 @@
         item.append(dot,label,strong,pct);
         legend.appendChild(item);
       });
-      wrap.append(pie,legend);list.appendChild(wrap);return;
+      wrap.append(pie,legend);list.appendChild(wrap);requestAnimationFrame(()=>wrap.classList.add("live-stats-revealed"));return;
     }
-    const max=Math.max(...values.map(([,count])=>count),1);
-    values.forEach(([option,count],index)=>{
+    const ranked=values.slice().sort((a,b)=>b[1]-a[1] || normalized.findIndex(item=>item.id===a[0].id)-normalized.findIndex(item=>item.id===b[0].id));
+    const max=Math.max(...ranked.map(([,count])=>count),1);
+    ranked.forEach(([option,count],index)=>{
       const row=document.createElement("div");row.className="stage-distribution-row answer-bar-row";
       const label=document.createElement("span");label.textContent=`${option.id} ${option.label}`;
       const bar=document.createElement("div");const fill=document.createElement("i");
-      fill.style.width=`${count?Math.max(6,(count/max)*100):0}%`;
-      fill.style.background=palette[index%palette.length];
+      const targetWidth=count?Math.max(6,(count/max)*100):0;
+      fill.style.width="0%";
+      fill.style.background=palette[Math.max(0,normalized.findIndex(item=>item.id===option.id))%palette.length];
       bar.appendChild(fill);
       const strong=document.createElement("strong");strong.innerHTML=`${count}<small>${Math.round(count/total*100)}%</small>`;
       row.append(label,bar,strong);list.appendChild(row);
+      requestAnimationFrame(()=>{fill.style.width=`${targetWidth}%`;});
     });
   }
 
