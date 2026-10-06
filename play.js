@@ -83,7 +83,7 @@ async function decodeActivity(encoded) {
       subtitle:raw.s||"",
       template:"open-classification",
       openClassification:{
-        work:{name:raw.o.w?.n||"未命名作品",showName:raw.o.w?.sh!==false,intro:raw.o.w?.i||"",image:raw.o.w?.img||""},
+        work:{name:raw.o.w?.n||"未命名材料",showName:raw.o.w?.sh!==false,intro:raw.o.w?.i||"",image:raw.o.w?.img||""},
         prompt:raw.o.p||"",
         elements:Array.isArray(raw.o.e)?raw.o.e:[],
         types:Array.isArray(raw.o.y)?raw.o.y:[],
@@ -98,7 +98,7 @@ async function decodeActivity(encoded) {
     return {
       title:raw.t||"", subtitle:raw.s||"", template:"progressive-reveal",
       progressive:{
-        work:{name:raw.g.w?.n||"未命名作品",showName:raw.g.w?.sh!==false,intro:raw.g.w?.i||"",image:raw.g.w?.img||""},
+        work:{name:raw.g.w?.n||"未命名材料",showName:raw.g.w?.sh!==false,intro:raw.g.w?.i||"",image:raw.g.w?.img||""},
         prompt:raw.g.p||"",
         clues:Array.isArray(raw.g.l)?raw.g.l:[],
         types:Array.isArray(raw.g.y)?raw.g.y:[],
@@ -114,7 +114,7 @@ async function decodeActivity(encoded) {
       template: "element-type",
       tasks: raw.x.map(task => ({
         work: {
-          name: task.w?.n || "未命名作品",
+          name: task.w?.n || "未命名材料",
           showName: task.w?.sh !== false,
           intro: task.w?.i || "",
           image: task.w?.img || ""
@@ -373,7 +373,7 @@ function renderWorkMedia(image, name) {
   const img = el("studentWorkImage");
   if (image) {
     img.src = image;
-    img.alt = name ? `${name} 作品圖片` : "作品圖片";
+    img.alt = name ? `${name} 材料圖片` : "材料圖片";
     media.classList.remove("hidden");
   } else {
     img.removeAttribute("src");
@@ -923,13 +923,13 @@ function startDeliberationPolling(interval=1800) {
 function renderProgressiveTask() {
   const task = activity.progressive;
   clearInterval(progressivePollTimer);
-  const displayName = task.work.showName ? task.work.name : "神秘作品";
+  const displayName = task.work.showName ? task.work.name : "未命名材料";
   el("studentCaseTitle").textContent = displayName;
   renderWorkMedia(task.work.image, displayName);
   const intro = el("studentCaseIntro");
   intro.textContent = task.work.intro || "";
   intro.classList.toggle("hidden", !task.work.intro);
-  el("studentCasePrompt").textContent = task.prompt || "每看到一條新線索，就重新判斷這部作品最接近哪一種類型。";
+  el("studentCasePrompt").textContent = task.prompt || "每獲得一項新資訊，就重新判斷目前最合理的答案或分類。";
   el("studentCaseIndex").textContent = "逐層鑑定";
   el("progressiveInteraction").classList.remove("hidden");
   progressiveStageIndex = Math.min(progressiveStageIndex, task.clues.length - 1);
@@ -958,7 +958,7 @@ function hydrateProgressiveHistory(responses = []) {
     return {
       stage,
       typeId:response.selected_type || "",
-      typeName:response.payload?.selectedTypeName || type?.n || "未命名類型",
+      typeName:response.payload?.selectedTypeName || type?.n || "未命名分類",
       clueText:activity?.progressive?.clues?.[stage - 1]?.t || response.payload?.clueText || ""
     };
   }).filter(Boolean);
@@ -974,12 +974,12 @@ function renderProgressiveStage() {
   const currentAnswer = progressiveHistoryEntry(stageNumber);
   const previousAnswer = latestProgressiveHistoryBefore(stageNumber);
   progressiveSelectedType = currentAnswer?.typeId || previousAnswer?.typeId || "";
-  el("progressiveStageKicker").textContent = `線索 ${stageNumber} / ${task.clues.length}`;
+  el("progressiveStageKicker").textContent = `資訊 ${stageNumber} / ${task.clues.length}`;
   el("caseCounter").textContent = `${stageNumber} / ${task.clues.length}`;
   const progress = (stageNumber / task.clues.length) * 100;
   el("progressBar").style.width = `${progress}%`;
   el("progressText").textContent = `${Math.round(progress)}%`;
-  el("lockBadge").textContent = `線索 ${stageNumber}`;
+  el("lockBadge").textContent = `資訊 ${stageNumber}`;
   el("progressiveSyncBadge").textContent = isSessionPlay() ? "📡 教師同步" : "個人預覽";
 
   const list = el("progressiveClueList");
@@ -1019,14 +1019,14 @@ function renderProgressiveStage() {
 async function submitProgressiveJudgement() {
   const task = activity.progressive;
   if (!progressiveSelectedType) {
-    showToast("請先選擇目前最符合的小說類型");
+    showToast("請先選擇目前最合理的分類或答案");
     return;
   }
   const type = task.types.find(item => item.i === progressiveSelectedType);
   const entry = {
     stage:progressiveStageIndex + 1,
     typeId:progressiveSelectedType,
-    typeName:type?.n || "未命名類型",
+    typeName:type?.n || "未命名分類",
     clueText:task.clues[progressiveStageIndex]?.t || ""
   };
   const existing = progressiveHistory.findIndex(item => item.stage === entry.stage);
@@ -1042,7 +1042,7 @@ async function submitProgressiveJudgement() {
   el("progressiveWaitingPanel").classList.remove("hidden");
   const isFinal = progressiveStageIndex >= task.clues.length - 1;
   if (isFinal) {
-    el("progressiveWaitingText").textContent = "所有線索都已完成，來看看你的判斷歷程。";
+    el("progressiveWaitingText").textContent = "所有資訊都已公開，來看看你的判斷歷程。";
     el("selfNextClueBtn").textContent = "查看判斷歷程";
     el("selfNextClueBtn").classList.remove("hidden");
     el("selfNextClueBtn").onclick = showProgressiveResult;
@@ -1050,12 +1050,12 @@ async function submitProgressiveJudgement() {
     return;
   }
   if (isSessionPlay()) {
-    el("progressiveWaitingText").textContent = "等待老師公開下一條線索…";
+    el("progressiveWaitingText").textContent = "等待老師公開下一項資訊…";
     el("selfNextClueBtn").classList.add("hidden");
     startProgressivePolling();
   } else {
     el("progressiveWaitingText").textContent = "這一層已記錄；準備好後可以繼續。";
-    el("selfNextClueBtn").textContent = "公開下一條線索 →";
+    el("selfNextClueBtn").textContent = "公開下一項資訊 →";
     el("selfNextClueBtn").classList.remove("hidden");
     el("selfNextClueBtn").onclick = () => advanceProgressiveLocal();
   }
@@ -1098,7 +1098,7 @@ async function syncProgressiveStageFromSession(initial=false) {
       if (!submittedCurrent) return;
     }
   } catch (error) {
-    console.warn("同步線索階段失敗", error);
+    console.warn("同步資訊階段失敗", error);
   }
 }
 
@@ -1112,13 +1112,13 @@ function showProgressiveResult() {
     const changed = index > 0 && arr[index-1].typeId !== entry.typeId;
     const row = document.createElement("div");
     row.className = `progressive-history-row ${changed ? "changed" : ""}`;
-    row.innerHTML = `<span class="history-stage">線索 ${entry.stage}</span><span class="history-answer">${escapeHtml(entry.typeName)}</span><span class="history-change">${index===0?"第一次判斷":changed?"↗ 改變判斷":"→ 保留判斷"}</span>`;
+    row.innerHTML = `<span class="history-stage">資訊 ${entry.stage}</span><span class="history-answer">${escapeHtml(entry.typeName)}</span><span class="history-change">${index===0?"第一次判斷":changed?"↗ 改變判斷":"→ 保留判斷"}</span>`;
     list.appendChild(row);
   });
   const ref = activity.progressive.types.find(type => type.i === activity.progressive.referenceTypeId);
   const refBox = el("progressiveReferenceResult");
   if (ref) {
-    refBox.innerHTML = `<span class="summary-label">教師參考分類</span><strong>${escapeHtml(ref.ic||"◼")} ${escapeHtml(ref.n)}</strong><p>這是課堂的參考方向；更重要的是回頭說明哪一條線索支持你的判斷。</p>`;
+    refBox.innerHTML = `<span class="summary-label">教師參考分類</span><strong>${escapeHtml(ref.ic||"◼")} ${escapeHtml(ref.n)}</strong><p>這是課堂的參考方向；更重要的是回頭說明哪一項資訊支持你的判斷。</p>`;
     refBox.classList.remove("hidden");
   } else refBox.classList.add("hidden");
   updateProgress(100);
@@ -1139,7 +1139,7 @@ function openResponseFromState(responses, stageKey) {
   return {
     selectedType:response.selected_type || "",
     selectedElements:Array.isArray(response.selected_elements) ? response.selected_elements : [],
-    selectedTypeName:response.payload?.selectedTypeName || openTypeById(response.selected_type)?.n || "未命名類型",
+    selectedTypeName:response.payload?.selectedTypeName || openTypeById(response.selected_type)?.n || "未命名分類",
     elementNames:Array.isArray(response.payload?.elementNames) ? response.payload.elementNames : [],
     changeReason:response.payload?.changeReason || "",
     changed:Boolean(response.payload?.changed)
@@ -1149,14 +1149,14 @@ function openResponseFromState(responses, stageKey) {
 function renderOpenClassificationTask() {
   clearInterval(openPollTimer);
   const task = activity.openClassification;
-  const displayName = task.work.showName ? task.work.name : "神秘作品";
+  const displayName = task.work.showName ? task.work.name : "未命名材料";
   el("studentCaseTitle").textContent = displayName;
   renderWorkMedia(task.work.image, displayName);
   const intro = el("studentCaseIntro");
   intro.textContent = task.work.intro || "";
   intro.classList.toggle("hidden", !task.work.intro);
-  el("studentCasePrompt").textContent = task.prompt || "選出最能代表這部作品的主要類型，並用至少兩個故事要素支持你的判斷。";
-  el("studentCaseIndex").textContent = "開放分類";
+  el("studentCasePrompt").textContent = task.prompt || "選出目前最合理的分類，並用至少兩個材料特徵、證據或資訊支持你的判斷。";
+  el("studentCaseIndex").textContent = "依據與分類";
   el("caseCounter").textContent = task.allowRejudge ? `${openPhase} / 2` : "1 / 1";
   updateProgress(task.allowRejudge ? openPhase * 50 : 100);
   el("lockBadge").textContent = openPhase === 1 ? "初次判斷" : "重新判斷";
@@ -1182,10 +1182,10 @@ function renderOpenClassificationForm() {
   el("openClassificationPhaseTitle").textContent = isRejudge ? "聽完同學的理由，再判斷一次" : "先做你的第一次判斷";
   el("openClassificationPhaseHelp").textContent = isRejudge
     ? "你可以保留原本答案，也可以因為新的證據或同學的理由修改判斷。"
-    : "選出最能代表作品的主要類型，並用故事要素支持你的判斷。";
+    : "選出目前最合理的分類，並用材料中的依據支持你的判斷。";
   el("openClassificationSyncBadge").textContent = isSessionPlay() ? "📡 教師同步" : "個人預覽";
   el("openEvidenceRequirement").textContent = `至少選 ${task.minEvidence} 個`;
-  el("openSubmissionHint").textContent = isRejudge ? "重新確認證據、類型與改變原因後再提交。" : "準備好後送出你的初次判斷。";
+  el("openSubmissionHint").textContent = isRejudge ? "重新確認依據、分類與改變原因後再提交。" : "準備好後送出你的初次判斷。";
   el("submitOpenClassificationBtn").textContent = isRejudge ? "提交最終判斷" : "提交初次判斷";
 
   renderOpenEvidenceChoices();
@@ -1202,7 +1202,7 @@ function renderOpenClassificationForm() {
     const type = openTypeById(openInitialResponse.selectedType);
     original.innerHTML = `
       <span class="summary-label">你原本的判斷</span>
-      <strong>${escapeHtml(type?.ic||"◼")} ${escapeHtml(type?.n||openInitialResponse.selectedTypeName||"未命名類型")}</strong>
+      <strong>${escapeHtml(type?.ic||"◼")} ${escapeHtml(type?.n||openInitialResponse.selectedTypeName||"未命名分類")}</strong>
       <div class="keyword-cloud">${openInitialResponse.selectedElements.map(id=>`<span class="keyword-pill">${escapeHtml(openElementById(id)?.n||id)}</span>`).join("")}</div>
     `;
     original.classList.remove("hidden");
@@ -1265,11 +1265,11 @@ function sameStringSet(a, b) {
 async function submitOpenClassification() {
   const task = activity.openClassification;
   if (openSelectedElements.size < task.minEvidence) {
-    showToast(`至少選 ${task.minEvidence} 個故事證據`);
+    showToast(`至少選 ${task.minEvidence} 個判斷依據`);
     return;
   }
   if (!openSelectedType) {
-    showToast("請先選擇最能代表作品的主要類型");
+    showToast("請先選擇目前最合理的分類");
     return;
   }
 
@@ -1303,7 +1303,7 @@ async function submitOpenClassification() {
 
   const response = {
     selectedType:openSelectedType,
-    selectedTypeName:type?.n || "未命名類型",
+    selectedTypeName:type?.n || "未命名分類",
     selectedElements,
     elementNames,
     changeReason,
@@ -1341,7 +1341,7 @@ function renderOpenOwnAnswer(response) {
   const type = openTypeById(response?.selectedType);
   const card = el("openOwnType");
   card.style.setProperty("--result-type-color", type?.c || "#667085");
-  card.innerHTML = `<span class="result-type-icon">${escapeHtml(type?.ic||"◼")}</span><strong>${escapeHtml(type?.n||response?.selectedTypeName||"未命名類型")}</strong>`;
+  card.innerHTML = `<span class="result-type-icon">${escapeHtml(type?.ic||"◼")}</span><strong>${escapeHtml(type?.n||response?.selectedTypeName||"未命名分類")}</strong>`;
   renderPillCloud("openOwnEvidence", (response?.selectedElements || []).map(id => openElementById(id)?.n || id));
 }
 
@@ -1356,7 +1356,7 @@ function renderOpenDistribution(containerId, rows = [], emptyText = "目前還�
   rows.forEach(row => {
     const item = document.createElement("div");
     item.className = "stage-distribution-row";
-    item.innerHTML = `<span>${escapeHtml(row.name||"未命名類型")}</span><div><i style="width:${Math.max(8,((Number(row.count)||0)/max)*100)}%"></i></div><strong>${Number(row.count)||0}</strong>`;
+    item.innerHTML = `<span>${escapeHtml(row.name||"未命名分類")}</span><div><i style="width:${Math.max(8,((Number(row.count)||0)/max)*100)}%"></i></div><strong>${Number(row.count)||0}</strong>`;
     list.appendChild(item);
   });
 }
@@ -1369,7 +1369,7 @@ function showOpenClassificationWaiting() {
   updateProgress(50);
   renderOpenOwnAnswer(openInitialResponse);
   el("openStudentDiscussionPrompt").textContent = activity.openClassification.discussionPrompt ||
-    "你為什麼選這個主要類型？和同學比較看看：你們用了哪些相同或不同的故事證據？";
+    "你為什麼選這個分類？和同學比較看看：你們用了哪些相同或不同的判斷依據？";
   renderOpenDistribution("openStudentDistribution", openStats.initial || []);
   if (isSessionPlay()) {
     el("openStageWaitingMessage").textContent = "等待老師開放重新判斷…";
@@ -1389,7 +1389,7 @@ async function refreshOpenStats() {
     openInitialResponse = openResponseFromState(state.responses || [], "initial") || openInitialResponse;
     openFinalResponse = openResponseFromState(state.responses || [], "final") || openFinalResponse;
   } catch (error) {
-    console.warn("取得開放分類統計失敗", error);
+    console.warn("取得分類統計失敗", error);
   }
 }
 
@@ -1449,7 +1449,7 @@ async function syncOpenClassificationState(initial=false) {
 
     renderOpenClassificationForm();
   } catch (error) {
-    console.warn("同步開放分類階段失敗", error);
+    console.warn("同步再次判斷階段失敗", error);
     if (initial) renderOpenClassificationForm();
   }
 }
@@ -1463,7 +1463,7 @@ function renderOpenComparisonCard(typeContainerId, evidenceContainerId, response
   const type = openTypeById(response?.selectedType);
   const container = el(typeContainerId);
   container.style.setProperty("--result-type-color", type?.c || "#667085");
-  container.innerHTML = `<span class="result-type-icon">${escapeHtml(type?.ic||"◼")}</span><strong>${escapeHtml(type?.n||response?.selectedTypeName||"未命名類型")}</strong>`;
+  container.innerHTML = `<span class="result-type-icon">${escapeHtml(type?.ic||"◼")}</span><strong>${escapeHtml(type?.n||response?.selectedTypeName||"未命名分類")}</strong>`;
   renderPillCloud(evidenceContainerId, (response?.selectedElements || []).map(id=>openElementById(id)?.n||id));
 }
 
@@ -1496,7 +1496,7 @@ function renderElementTypeTask() {
   modeASelectedElements = new Set();
   modeASelectedType = "";
 
-  const displayName = task.work.showName ? task.work.name : "神秘作品";
+  const displayName = task.work.showName ? task.work.name : "未命名材料";
   el("studentCaseTitle").textContent = displayName;
   renderWorkMedia(task.work.image, displayName);
 
@@ -1505,7 +1505,7 @@ function renderElementTypeTask() {
   intro.classList.toggle("hidden", !task.work.intro);
 
   el("studentCasePrompt").textContent = task.prompt ||
-    "先找出故事裡的重要要素，再根據這些證據判斷最符合的小說類型。";
+    "先找出材料中的重要依據，再根據這些資訊判斷最合理的分類。";
   el("lockBadge").textContent = "找證據";
 
   el("elementTypeInteraction").classList.remove("hidden");
@@ -1547,7 +1547,7 @@ function renderModeAElementChoices(task) {
 function updateModeAElementStatus(task) {
   const count = modeASelectedElements.size;
   const min = task.minElements;
-  el("elementSelectionStatus").textContent = `已選 ${count} 個要素 · 至少選 ${min} 個`;
+  el("elementSelectionStatus").textContent = `已選 ${count} 個依據 · 至少選 ${min} 個`;
   el("elementToTypeBtn").disabled = count < min;
 }
 
@@ -1581,13 +1581,13 @@ function renderModeATypeChoices(task) {
 function goToTypeStep() {
   const task = currentTask();
   if (modeASelectedElements.size < task.minElements) {
-    showToast(`至少選 ${task.minElements} 個故事要素才能進入下一步`);
+    showToast(`至少選 ${task.minElements} 個判斷依據才能進入下一步`);
     return;
   }
 
   el("elementStepPanel").classList.add("hidden");
   el("typeStepPanel").classList.remove("hidden");
-  el("lockBadge").textContent = "判斷類型";
+  el("lockBadge").textContent = "進行分類";
 
   const cloud = el("chosenElementCloud");
   cloud.innerHTML = "";
@@ -1611,7 +1611,7 @@ function markCurrentTaskComplete() {
 function submitElementType() {
   const task = currentTask();
   if (!modeASelectedType) {
-    showToast("請先選擇一個你認為最符合的小說類型");
+    showToast("請先選擇一個你認為最合理的分類");
     return;
   }
 
@@ -1630,8 +1630,8 @@ function submitElementType() {
     ? "你的證據和分類都抓得很完整！"
     : "來比較你的判斷和參考答案";
   el("elementTypeResultText").textContent = exactElements && exactType
-    ? "你先從故事找到關鍵要素，再用這些證據完成分類。"
-    : "分類不是只看最後選了哪一類，也要一起比較你用了哪些故事要素作為證據。";
+    ? "你先從材料找到關鍵依據，再用這些資訊完成分類。"
+    : "分類不是只看最後選了哪一類，也要一起比較你用了哪些特徵、證據或資訊作為依據。";
 
   renderPillCloud("studentElementResult",
     task.elements.filter(element => modeASelectedElements.has(element.i)).map(element => element.n)
@@ -1667,7 +1667,7 @@ function renderResultType(containerId, type) {
   container.style.setProperty("--result-type-color", type.c || "#667085");
   container.innerHTML = `
     <span class="result-type-icon">${escapeHtml(type.ic || "◼")}</span>
-    <strong>${escapeHtml(type.n || "未命名類型")}</strong>
+    <strong>${escapeHtml(type.n || "未命名分類")}</strong>
   `;
 }
 
@@ -1686,8 +1686,8 @@ function renderStandardCase() {
   const isOpenMode = activity.template === "open-tags";
   el("studentCasePrompt").textContent = c.prompt || (
     isOpenMode
-      ? "選出你認為符合這個作品／情境的標籤，可以複選。"
-      : "選出最能代表這個作品／情境的字卡。"
+      ? "選出你認為符合這份材料／情境的特徵或標籤，可以複選。"
+      : "選出最符合這份材料／情境的項目。"
   );
   el("lockBadge").textContent = "思考中";
   el("interactionArea").classList.remove("hidden");
@@ -1698,7 +1698,7 @@ function renderStandardCase() {
   const poolSection = document.querySelector("#cardPool")?.closest("section");
   const answerSection = document.querySelector("#answerZone")?.closest("section");
   if (poolSection) {
-    poolSection.querySelector(".mini-heading span").textContent = isOpenMode ? "可選標籤" : "故事線索";
+    poolSection.querySelector(".mini-heading span").textContent = isOpenMode ? "可選標籤" : "可選項目";
     poolSection.querySelector(".mini-heading small").textContent = isOpenMode
       ? "可選一個或多個你認為符合的標籤"
       : "點一下或拖曳到右側";
@@ -1707,7 +1707,7 @@ function renderStandardCase() {
     answerSection.querySelector(".mini-heading span").textContent = isOpenMode ? "我的選擇" : "我的判斷";
     answerSection.querySelector(".mini-heading small").textContent = isOpenMode
       ? "沒有唯一答案，準備說明你的理由"
-      : "放入最能代表作品的字卡";
+      : "放入最符合材料的項目";
   }
   el("submitCaseBtn").textContent = isOpenMode ? "確認我的選擇" : "送出判斷";
 
@@ -1737,7 +1737,7 @@ function renderCards(cards) {
   const answer = el("answerZone");
   pool.innerHTML = "";
   const emptyText = activity?.template === "open-tags"
-    ? "把你認為符合這部作品的標籤放到這裡"
+    ? "把你認為符合這份材料的特徵或標籤放到這裡"
     : "把你選中的字卡放到這裡";
   answer.innerHTML = `<div id="emptyHint" class="empty-hint">${emptyText}</div>`;
 
@@ -1851,14 +1851,14 @@ function submitCase() {
 
   if (exact) {
     el("feedbackIcon").textContent = "🎯";
-    el("feedbackTitle").textContent = "抓到核心線索了！";
-    el("feedbackText").textContent = `你選出的 ${correctChosen} 張字卡，正好都是這個故事最重要的元素。`;
+    el("feedbackTitle").textContent = "抓到關鍵項目了！";
+    el("feedbackText").textContent = `你選出的 ${correctChosen} 個項目，正好都是本題的重要依據。`;
   } else {
     el("feedbackIcon").textContent = "🔎";
     el("feedbackTitle").textContent = "再多想一步也沒關係";
     const extra = chosen.length - correctChosen;
     el("feedbackText").textContent =
-      `你抓到 ${correctChosen} 張核心字卡；另外還有 ${missed} 張核心線索沒有選到${extra > 0 ? `，並混入了 ${extra} 張干擾字卡` : ""}。先看看揭密，再回頭比較哪些元素真正推動故事。`;
+      `你選對 ${correctChosen} 個關鍵項目；另外還有 ${missed} 個重要依據沒有選到${extra > 0 ? `，並混入了 ${extra} 個干擾項目` : ""}。先看看揭示結果，再回頭比較哪些資訊真正影響判斷。`;
   }
 }
 
@@ -1874,7 +1874,7 @@ function showOpenDiscussion(c, chosen) {
 
   el("discussionPromptText").textContent =
     (c.discussionPrompt || "").trim() ||
-    "你為什麼會選這些標籤？和同學比較看看：你們有哪些相同或不同的判斷？如果只能選一個主要類型，你會留下哪一個？";
+    "你為什麼會選這些特徵或標籤？和同學比較看看：你們用了哪些相同或不同的依據？";
 
   el("discussionNextBtn").textContent =
     currentCaseIndex === totalTasks() - 1 ? "完成活動" : "下一關";
@@ -1910,19 +1910,19 @@ function showComplete() {
       "你完成了逐層思辨。這個活動不評分，也不要求你改變立場；重點是看見哪些新資訊、假設與價值影響了自己的判斷。";
   } else if (activity.template === "progressive-reveal") {
     completeText.textContent =
-      "你完成了逐層判斷。回頭看看自己的答案在哪一條線索後改變，並用作品內容說明理由。";
+      "你完成了逐步判斷。回頭看看自己的答案在哪一項資訊後改變，並用材料內容說明理由。";
   } else if (activity.template === "open-classification") {
     completeText.textContent =
-      "你完成了開放分類。比較初次與最終判斷：答案可以改，也可以不改，重點是能用故事證據說明自己的選擇。";
+      "你完成了討論後再判斷。比較初次與最終判斷：答案可以改，也可以不改，重點是能用依據說明自己的選擇。";
   } else if (activity.template === "element-type") {
     completeText.textContent =
-      "你完成了「先找要素，再判斷類型」的練習。分類時，重要的不只是答案，而是能用故事內容說明自己的判斷。";
+      "你完成了「先找依據，再進行分類」的練習。重要的不只是答案，而是能用材料內容說明自己的判斷。";
   } else if (activity.template === "open-tags") {
     completeText.textContent =
-      "你已經完成所有關卡。比較彼此的選擇與理由，看看同一部作品為什麼可能同時具有多種故事要素。";
+      "你已經完成所有關卡。比較彼此的選擇與理由，看看同一份材料為什麼可能支持不同觀點。";
   } else {
     completeText.textContent =
-      "你已經完成所有關卡。現在回頭看看：不同作品的主要元素，會如何影響我們對故事類型的判斷？";
+      "你已經完成所有關卡。現在回頭看看：哪些資訊或依據最影響你的判斷？";
   }
 }
 

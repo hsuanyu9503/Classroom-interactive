@@ -341,7 +341,7 @@
     if (activeSession.activityMode === "progressive-reveal") {
       const stage = Math.max(1,Number(activeSession.currentStage)||1);
       relevant = responses.filter(item => item.mode === "progressive-reveal" && item.stage_key === `clue-${stage}`);
-      phaseLabel = `線索 ${stage} / ${Math.max(1,Number(activeSession.stageCount)||1)}`;
+      phaseLabel = `資訊 ${stage} / ${Math.max(1,Number(activeSession.stageCount)||1)}`;
     } else if (activeSession.activityMode === "open-classification") {
       const finalPhase = Number(activeSession.currentStage || 1) >= 2;
       const key = finalPhase ? "final" : "initial";
@@ -425,13 +425,13 @@
   }
 
   function activityModeLabel(mode) {
-    if (mode === "element-type") return "要素 → 類型";
-    if (mode === "progressive-reveal") return "逐層揭露";
-    if (mode === "open-classification") return "開放分類";
+    if (mode === "element-type") return "依據與分類｜基礎分類";
+    if (mode === "progressive-reveal") return "逐步揭露";
+    if (mode === "open-classification") return "依據與分類｜討論後再判斷";
     if (mode === "layered-deliberation") return "逐層思辨";
-    if (mode === "open-tags") return "開放式討論";
+    if (mode === "open-tags") return "特徵選擇";
     if (!mode) return "—";
-    return "探索式揭密";
+    return "選擇與揭示";
   }
 
   function sessionKind() {
@@ -502,7 +502,7 @@
       <div>
         <strong>${escapeHtml(activity.title)}</strong>
         <p>${escapeHtml(activity.subtitle || "沒有副標題")}</p>
-        <small>${activityModeLabel(activity.template)} · ${activity.template === "progressive-reveal" ? `${activity.taskCount} 層線索` : activity.template === "open-classification" ? "初次＋重新判斷" : activity.template === "layered-deliberation" ? `${activity.taskCount} 層情境 · 需雲端 Session` : `${activity.taskCount} 個任務`}</small>
+        <small>${activityModeLabel(activity.template)} · ${activity.template === "progressive-reveal" ? `${activity.taskCount} 項資訊` : activity.template === "open-classification" ? "初次＋重新判斷" : activity.template === "layered-deliberation" ? `${activity.taskCount} 層情境 · 需雲端 Session` : `${activity.taskCount} 個任務`}</small>
       </div>`;
     if (!$("sessionTitleInput").value.trim() || $("sessionTitleInput").dataset.autoTitle === "1") {
       $("sessionTitleInput").value = activity.title;
@@ -684,7 +684,7 @@
     activityResults.slice(0,8).forEach(({activity,ready,reason})=>{
       const row=document.createElement("div");
       row.className=`teach-ready-item ${ready ? "" : "unready"}`;
-      const legacy = activity.template === "open-tags" ? " · 舊版相容" : "";
+      const legacy = "";
       row.innerHTML=`
         <div><strong>${escapeHtml(activity.title || "未命名活動")}</strong><small>${ready ? `${activityModeLabel(activity.template)} · ${activity.taskCount || 0} 個任務${legacy}` : `尚未就緒 · ${escapeHtml(reason)}`}</small></div>
         <button class="btn ${ready ? "btn-teach" : "btn-secondary"}" type="button" ${ready ? "" : "disabled"}>${ready ? "準備上課" : "尚未完成"}</button>`;
@@ -1087,8 +1087,8 @@
   }
 
   function nodeTypeLabel(type) {
-    if (type === "work-wall") return "作品牆";
-    if (type === "type-toolbox") return "類型工具箱";
+    if (type === "work-wall") return "材料牆";
+    if (type === "type-toolbox") return "分類工具箱";
     if (type === "activity") return "互動活動";
     return "教學內容";
   }
@@ -1483,8 +1483,8 @@
     panel.classList.remove("hidden");
     const stage = snapshot.current_stage || 1;
     const total = snapshot.stage_count || activeSession.stageCount || 1;
-    $("progressiveStageBadge").textContent = `線索 ${stage} / ${total}`;
-    $("teacherCurrentClueText").textContent = `目前已公開到第 ${stage} 層線索`;
+    $("progressiveStageBadge").textContent = `資訊 ${stage} / ${total}`;
+    $("teacherCurrentClueText").textContent = `目前已公開到第 ${stage} 項資訊`;
     const currentResponses = (snapshot.responses || []).filter(r=>
       r.mode==="progressive-reveal" &&
       stageNumberFromKey(r.stage_key)===stage &&
@@ -1493,11 +1493,11 @@
     $("teacherStageSubmissionText").textContent = `本層已提交 ${currentResponses.length} / ${snapshot.participant_count || 0}`;
     $("previousStageBtn").disabled = stage <= 1;
     $("nextStageBtn").disabled = stage >= total;
-    $("nextStageBtn").textContent = stage >= total ? "已公開全部線索" : "公開下一條線索 →";
+    $("nextStageBtn").textContent = stage >= total ? "已公開全部資訊" : "公開下一項資訊 →";
 
     const counts = new Map();
     currentResponses.forEach(r=>{
-      const name = r.payload?.selectedTypeName || r.selected_type || "未命名類型";
+      const name = r.payload?.selectedTypeName || r.selected_type || "未命名分類";
       counts.set(name,(counts.get(name)||0)+1);
     });
     const list = $("teacherStageDistribution");
@@ -1519,7 +1519,7 @@
     list.innerHTML="";
     const counts=new Map();
     responses.forEach(r=>{
-      const name=r.payload?.selectedTypeName || r.selected_type || "未命名類型";
+      const name=r.payload?.selectedTypeName || r.selected_type || "未命名分類";
       counts.set(name,(counts.get(name)||0)+1);
     });
     if (!counts.size) {
@@ -1579,7 +1579,7 @@
       await window.ClassroomSessionAPI.setStage(activeSession,target);
       await refreshActiveSession();
     } catch (error) {
-      showSessionToast(error.message || "更新開放分類階段失敗");
+      showSessionToast(error.message || "更新再次判斷階段失敗");
     }
   }
 
@@ -1590,7 +1590,7 @@
       await window.ClassroomSessionAPI.setStage(activeSession,target);
       await refreshActiveSession();
     } catch (error) {
-      showSessionToast(error.message || "更新線索階段失敗");
+      showSessionToast(error.message || "更新資訊階段失敗");
     }
   }
 

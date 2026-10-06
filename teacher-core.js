@@ -1,4 +1,4 @@
-/* V2.14.1 | Teacher Core: workflow + Course/Type/Work libraries */
+/* V2.15.1 | Teacher Core: workflow + Course/Type/Work libraries */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2
@@ -43,16 +43,16 @@
 
   const defaultLegacyCourse = {
     id: uuid(),
-    title: "小說類型大解密",
-    subtitle: "從故事要素建立小說分類工具",
-    description: "兩節課依序從類型要素的建立，走到典型作品、逐層線索與多類型作品的證據式分類。",
+    title: "示例課程｜小說分類",
+    subtitle: "示範如何用材料、依據與分類建立互動課程",
+    description: "這是一組可刪除的示例資料，示範材料庫、分類工具箱、逐步揭露與依據式分類如何組成完整課程。",
     lessons: [
       {
         id: uuid(), title: "小說類型拆解所",
         nodes: [
           {id:uuid(), type:"showcase", title:"作品有什麼不一樣？", activityRef:"", note:"一次呈現數張動畫／漫畫作品卡，引導學生自由觀察差異。"},
           {id:uuid(), type:"toolbox", title:"五大小說類型工具箱", activityRef:"", note:"依序介紹奇幻、偵探、武俠、歷史、冒險與各自要素。"},
-          {id:uuid(), type:"activity", title:"要素辨識練習", activityRef:"", note:"使用「要素 → 類型分類」模式，讓學生先找證據，再完成類型判斷。"},
+          {id:uuid(), type:"activity", title:"要素辨識練習", activityRef:"", note:"使用「依據與分類｜基礎分類」流程，讓學生先找依據，再完成分類判斷。"},
           {id:uuid(), type:"summary", title:"小說分類三步驟", activityRef:"", note:"看故事 → 找重要要素 → 根據要素判斷類型，並留下下一節伏筆。"}
         ]
       },
@@ -61,8 +61,8 @@
         nodes: [
           {id:uuid(), type:"activity", title:"字卡快問快答", activityRef:"", note:"用單一要素暖身，帶出不能只靠單一特徵。"},
           {id:uuid(), type:"activity", title:"典型作品分類", activityRef:"", note:"學生先選要素，再選主要類型。"},
-          {id:uuid(), type:"activity", title:"逐層公開作品要素", activityRef:"", note:"使用「逐層揭露」模式，由教師同步公開線索並保留每一層的判斷變化。"},
-          {id:uuid(), type:"activity", title:"多類型作品挑戰", activityRef:"", note:"引用開放分類模式，比較不同學生的類型與證據。"},
+          {id:uuid(), type:"activity", title:"逐層公開作品要素", activityRef:"", note:"使用「逐步揭露」模板，由教師同步公開資訊並保留每一階段的判斷變化。"},
+          {id:uuid(), type:"activity", title:"多類型作品挑戰", activityRef:"", note:"使用「依據與分類｜討論後再判斷」流程，比較不同學生的分類與依據。"},
           {id:uuid(), type:"summary", title:"小說分類判斷指南", activityRef:"", note:"以五步驟收束：找要素、對應類型、不看單一要素、找主要特徵、用證據說明。"}
         ]
       }
@@ -315,22 +315,22 @@
       },
       works:{
         kicker:"PREP · MATERIAL",
-        title:"作品庫",
-        description:"集中整理作品介紹、逐層線索與可對應要素，讓不同活動與課程重複引用。",
+        title:"材料庫",
+        description:"集中整理文本、圖片、案例或其他材料，以及可逐步公開的資訊與對應依據，讓不同活動與課程重複引用。",
         stats:[
-          [works.length,"作品"],
-          [clueCount,"逐層線索"],
-          [types.length,"可用類型"]
+          [works.length,"材料"],
+          [clueCount,"逐步資訊"],
+          [types.length,"可用分類"]
         ]
       },
       types:{
         kicker:"PREP · TOOLBOX",
-        title:"類型工具箱",
-        description:"建立共用的小說類型與分類要素；之後只引用，不必在每個活動重複輸入。",
+        title:"分類工具箱",
+        description:"建立共用的分類、概念與判斷依據；之後只引用，不必在每個活動重複輸入。",
         stats:[
-          [types.length,"類型"],
-          [elementCount,"分類要素"],
-          [works.length,"作品"]
+          [types.length,"分類"],
+          [elementCount,"判斷依據"],
+          [works.length,"材料"]
         ]
       },
       activities:{
@@ -622,7 +622,7 @@
     if (type === "work-wall" || type === "type-toolbox") {
       const selected = [...resourceSelect.selectedOptions].map(option => option.value);
       populateResourceSelect(resourceSelect,type,selected);
-      node.querySelector(".node-resource-label").textContent = type === "work-wall" ? "引用作品" : "引用類型";
+      node.querySelector(".node-resource-label").textContent = type === "work-wall" ? "引用材料" : "引用分類";
     }
   }
 
@@ -991,7 +991,7 @@
       const snap = await window.ClassroomActivityAPI?.buildSessionSnapshot?.(id);
       if (!snap) throw new Error("活動模組尚未載入");
       if (snap.template === "layered-deliberation") {
-        throw new Error("逐層思辨包含未公開情境資訊，V2.14.1 請以「單一活動 Session」上課，不可放入完整 Course Snapshot。");
+        throw new Error("逐層思辨包含未公開情境資訊，V2.15.1 請以「單一活動 Session」上課，不可放入完整 Course Snapshot。");
       }
       activitySnapshots.push({
         id:snap.id,title:snap.title,subtitle:snap.subtitle,
@@ -1110,7 +1110,7 @@
     types.forEach(type => {
       const item = document.createElement("div");
       item.className = `v15-list-item ${type.id === currentTypeId ? "active" : ""}`;
-      item.innerHTML = `<strong>${escapeHtml(type.icon || "◼")} ${escapeHtml(type.name || "未命名類型")}</strong><small>${type.elements?.length || 0} 張要素卡</small>`;
+      item.innerHTML = `<strong>${escapeHtml(type.icon || "◼")} ${escapeHtml(type.name || "未命名分類")}</strong><small>${type.elements?.length || 0} 張依據卡</small>`;
       item.addEventListener("click", () => {
         saveCurrentType(false); currentTypeId = type.id; renderTypeList(); loadTypeEditor(type);
       });
@@ -1150,7 +1150,7 @@
   function readTypeEditor() {
     return {
       id:currentTypeId || uuid(),
-      name:$("typeName").value.trim() || "未命名類型",
+      name:$("typeName").value.trim() || "未命名分類",
       icon:$("typeIcon").value.trim() || "◼",
       color:$("typeColor").value,
       description:$("typeDescription").value.trim(),
@@ -1163,21 +1163,21 @@
     if (!currentTypeId) return;
     const data = readTypeEditor(); const i = types.findIndex(t=>t.id===data.id);
     if (i>=0) types[i]=data; else types.unshift(data); save(KEYS.types,types); renderTypeList(); updateTypePreview();
-    if (showMessage) showMiniToast("類型工具箱已儲存");
+    if (showMessage) showMiniToast("分類工具箱已儲存");
   }
   function updateTypePreview() {
-    const name=$("typeName").value.trim()||"類型名稱", icon=$("typeIcon").value.trim()||"◼", color=$("typeColor").value;
+    const name=$("typeName").value.trim()||"分類名稱", icon=$("typeIcon").value.trim()||"◼", color=$("typeColor").value;
     $("typePreview").innerHTML=`<span class="type-preview-chip" style="border-color:${color}55;background:${color}16;color:${color}">${escapeHtml(icon)} ${escapeHtml(name)}</span>`;
   }
   ["typeName","typeIcon","typeColor"].forEach(id => $(id).addEventListener("input", updateTypePreview));
   $("addTypeElementBtn").addEventListener("click",()=>addTypeElementRow($("typeElementList")));
   $("saveTypeBtn").addEventListener("click",()=>saveCurrentType(true));
   $("newTypeBtn").addEventListener("click",()=>{
-    saveCurrentType(false); const t={id:uuid(),name:"新類型",icon:"◼",color:"#667085",description:"",elements:[]}; types.unshift(t);currentTypeId=t.id;save(KEYS.types,types);renderTypeList();loadTypeEditor(t);
+    saveCurrentType(false); const t={id:uuid(),name:"新分類",icon:"◼",color:"#667085",description:"",elements:[]}; types.unshift(t);currentTypeId=t.id;save(KEYS.types,types);renderTypeList();loadTypeEditor(t);
   });
   $("deleteTypeBtn").addEventListener("click",()=>{
-    if(!confirm("確定刪除這個類型與其要素嗎？"))return;
-    types=types.filter(t=>t.id!==currentTypeId); if(!types.length) types=[{id:uuid(),name:"新類型",icon:"◼",color:"#667085",description:"",elements:[]}];
+    if(!confirm("確定刪除這個分類與其判斷依據嗎？"))return;
+    types=types.filter(t=>t.id!==currentTypeId); if(!types.length) types=[{id:uuid(),name:"新分類",icon:"◼",color:"#667085",description:"",elements:[]}];
     currentTypeId=types[0].id;save(KEYS.types,types);renderTypeList();loadTypeEditor(types[0]);
   });
 
@@ -1196,7 +1196,7 @@
     const list=$("workList");list.innerHTML="";
     works.forEach(work=>{
       const item=document.createElement("div");item.className=`v15-list-item ${work.id===currentWorkId?"active":""}`;
-      item.innerHTML=`<strong>${escapeHtml(work.name||"未命名作品")}</strong><small>${work.clues?.length||0} 層線索 · ${work.elementRefs?.length||0} 個對應要素</small>`;
+      item.innerHTML=`<strong>${escapeHtml(work.name||"未命名材料")}</strong><small>${work.clues?.length||0} 項逐步資訊 · ${work.elementRefs?.length||0} 個對應依據</small>`;
       item.addEventListener("click",()=>{saveCurrentWork(false);currentWorkId=work.id;renderWorkList();loadWorkEditor(work);});
       list.appendChild(item);
     });
@@ -1204,7 +1204,7 @@
   function renderWorkElementChoices(selected=[]) {
     const box=$("workElementChoices"); if(!box) return; box.innerHTML="";
     const elements=allElements();
-    if(!elements.length){box.innerHTML='<div class="empty-v15">請先在「類型工具箱」建立分類要素。</div>';return;}
+    if(!elements.length){box.innerHTML='<div class="empty-v15">請先在「分類工具箱」建立判斷依據。</div>';return;}
     elements.forEach(e=>{
       const label=document.createElement("label");label.className="element-choice";
       label.innerHTML=`<input type="checkbox" value="${escapeHtml(e.id)}" ${selected.includes(e.id)?"checked":""}><span><strong>${escapeHtml(e.icon)} ${escapeHtml(e.name)}</strong><small>${escapeHtml(e.typeName)}</small></span>`;
@@ -1217,7 +1217,7 @@
     row.dataset.id = clue.id || uuid();
     const input = row.querySelector(".simple-row-input");
     input.value = clue.text || "";
-    input.placeholder = "輸入一層線索";
+    input.placeholder = "輸入一項資訊";
     row.querySelector(".simple-row-remove").addEventListener("click", () => row.remove());
     container.appendChild(fragment);
   }
@@ -1232,7 +1232,7 @@
   function readWorkEditor() {
     return {
       id:currentWorkId||uuid(),
-      name:$("workName").value.trim()||"未命名作品",
+      name:$("workName").value.trim()||"未命名材料",
       image:$("workImage").value.trim(),
       showName:$("workShowName").checked,
       intro:$("workIntro").value.trim(),
@@ -1246,21 +1246,21 @@
   }
   function saveCurrentWork(showMessage=true){
     if(!currentWorkId)return;const data=readWorkEditor(),i=works.findIndex(w=>w.id===data.id);if(i>=0)works[i]=data;else works.unshift(data);
-    save(KEYS.works,works);renderWorkList();updateWorkPreview();if(showMessage)showMiniToast("作品資料已儲存");
+    save(KEYS.works,works);renderWorkList();updateWorkPreview();if(showMessage)showMiniToast("材料資料已儲存");
   }
   function updateWorkPreview(){
-    const name=$("workName").value.trim()||"作品預覽",img=$("workImage").value.trim();
+    const name=$("workName").value.trim()||"材料預覽",img=$("workImage").value.trim();
     $("workPreview").innerHTML=`<div class="work-preview-thumb">${img?`<img src="${escapeHtml(img)}" alt="">`:"🎬"}</div><div><strong>${escapeHtml(name)}</strong><br><small>${$("workShowName").checked?"學生端顯示名稱":"學生端隱藏名稱"}</small></div>`;
   }
   ["workName","workImage","workShowName"].forEach(id=>$(id).addEventListener("input",updateWorkPreview));
   $("addWorkClueBtn").addEventListener("click",()=>addWorkClueRow($("workClueList")));
   $("saveWorkBtn").addEventListener("click",()=>saveCurrentWork(true));
   $("newWorkBtn").addEventListener("click",()=>{
-    saveCurrentWork(false);const w={id:uuid(),name:"新作品",image:"",showName:true,intro:"",teacherNote:"",clues:[],elementRefs:[]};works.unshift(w);currentWorkId=w.id;save(KEYS.works,works);renderWorkList();loadWorkEditor(w);
+    saveCurrentWork(false);const w={id:uuid(),name:"新材料",image:"",showName:true,intro:"",teacherNote:"",clues:[],elementRefs:[]};works.unshift(w);currentWorkId=w.id;save(KEYS.works,works);renderWorkList();loadWorkEditor(w);
   });
   $("deleteWorkBtn").addEventListener("click",()=>{
-    if(!confirm("確定刪除這筆作品資料嗎？"))return;
-    works=works.filter(w=>w.id!==currentWorkId);if(!works.length)works=[{id:uuid(),name:"新作品",image:"",showName:true,intro:"",teacherNote:"",clues:[],elementRefs:[]}];
+    if(!confirm("確定刪除這筆材料資料嗎？"))return;
+    works=works.filter(w=>w.id!==currentWorkId);if(!works.length)works=[{id:uuid(),name:"新材料",image:"",showName:true,intro:"",teacherNote:"",clues:[],elementRefs:[]}];
     currentWorkId=works[0].id;save(KEYS.works,works);renderWorkList();loadWorkEditor(works[0]);
   });
 

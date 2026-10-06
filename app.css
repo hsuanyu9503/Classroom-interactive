@@ -2447,14 +2447,16 @@ input[type="color"]{height:46px;padding:5px 7px;cursor:pointer}
   .workflow-mode-btn strong{font-size:15px}
   .workflow-mode-btn small{display:none}
   .workflow-subnav[data-workflow-nav="prepare"]{
-    display:flex;
-    overflow-x:auto;
-    scrollbar-width:none;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+    overflow:visible;
   }
-  .workflow-subnav[data-workflow-nav="prepare"]::-webkit-scrollbar{display:none}
   .workflow-subnav[data-workflow-nav="prepare"] .workspace-tab{
-    min-width:max-content;
-    flex:0 0 auto;
+    width:100%;
+    min-width:0;
+    flex:initial;
+    white-space:normal;
   }
   .workflow-subnav[data-workflow-nav="teach"]{
     display:grid;
@@ -4048,4 +4050,149 @@ select:focus{
 .answer-bar-row>div>i{
   border-radius:999px;
   transition:width .22s ease;
+}
+
+
+/* =========================================================
+   V2.15.1 — Universal teaching template families
+   ========================================================= */
+.mode-selector{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;
+}
+.mode-option{
+  min-width:0;
+}
+.mode-option-body{
+  height:100%;
+  min-height:112px;
+  align-content:start;
+}
+.mode-option-body strong{
+  font-size:17px;
+}
+.mode-option-body small{
+  margin-top:2px;
+  line-height:1.6;
+}
+
+.mode-family-card{
+  min-width:0;
+  padding:17px;
+  border:2px solid #dfe5ef;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 5px 14px rgba(55,70,104,.04);
+  transition:border-color .18s ease,background .18s ease,box-shadow .18s ease;
+}
+.mode-family-card.classification-family{
+  grid-column:1 / -1;
+}
+.mode-family-card:has(.mode-flow-option input:checked){
+  border-color:var(--primary);
+  background:radial-gradient(circle at 100% 0,rgba(79,91,213,.10),transparent 36%),#f8f8ff;
+  box-shadow:0 8px 22px rgba(79,91,213,.11);
+}
+.mode-family-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:13px;
+}
+.mode-family-head>div{
+  min-width:0;
+}
+.mode-family-head strong{
+  display:block;
+  color:#27314a;
+  font-size:17px;
+}
+.mode-family-head small{
+  display:block;
+  margin-top:6px;
+  color:var(--muted);
+  line-height:1.6;
+}
+.mode-family-badge{
+  flex:0 0 auto;
+  padding:5px 9px;
+  border:1px solid #dfe3ff;
+  border-radius:999px;
+  background:#f3f4ff;
+  color:#525bc3;
+  font-size:10px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.mode-flow-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.mode-flow-option{
+  position:relative;
+  min-width:0;
+  cursor:pointer;
+}
+.mode-flow-option>input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+.mode-flow-body{
+  display:grid;
+  gap:4px;
+  min-height:72px;
+  padding:12px 14px;
+  border:1px solid #dfe5ef;
+  border-radius:14px;
+  background:#fbfcff;
+  transition:border-color .18s ease,background .18s ease,box-shadow .18s ease;
+}
+.mode-flow-body b{
+  color:#35405a;
+  font-size:13px;
+}
+.mode-flow-body small{
+  color:#7e899d;
+  font-size:11px;
+  line-height:1.5;
+}
+.mode-flow-option:hover .mode-flow-body{
+  border-color:#cbd3ef;
+  background:#fff;
+}
+.mode-flow-option>input:checked+.mode-flow-body{
+  border-color:#858ce7;
+  background:#eeeeff;
+  box-shadow:0 0 0 2px rgba(79,91,213,.07);
+}
+.mode-flow-option>input:focus-visible+.mode-flow-body,
+.mode-option>input:focus-visible+.mode-option-body{
+  outline:3px solid rgba(79,91,213,.18);
+  outline-offset:2px;
+}
+
+@media(max-width:700px){
+  .mode-selector{
+    grid-template-columns:1fr;
+  }
+  .mode-family-card.classification-family{
+    grid-column:auto;
+  }
+  .mode-flow-grid{
+    grid-template-columns:1fr;
+  }
+  .mode-family-head{
+    flex-direction:column;
+    gap:8px;
+  }
+}
+
+/* Generic terminology: keep technical IDs/storage unchanged while presenting reusable teaching concepts. */
+.material-terminology-note{
+  color:#7d8798;
+  font-size:11px;
+  line-height:1.55;
 }

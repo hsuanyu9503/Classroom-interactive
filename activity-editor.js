@@ -1,4 +1,4 @@
-/* V2.14.1 | Activity Editor + layered deliberation + custom choices */
+/* V2.15.1 | Activity Editor + layered deliberation + custom choices */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -178,22 +178,20 @@ function newOpenClassificationTask() {
 
 function defaultDeliberationLayers() {
   return [
-    {id:createId(),title:"① 公開影像",content:"顧客到店購買飲料，店員發布的影片中出現顧客可辨識的臉部。",question:"目前能否判斷影片是否適合繼續公開？還需要知道什麼？",teacherNote:""},
-    {id:createId(),title:"② 未被告知或同意",content:"顧客表示，當時完全沒有被告知，也沒有同意被拍攝。",question:"到店消費、被鏡頭拍到，是否足以支持公開影像？",teacherNote:""},
-    {id:createId(),title:"③ 經朋友轉傳才知道",content:"顧客七月初到店，直到 7 月 24 日朋友轉傳，才知道自己的影像被公開。",question:"沒有立即反對是否代表接受？你是否曾假設顧客早就知道？",teacherNote:""},
-    {id:createId(),title:"④ 要求遮臉",content:"顧客先要求將臉打馬賽克，未立即要求刪除整段影片。",question:"你支持這個要求，是因為尊重選擇，還是因為對發布者影響較小？",teacherNote:""},
-    {id:createId(),title:"⑤ 保留的理由",content:"店員表示遮臉需要刪除重發；影片累積許多觀看，對自己很重要，因此希望保留，也表示會尊重顧客決定。",question:"修改成本與觀看利益，應在判斷中占多少分量？理解心情是否等於接受要求？",teacherNote:"店員對平台修改限制的說法應標示為其回覆，不當成已驗證的平台規則。"},
-    {id:createId(),title:"⑥ 處理結果",content:"顧客明確要求下架。依其敘述，IG 內容撤下後，Threads 影片仍存在，因此再次要求處理。",question:"表示尊重需要哪些行動？你正在評價最初公開，還是事後處理？",teacherNote:""}
+    {id:createId(),title:"① 初始資訊",content:"",question:"根據目前資訊，你的判斷是什麼？",teacherNote:""},
+    {id:createId(),title:"② 補充資訊",content:"",question:"這項新資訊有改變你的判斷嗎？為什麼？",teacherNote:""},
+    {id:createId(),title:"③ 不同觀點／條件",content:"",question:"加入這項資訊後，你最在意的判斷依據是什麼？",teacherNote:""},
+    {id:createId(),title:"④ 最後資訊",content:"",question:"綜合目前所有資訊，你最後的判斷是什麼？",teacherNote:""}
   ];
 }
 
 
 function defaultDeliberationOptions() {
   return [
-    {id:"A",label:"完全不能接受"},
-    {id:"B",label:"不太能接受"},
-    {id:"C",label:"大致能接受"},
-    {id:"D",label:"完全能接受"},
+    {id:"A",label:"非常不同意"},
+    {id:"B",label:"比較不同意"},
+    {id:"C",label:"比較同意"},
+    {id:"D",label:"非常同意"},
     {id:"U",label:"資訊不足，暫不判斷"}
   ];
 }
@@ -348,8 +346,8 @@ function updateDeliberationReasonModeUi({ensureChoice=true}={}) {
 
 function newDeliberationActivityData() {
   return {
-    sourceNote:"依當事人貼文敘述整理；店員對平台修改限制的說法屬其回覆，不當成已驗證的平台規則。",
-    fixedQuestion:"就目前資訊，你認為這段影片繼續公開，有多能被接受？",
+    sourceNote:"",
+    fixedQuestion:"就目前資訊，你的判斷是什麼？",
     options:defaultDeliberationOptions(),
     chartType:"bar",
     reasonMode:"text",
@@ -360,27 +358,27 @@ function newDeliberationActivityData() {
     reflection:{
       key:"哪一層最影響你？為什麼？",
       value:"你得知了新事實、修正了假設，還是重新衡量某個價值？",
-      action:"如果你是店員，會如何處理並回覆顧客？",
-      extension:"如果影片中的你很好看，大家也都稱讚，是否就足以支持公開？「好看」與「適合公開」之間，還需要哪些理由？"
+      action:"如果你需要做出實際回應，會怎麼做？",
+      extension:"還有哪些資訊可能改變你的判斷？你會如何確認？"
     }
   };
 }
 
 const defaultActivity = {
   id: createId(),
-  title: "故事鑑定所",
-  subtitle: "從作品元素找出故事類型的祕密",
+  title: "示例活動｜關鍵依據判斷",
+  subtitle: "先選出重要資訊，再揭示教師整理",
   template: "drag-reveal",
   cases: [
     {
-      title: "名偵探柯南",
-      intro: "高中生偵探工藤新一因意外變成小學生模樣，化名江戶川柯南，一邊隱藏身分，一邊運用觀察與推理破解各種案件。",
-      prompt: "哪些元素最能代表這個故事？",
-      cards: ["蒐集線索", "解開謎團", "找出犯人", "使用魔法", "前往異世界"],
-      correctCards: ["蒐集線索", "解開謎團", "找出犯人"],
-      revealTitle: "推理小說",
-      keywords: ["謎團", "線索", "推理", "真相"],
-      revealDescription: "故事通常以謎團為核心，角色透過線索與推理逐步找出真相。",
+      title: "校園植物觀察",
+      intro: "觀察一株校園植物的葉片、莖與生長位置，從提供的特徵中選出最能支持判斷的項目。",
+      prompt: "哪些項目是完成判斷時最重要的依據？",
+      cards: ["葉片形狀", "葉脈特徵", "生長位置", "花盆顏色", "旁邊是否有人"],
+      correctCards: ["葉片形狀", "葉脈特徵", "生長位置"],
+      revealTitle: "判斷要看與問題直接相關的特徵",
+      keywords: ["觀察", "特徵", "證據", "判斷"],
+      revealDescription: "同一份材料裡會有很多資訊；真正有用的是能直接支持問題判斷的特徵與證據。",
       discussionPrompt: ""
     }
   ],
@@ -479,12 +477,12 @@ function newBlankActivity() {
 }
 
 function getModeLabel(template) {
-  if (template === "open-tags") return "開放式標籤討論";
-  if (template === "element-type") return "要素 → 類型分類";
-  if (template === "progressive-reveal") return "逐層揭露";
-  if (template === "open-classification") return "開放分類";
+  if (template === "open-tags") return "特徵選擇";
+  if (template === "element-type") return "依據與分類｜基礎分類";
+  if (template === "progressive-reveal") return "逐步揭露";
+  if (template === "open-classification") return "依據與分類｜討論後再判斷";
   if (template === "layered-deliberation") return "逐層思辨";
-  return "探索式揭密";
+  return "選擇與揭示";
 }
 
 function renderLibrary() {
@@ -630,18 +628,18 @@ function readCases() {
 // ---------- V1.6 要素 → 類型 ----------
 function populateWorkSelect(select, selectedId = "") {
   const works = getWorkLibrary();
-  select.innerHTML = '<option value="">— 選擇作品庫中的作品 —</option>';
+  select.innerHTML = '<option value="">— 選擇材料庫中的材料 —</option>';
   works.forEach(work => {
     const option = document.createElement("option");
     option.value = work.id;
-    option.textContent = work.name || "未命名作品";
+    option.textContent = work.name || "未命名材料";
     option.selected = work.id === selectedId;
     select.appendChild(option);
   });
   if (selectedId && !works.some(work => work.id === selectedId)) {
     const missing = document.createElement("option");
     missing.value = selectedId;
-    missing.textContent = "⚠ 引用的作品已不存在";
+    missing.textContent = "⚠ 引用的材料已不存在";
     missing.selected = true;
     select.appendChild(missing);
   }
@@ -652,7 +650,7 @@ function renderModeAWorkPreview(card) {
   const work = getWorkMap().get(workId);
   const preview = card.querySelector(".mode-a-work-preview");
   if (!work) {
-    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇作品；若作品庫是空的，請先到「作品庫」建立作品。</div>';
+    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇材料；若材料庫是空的，請先到「材料庫」建立材料。</div>';
     return;
   }
   const image = work.image
@@ -661,9 +659,9 @@ function renderModeAWorkPreview(card) {
   preview.innerHTML = `
     ${image}
     <div>
-      <span class="section-kicker">引用作品</span>
-      <h4>${escapeHtml(work.name || "未命名作品")}</h4>
-      <p>${escapeHtml(work.intro || "尚未設定學生版作品介紹。")}</p>
+      <span class="section-kicker">引用材料</span>
+      <h4>${escapeHtml(work.name || "未命名材料")}</h4>
+      <p>${escapeHtml(work.intro || "尚未設定學生版材料介紹。")}</p>
     </div>
   `;
 }
@@ -676,7 +674,7 @@ function renderModeAElementGrid(card, task) {
 
   grid.innerHTML = "";
   if (!allElements.length) {
-    grid.innerHTML = '<div class="mode-a-missing-data">類型工具箱目前沒有要素，請先建立分類要素。</div>';
+    grid.innerHTML = '<div class="mode-a-missing-data">分類工具箱目前沒有判斷依據，請先建立。</div>';
     return;
   }
 
@@ -718,10 +716,10 @@ function renderModeATypeGrid(card, task) {
   const provided = new Set(task.typeRefs || []);
 
   grid.innerHTML = "";
-  reference.innerHTML = '<option value="">— 選擇參考類型 —</option>';
+  reference.innerHTML = '<option value="">— 選擇參考分類 —</option>';
 
   if (!types.length) {
-    grid.innerHTML = '<div class="mode-a-missing-data">類型工具箱目前沒有類型。</div>';
+    grid.innerHTML = '<div class="mode-a-missing-data">分類工具箱目前沒有分類。</div>';
     return;
   }
 
@@ -732,7 +730,7 @@ function renderModeATypeGrid(card, task) {
       <input class="mode-a-type-provided" type="checkbox" value="${escapeHtml(type.id)}" ${provided.has(type.id) ? "checked" : ""}>
       <span class="mode-a-type-icon">${escapeHtml(type.icon || "◼")}</span>
       <span>
-        <strong>${escapeHtml(type.name || "未命名類型")}</strong>
+        <strong>${escapeHtml(type.name || "未命名分類")}</strong>
         <small>${escapeHtml(type.description || "")}</small>
       </span>
     `;
@@ -740,7 +738,7 @@ function renderModeATypeGrid(card, task) {
 
     const option = document.createElement("option");
     option.value = type.id;
-    option.textContent = `${type.icon || "◼"} ${type.name || "未命名類型"}`;
+    option.textContent = `${type.icon || "◼"} ${type.name || "未命名分類"}`;
     option.selected = task.correctTypeRef === type.id;
     reference.appendChild(option);
   });
@@ -846,12 +844,12 @@ function renderProgressiveWorkPreview() {
   const preview = progressiveTaskEditor.querySelector(".progressive-work-preview");
   if (!preview) return;
   if (!work) {
-    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇一部有逐層線索的作品。</div>';
+    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇一份有逐步資訊的材料。</div>';
     return;
   }
   preview.innerHTML = `
     <div class="mode-a-preview-image ${work.image ? "" : "placeholder"}">${work.image ? `<img src="${escapeHtml(work.image)}" alt="">` : "🪄"}</div>
-    <div><span class="section-kicker">引用作品</span><h4>${escapeHtml(work.name || "未命名作品")}</h4><p>${escapeHtml(work.intro || "尚未設定作品介紹。")}</p></div>
+    <div><span class="section-kicker">引用材料</span><h4>${escapeHtml(work.name || "未命名材料")}</h4><p>${escapeHtml(work.intro || "尚未設定材料介紹。")}</p></div>
   `;
 }
 
@@ -861,7 +859,7 @@ function renderProgressiveClues(task) {
   if (!grid) return;
   grid.innerHTML = "";
   if (!work?.clues?.length) {
-    grid.innerHTML = '<div class="mode-a-missing-data">這部作品還沒有逐層線索，請先到作品庫新增。</div>';
+    grid.innerHTML = '<div class="mode-a-missing-data">這份材料還沒有逐步資訊，請先到材料庫新增。</div>';
     return;
   }
   const selected = new Set(task.clueRefs || []);
@@ -880,7 +878,7 @@ function renderProgressiveTypes(task) {
   const selected = new Set(task.typeRefs || []);
   const types = getTypeLibrary();
   grid.innerHTML = "";
-  reference.innerHTML = '<option value="">— 不設定唯一參考類型 —</option>';
+  reference.innerHTML = '<option value="">— 不設定唯一參考分類 —</option>';
   types.forEach(type => {
     const label = document.createElement("label");
     label.className = "mode-a-type-option";
@@ -947,12 +945,12 @@ function renderOpenClassificationWorkPreview() {
   const work = getWorkMap().get(card.querySelector(".open-classification-work-select").value);
   const preview = card.querySelector(".open-classification-work-preview");
   if (!work) {
-    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇作品。</div>';
+    preview.innerHTML = '<div class="mode-a-missing-data">請先選擇材料。</div>';
     return;
   }
   preview.innerHTML = `
     ${work.image ? `<div class="mode-a-preview-image"><img src="${escapeHtml(work.image)}" alt=""></div>` : `<div class="mode-a-preview-image placeholder">🎬</div>`}
-    <div><span class="section-kicker">引用作品</span><h4>${escapeHtml(work.name||"未命名作品")}</h4><p>${escapeHtml(work.intro||"尚未設定學生版作品介紹。")}</p></div>
+    <div><span class="section-kicker">引用材料</span><h4>${escapeHtml(work.name||"未命名材料")}</h4><p>${escapeHtml(work.intro||"尚未設定學生版材料介紹。")}</p></div>
   `;
 }
 
@@ -964,7 +962,7 @@ function renderOpenClassificationElements(task) {
   const elements = getAllLibraryElements();
   grid.innerHTML = "";
   if (!elements.length) {
-    grid.innerHTML = '<div class="mode-a-missing-data">類型工具箱目前沒有可使用的故事要素。</div>';
+    grid.innerHTML = '<div class="mode-a-missing-data">分類工具箱目前沒有可使用的判斷依據。</div>';
     return;
   }
   elements.forEach(element => {
@@ -1231,15 +1229,15 @@ function applyModeUI(mode) {
   editorPanel?.classList.toggle("layered-deliberation-mode", isDeliberation);
 
   if (templateKicker) {
-    templateKicker.textContent = isDeliberation ? "模板 06" : isOpenClassification ? "模板 05" : isProgressive ? "模板 04" : isElementType ? "模板 03" : isOpen ? "模板 02" : "模板 01";
+    templateKicker.textContent = isDeliberation ? "模板 05" : isProgressive ? "模板 04" : (isElementType || isOpenClassification) ? "模板 03" : isOpen ? "模板 02" : "模板 01";
   }
   if (templateTitle) {
     templateTitle.textContent = isDeliberation
       ? "逐層思辨"
-      : isOpenClassification ? "開放分類"
-      : isProgressive ? "逐層揭露"
-      : isElementType ? "要素 → 類型分類"
-      : isOpen ? "開放式標籤討論" : "探索式拖曳揭密";
+      : isOpenClassification ? "依據與分類｜討論後再判斷"
+      : isProgressive ? "逐步揭露"
+      : isElementType ? "依據與分類｜基礎分類"
+      : isOpen ? "特徵選擇" : "選擇與揭示";
   }
 
   const isSpecial = isElementType || isProgressive || isOpenClassification || isDeliberation;
@@ -1255,8 +1253,8 @@ function applyModeUI(mode) {
   });
   document.querySelectorAll(".card-builder-help").forEach(help => {
     help.textContent = isOpen
-      ? "輸入可供學生複選的標籤或故事要素；此模式沒有標準答案。按 Enter 可快速新增下一張。"
-      : "輸入字卡內容後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張字卡。";
+      ? "輸入可供學生複選的特徵、依據或標籤；此模式沒有唯一答案。按 Enter 可快速新增下一張。"
+      : "輸入學生可選擇的項目後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張。";
   });
   document.querySelectorAll(".reveal-settings").forEach(section => {
     section.classList.toggle("hidden", isOpen);
@@ -1373,12 +1371,12 @@ function validateActivity(activity) {
     const works = getWorkMap();
     const elements = getLibraryElementMap();
     const types = getTypeMap();
-    if (!task?.workRef || !works.has(task.workRef)) return "開放分類尚未選擇有效作品";
-    if (!task.elementRefs?.length) return "開放分類尚未提供故事證據";
-    if (task.elementRefs.length < task.minEvidence) return "可選故事證據少於最低選擇數";
-    if (task.elementRefs.some(id => !elements.has(id))) return "開放分類引用了已不存在的故事要素";
-    if (!task.typeRefs?.length) return "開放分類尚未提供可選類型";
-    if (task.typeRefs.some(id => !types.has(id))) return "開放分類引用了已不存在的類型";
+    if (!task?.workRef || !works.has(task.workRef)) return "依據與分類尚未選擇有效材料";
+    if (!task.elementRefs?.length) return "依據與分類尚未提供判斷依據";
+    if (task.elementRefs.length < task.minEvidence) return "可選判斷依據少於最低選擇數";
+    if (task.elementRefs.some(id => !elements.has(id))) return "依據與分類引用了已不存在的判斷依據";
+    if (!task.typeRefs?.length) return "依據與分類尚未提供可選分類";
+    if (task.typeRefs.some(id => !types.has(id))) return "依據與分類引用了已不存在的分類";
     return "";
   }
 
@@ -1386,14 +1384,14 @@ function validateActivity(activity) {
     const task = activity.progressive;
     const works = getWorkMap();
     const types = getTypeMap();
-    if (!task?.workRef || !works.has(task.workRef)) return "逐層揭露尚未選擇有效作品";
-    if (!task.clueRefs || task.clueRefs.length < 2) return "逐層揭露至少需要 2 條線索";
+    if (!task?.workRef || !works.has(task.workRef)) return "逐步揭露尚未選擇有效材料";
+    if (!task.clueRefs || task.clueRefs.length < 2) return "逐步揭露至少需要 2 項資訊";
     const work = works.get(task.workRef);
     const validClues = new Set((work.clues || []).map(clue => clue.id));
-    if (task.clueRefs.some(id => !validClues.has(id))) return "逐層揭露引用了已不存在的線索";
-    if (!task.typeRefs?.length) return "逐層揭露尚未提供可選類型";
-    if (task.typeRefs.some(id => !types.has(id))) return "逐層揭露引用了已不存在的類型";
-    if (task.referenceTypeRef && !task.typeRefs.includes(task.referenceTypeRef)) return "最終參考類型必須同時提供給學生";
+    if (task.clueRefs.some(id => !validClues.has(id))) return "逐步揭露引用了已不存在的資訊";
+    if (!task.typeRefs?.length) return "逐步揭露尚未提供可選分類";
+    if (task.typeRefs.some(id => !types.has(id))) return "逐步揭露引用了已不存在的分類";
+    if (task.referenceTypeRef && !task.typeRefs.includes(task.referenceTypeRef)) return "最終參考分類必須同時提供給學生";
     return "";
   }
 
@@ -1405,16 +1403,16 @@ function validateActivity(activity) {
 
     for (let i = 0; i < activity.tasks.length; i++) {
       const task = activity.tasks[i];
-      if (!task.workRef || !works.has(task.workRef)) return `第 ${i + 1} 個分類任務尚未選擇有效作品`;
-      if (!task.elementRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選要素`;
-      if (task.elementRefs.length < task.minElements) return `第 ${i + 1} 個分類任務提供的要素少於最低選擇數`;
-      if (!task.correctElementRefs.length) return `第 ${i + 1} 個分類任務尚未設定參考要素`;
-      if (task.correctElementRefs.some(id => !task.elementRefs.includes(id))) return `第 ${i + 1} 個分類任務的參考要素必須同時提供給學生`;
-      if (task.elementRefs.some(id => !elements.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的要素`;
-      if (!task.typeRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選類型`;
-      if (!task.correctTypeRef) return `第 ${i + 1} 個分類任務尚未設定參考類型`;
-      if (!task.typeRefs.includes(task.correctTypeRef)) return `第 ${i + 1} 個分類任務的參考類型必須同時提供給學生`;
-      if (task.typeRefs.some(id => !types.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的類型`;
+      if (!task.workRef || !works.has(task.workRef)) return `第 ${i + 1} 個分類任務尚未選擇有效材料`;
+      if (!task.elementRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選依據`;
+      if (task.elementRefs.length < task.minElements) return `第 ${i + 1} 個分類任務提供的依據少於最低選擇數`;
+      if (!task.correctElementRefs.length) return `第 ${i + 1} 個分類任務尚未設定參考依據`;
+      if (task.correctElementRefs.some(id => !task.elementRefs.includes(id))) return `第 ${i + 1} 個分類任務的參考依據必須同時提供給學生`;
+      if (task.elementRefs.some(id => !elements.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的依據`;
+      if (!task.typeRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選分類`;
+      if (!task.correctTypeRef) return `第 ${i + 1} 個分類任務尚未設定參考分類`;
+      if (!task.typeRefs.includes(task.correctTypeRef)) return `第 ${i + 1} 個分類任務的參考分類必須同時提供給學生`;
+      if (task.typeRefs.some(id => !types.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的分類`;
     }
     return "";
   }
@@ -1423,7 +1421,7 @@ function validateActivity(activity) {
 
   for (let i = 0; i < activity.cases.length; i++) {
     const c = activity.cases[i];
-    if (!c.title) return `第 ${i + 1} 關尚未填寫作品／情境名稱`;
+    if (!c.title) return `第 ${i + 1} 關尚未填寫材料／情境名稱`;
     if (!c.cards.length) return `第 ${i + 1} 關尚未填寫${activity.template === "open-tags" ? "標籤" : "字卡"}`;
 
     if (activity.template !== "open-tags") {
@@ -1480,7 +1478,7 @@ function buildElementTypeSnapshot(activity) {
     const typeOptions = task.typeRefs.map(id => typeMap.get(id)).filter(Boolean);
     return {
       w: {
-        n: work?.name || "未命名作品",
+        n: work?.name || "未命名材料",
         sh: work?.showName !== false,
         i: work?.intro || "",
         img: work?.image || ""
@@ -1511,7 +1509,7 @@ function buildProgressiveSnapshot(activity) {
   const clueMap = new Map((work?.clues || []).map(clue => [clue.id, clue]));
   const types = task.typeRefs.map(id => typeMap.get(id)).filter(Boolean);
   return {
-    w:{n:work?.name||"未命名作品",sh:work?.showName!==false,i:work?.intro||"",img:work?.image||""},
+    w:{n:work?.name||"未命名材料",sh:work?.showName!==false,i:work?.intro||"",img:work?.image||""},
     p:task.prompt||"",
     l:task.clueRefs.map(id=>clueMap.get(id)).filter(Boolean).map((clue,index)=>({i:String(index),t:clue.text})),
     y:types.map((type,index)=>({i:String(index),n:type.name,ic:type.icon||"◼",c:type.color||"#667085",d:type.description||""})),
@@ -1528,7 +1526,7 @@ function buildOpenClassificationSnapshot(activity) {
   const elements = task.elementRefs.map(id => elementMap.get(id)).filter(Boolean);
   const types = task.typeRefs.map(id => typeMap.get(id)).filter(Boolean);
   return {
-    w:{n:work?.name||"未命名作品",sh:work?.showName!==false,i:work?.intro||"",img:work?.image||""},
+    w:{n:work?.name||"未命名材料",sh:work?.showName!==false,i:work?.intro||"",img:work?.image||""},
     p:task.prompt||"",
     e:elements.map((element,index)=>({i:String(index),n:element.name})),
     y:types.map((type,index)=>({i:String(index),n:type.name,ic:type.icon||"◼",c:type.color||"#667085",d:type.description||""})),
@@ -1698,7 +1696,7 @@ async function previewOrShare(openPreview = false) {
   } else if (url.length > QR_SAFE_MAX_LENGTH) {
     qrcodeEl.classList.remove("qr-size-medium","qr-size-large");
     qrcodeEl.innerHTML = "<p class='subtle'>活動內容較多，若直接塞進 QR Code 會過度密集而難以掃描。</p>";
-    qrNotice.textContent = `目前分享網址 ${url.length} 字元，已超過 1100 字元的教室掃碼建議上限。學生連結仍可使用；請優先改用課堂 Session QR，或精簡作品介紹／圖片網址。`;
+    qrNotice.textContent = `目前分享網址 ${url.length} 字元，已超過 1100 字元的教室掃碼建議上限。學生連結仍可使用；請優先改用課堂 Session QR，或精簡材料介紹／圖片網址。`;
     qrNotice.classList.remove("hidden");
   } else if (window.QRCode) {
     try {
@@ -1934,7 +1932,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.14.1",
+    appVersion:"2.15.0",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),
@@ -1983,7 +1981,7 @@ async function importTeachingBackup(file) {
     return;
   }
 
-  if (!confirm("匯入會覆蓋目前的課程、類型、作品與活動資料。確定繼續嗎？")) return;
+  if (!confirm("匯入會覆蓋目前的課程、分類、材料與活動資料。確定繼續嗎？")) return;
 
   localStorage.setItem(BACKUP_KEYS.types, JSON.stringify(data.types));
   localStorage.setItem(BACKUP_KEYS.works, JSON.stringify(data.works));
