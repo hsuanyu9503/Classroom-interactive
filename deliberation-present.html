@@ -51,6 +51,30 @@
         </div>
       </article>
     </section>
+
+    <section class="deliberation-presentation-control-dock" aria-label="投影課堂控制">
+      <div class="dp-control-status-row">
+        <span id="dpControlStatus" class="dp-control-status offline">⚪ 僅投影模式</span>
+        <small id="dpControlHint">教師控制端連線後，可直接在這裡操作課堂流程。</small>
+      </div>
+
+      <div class="dp-control-groups">
+        <div class="dp-control-group" aria-label="課堂流程控制">
+          <button id="dpPreviousBtn" class="btn btn-secondary dp-session-control" type="button">← 上一層</button>
+          <button id="dpOpenBtn" class="btn btn-secondary dp-session-control" type="button">🟢 開放作答</button>
+          <button id="dpLockBtn" class="btn btn-secondary dp-session-control" type="button">🔒 鎖定</button>
+          <button id="dpPublishBtn" class="btn btn-primary dp-session-control" type="button">📊 公布結果</button>
+          <button id="dpNextBtn" class="btn btn-primary dp-session-control" type="button">下一層 →</button>
+        </div>
+
+        <div class="dp-control-group dp-local-controls" aria-label="投影顯示控制">
+          <button id="dpViewOverviewBtn" class="btn btn-secondary active" type="button">總覽</button>
+          <button id="dpViewContentBtn" class="btn btn-secondary" type="button">情境</button>
+          <button id="dpViewResultsBtn" class="btn btn-secondary" type="button">統計</button>
+          <button id="dpFullscreenBtn" class="btn btn-secondary" type="button">⛶ 全螢幕</button>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="app-credit" aria-label="網站作者">

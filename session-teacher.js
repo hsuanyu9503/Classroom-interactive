@@ -129,6 +129,81 @@
     }
   }
 
+  function postDeliberationProjectionControlStatus({requestId="",message="",error=""}={}) {
+    if (!deliberationPresentationChannel) return;
+    try {
+      deliberationPresentationChannel.postMessage({
+        schema:"classroom-deliberation-presentation-control-status",
+        version:1,
+        at:new Date().toISOString(),
+        connected:true,
+        requestId,
+        message,
+        error
+      });
+    } catch {}
+  }
+
+  async function previousDeliberationLayer() {
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return false;
+    const current=Math.max(1,Number(activeSession.currentStage)||1);
+    const target=Math.max(1,current-1);
+    if (target===current) return false;
+    try {
+      await window.ClassroomSessionAPI.setDeliberationState(activeSession,{stage:target,roundState:"published"});
+      await refreshActiveSession();
+      return true;
+    } catch (error) {
+      showSessionToast(error.message || "回到上一層失敗");
+      return false;
+    }
+  }
+
+  async function handleDeliberationProjectionCommand(payload) {
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation" || activeSession.status === "closed") {
+      postDeliberationProjectionControlStatus({
+        requestId:payload?.requestId || "",
+        error:"目前沒有可控制的逐層思辨 Session"
+      });
+      return;
+    }
+    const command=String(payload?.command || "");
+    const requestId=String(payload?.requestId || "");
+    try {
+      let success=true;
+      if (command==="open") success=await setDeliberationRound("open");
+      else if (command==="lock") success=await setDeliberationRound("locked");
+      else if (command==="publish") success=await setDeliberationRound("published");
+      else if (command==="next") success=await nextDeliberationLayer();
+      else if (command==="previous") success=await previousDeliberationLayer();
+      else if (command==="refresh") await refreshActiveSession(true);
+      else throw new Error("不支援的投影控制指令");
+      if (success===false) throw new Error("課堂狀態未完成更新");
+      postDeliberationProjectionControlStatus({requestId,message:"控制完成"});
+      if (latestTeacherSnapshot) publishDeliberationPresentation(latestTeacherSnapshot);
+    } catch (error) {
+      postDeliberationProjectionControlStatus({
+        requestId,
+        error:error?.message || "投影控制失敗"
+      });
+    }
+  }
+
+  function bindDeliberationPresentationChannel(channel) {
+    if (!channel || channel.__teacherControlBound) return;
+    channel.__teacherControlBound=true;
+    channel.addEventListener("message",event=>{
+      const data=event.data || {};
+      if (data.schema!=="classroom-deliberation-presentation-command") return;
+      if (data.type==="hello" || data.type==="ping") {
+        postDeliberationProjectionControlStatus({message:"教師控制端已連線"});
+        if (latestTeacherSnapshot) publishDeliberationPresentation(latestTeacherSnapshot);
+        return;
+      }
+      if (data.type==="command") handleDeliberationProjectionCommand(data);
+    });
+  }
+
   function ensureDeliberationPresentationChannel() {
     if (!activeSession?.id || activeSession.activityMode !== "layered-deliberation") return null;
     if (deliberationPresentationChannel && deliberationPresentationSessionId===activeSession.id) return deliberationPresentationChannel;
@@ -137,6 +212,7 @@
     deliberationPresentationSessionId=activeSession.id;
     if (typeof BroadcastChannel==="function") {
       deliberationPresentationChannel=new BroadcastChannel(deliberationPresentationChannelName(activeSession.id));
+      bindDeliberationPresentationChannel(deliberationPresentationChannel);
     }
     return deliberationPresentationChannel;
   }
@@ -167,6 +243,13 @@
       participantCount:Number(snapshot?.participant_count)||0,
       submittedCount:new Set(current.map(r=>r.participant_id)).size,
       published,
+      controls:{
+        canPrevious:stage>1,
+        canOpen:(snapshot?.round_state || "open")!=="open",
+        canLock:(snapshot?.round_state || "open")==="open",
+        canPublish:(snapshot?.round_state || "open")!=="published",
+        canNext:(snapshot?.round_state || "open")==="published" && stage<total
+      },
       distribution:published ? counts : null,
       reasons:published ? current.filter(r=>!r.is_hidden).map(r=>String(r.payload?.reason || "").trim()).filter(Boolean) : []
     };
@@ -1358,31 +1441,35 @@
   }
 
   async function setDeliberationRound(roundState) {
-    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return;
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return false;
     try {
       await window.ClassroomSessionAPI.setDeliberationState(activeSession,{
         stage:activeSession.currentStage || 1,
         roundState
       });
       await refreshActiveSession();
+      return true;
     } catch (error) {
       showSessionToast(error.message || "更新逐層思辨狀態失敗");
+      return false;
     }
   }
 
   async function nextDeliberationLayer() {
-    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return;
+    if (!activeSession || activeSession.activityMode !== "layered-deliberation") return false;
     if (activeSession.roundState !== "published") {
       showSessionToast("請先公布本層結果，再進入下一層");
-      return;
+      return false;
     }
     const target=Math.min((activeSession.currentStage || 1)+1,activeSession.stageCount || 1);
-    if (target === activeSession.currentStage) return;
+    if (target === activeSession.currentStage) return false;
     try {
       await window.ClassroomSessionAPI.setDeliberationState(activeSession,{stage:target,roundState:"open"});
       await refreshActiveSession();
+      return true;
     } catch (error) {
       showSessionToast(error.message || "公開下一層失敗");
+      return false;
     }
   }
 
