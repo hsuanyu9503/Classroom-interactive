@@ -21,7 +21,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.18.0</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.19.0</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -365,6 +365,39 @@
             </div>
           </div>
 
+          <div class="mode-family-card first-wave-family">
+            <div class="mode-family-head">
+              <div>
+                <strong>✨ 快速互動</strong>
+                <small>補齊態度、優先順序與開放觀點三種常用課堂互動，可直接進入 Session 統計。</small>
+              </div>
+              <span class="mode-family-badge">第一波新模組</span>
+            </div>
+            <div class="mode-flow-grid first-wave-grid">
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="scale-spectrum" />
+                <span class="mode-flow-body">
+                  <b>📏 量表／立場光譜</b>
+                  <small>1～N 程度選擇 → 看全班分布與平均</small>
+                </span>
+              </label>
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="ranking" />
+                <span class="mode-flow-body">
+                  <b>↕️ 排序／優先順序</b>
+                  <small>拖曳排序 → 比較第一順位與平均排名</small>
+                </span>
+              </label>
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="open-text" />
+                <span class="mode-flow-body">
+                  <b>💬 開放文字／文字牆</b>
+                  <small>短答蒐集 → 匿名或具名即時文字牆</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
           <label class="mode-option">
             <input type="radio" name="activityMode" value="progressive-reveal" />
             <span class="mode-option-body">
@@ -438,6 +471,57 @@
         </div>
         <div id="openClassificationTaskEditor"></div>
       </section>
+      <section id="scaleEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div>
+            <span class="section-kicker">SCALE / SPECTRUM</span>
+            <h3>量表／立場光譜</h3>
+            <p class="field-help">設定一個連續程度題，學生以 1～N 表達立場；教師端即時呈現分布、平均與中位數。</p>
+          </div>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>題目</span><textarea id="scaleQuestion" rows="3" placeholder="例如：你認為這個行為有多嚴重？"></textarea></label>
+          <div class="form-grid three-col">
+            <label class="field"><span>刻度數</span><input id="scalePointCount" type="number" min="3" max="10" value="5" /></label>
+            <label class="field"><span>左端標籤</span><input id="scaleLeftLabel" type="text" maxlength="40" placeholder="完全不同意" /></label>
+            <label class="field"><span>右端標籤</span><input id="scaleRightLabel" type="text" maxlength="40" placeholder="非常同意" /></label>
+          </div>
+        </div>
+      </section>
+
+      <section id="rankingEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div>
+            <span class="section-kicker">RANKING</span>
+            <h3>排序／優先順序</h3>
+            <p class="field-help">學生將項目排出優先順序；教師端比較第一順位票數與全班平均排名。</p>
+          </div>
+          <button id="addRankingItemBtn" class="btn btn-secondary" type="button">＋ 新增排序項目</button>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>排序題目</span><textarea id="rankingQuestion" rows="3" placeholder="例如：請把你認為最重要的判斷因素依序排列。"></textarea></label>
+          <div id="rankingItemsEditor" class="ranking-items-editor"></div>
+          <small class="field-help">至少 2 項，最多 10 項；學生端可拖曳，也可使用上下移動按鈕。</small>
+        </div>
+      </section>
+
+      <section id="openTextEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div>
+            <span class="section-kicker">OPEN RESPONSE</span>
+            <h3>開放文字／文字牆</h3>
+            <p class="field-help">蒐集學生短答並在教師端形成即時文字牆；教師可在自己的檢視頁切換匿名或顯示學生。</p>
+          </div>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>提問</span><textarea id="openTextQuestion" rows="3" placeholder="例如：你認為這個案例最大的問題是什麼？"></textarea></label>
+          <div class="form-grid two-col">
+            <label class="field"><span>輸入提示</span><input id="openTextPlaceholder" type="text" maxlength="80" placeholder="請用一兩句話寫下你的想法" /></label>
+            <label class="field"><span>字數上限</span><input id="openTextMaxLength" type="number" min="30" max="1000" value="240" /></label>
+          </div>
+        </div>
+      </section>
+
       <section id="deliberationEditorSection" class="deliberation-editor-section hidden">
         <div class="editor-toolbar deliberation-toolbar">
           <div>
@@ -835,6 +919,41 @@
             <div><span>改變判斷</span><strong id="openChangedCount">0</strong></div>
             <div><span>維持原判斷</span><strong id="openUnchangedCount">0</strong></div>
           </div>
+        </section>
+
+        <section id="scaleSessionControl" class="wave-session-control hidden">
+          <div class="session-section-head">
+            <div><span class="section-kicker">LIVE SCALE</span><h3>量表即時統計</h3></div>
+            <span id="scaleAnsweredBadge" class="stage-badge">0 / 0</span>
+          </div>
+          <div class="wave-session-grid">
+            <div class="wave-metric-panel">
+              <span class="summary-label">全班趨勢</span>
+              <div class="wave-metrics"><div><span>平均</span><strong id="scaleAverageValue">—</strong></div><div><span>中位數</span><strong id="scaleMedianValue">—</strong></div></div>
+              <p id="scaleEndpointLabels" class="subtle">—</p>
+            </div>
+            <div><span class="summary-label">即時分布</span><div id="scaleLiveDistribution" class="stage-distribution-list"></div></div>
+          </div>
+        </section>
+
+        <section id="rankingSessionControl" class="wave-session-control hidden">
+          <div class="session-section-head">
+            <div><span class="section-kicker">LIVE RANKING</span><h3>排序即時統計</h3></div>
+            <span id="rankingAnsweredBadge" class="stage-badge">0 / 0</span>
+          </div>
+          <div class="wave-session-grid">
+            <div><span class="summary-label">第一順位分布</span><div id="rankingFirstDistribution" class="stage-distribution-list"></div></div>
+            <div><span class="summary-label">平均排名</span><div id="rankingAverageList" class="ranking-average-list"></div></div>
+          </div>
+        </section>
+
+        <section id="openTextSessionControl" class="wave-session-control hidden">
+          <div class="session-section-head">
+            <div><span class="section-kicker">LIVE TEXT WALL</span><h3>即時文字牆</h3></div>
+            <label class="reason-identity-control" for="openTextIdentityMode"><span>顯示方式</span><select id="openTextIdentityMode"><option value="anonymous">匿名</option><option value="named">顯示學生</option></select></label>
+          </div>
+          <div class="text-wall-meta"><span id="openTextAnsweredCount">已回答 0 / 0</span><small>此切換只影響教師目前的文字牆檢視。</small></div>
+          <div id="openTextWall" class="open-text-wall"><div class="empty-v15">目前還沒有學生提交文字。</div></div>
         </section>
 
         <section id="deliberationSessionControl" class="deliberation-session-control hidden">

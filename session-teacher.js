@@ -1,4 +1,4 @@
-/* V2.18.0 | Teacher Session + student inspector + reason identity controls */
+/* V2.19.0 | Teacher Session + student inspector + reason identity controls */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -21,13 +21,14 @@
     try { return localStorage.getItem("classroom-deliberation-reason-identity") === "named" ? "named" : "anonymous"; } catch { return "anonymous"; }
   })();
   const liveStatsShown = new Map();
+  let openTextIdentityMode = "anonymous";
   const LIVE_STATS_PALETTE=["#3b6fb6","#e38b2c","#2f8f66","#8a5db7","#d65b5b","#2b9cb3","#c59a2b","#c35a8a","#61758a","#8a6846"];
 
   function stableLiveStatColor(value,fallbackIndex=0) {
     const text=String(value ?? "").trim();
     let paletteIndex=Math.abs(Number(fallbackIndex)||0)%LIVE_STATS_PALETTE.length;
 
-    // V2.18.0：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
+    // V2.19.0：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
     // 這可保證 Realtime 更新、新選項首次出現或學生改答案時，既有選項永遠不換色。
     if (/^\d+$/.test(text)) {
       paletteIndex=Number(text)%LIVE_STATS_PALETTE.length;
@@ -414,7 +415,10 @@
       phaseLabel,
       distribution,
       changedCount:Number(extras.changedCount || 0),
-      unchangedCount:Number(extras.unchangedCount || 0)
+      unchangedCount:Number(extras.unchangedCount || 0),
+      customMetrics:Array.isArray(extras.customMetrics) ? extras.customMetrics : [],
+      secondaryList:Array.isArray(extras.secondaryList) ? extras.secondaryList : [],
+      textWall:Array.isArray(extras.textWall) ? extras.textWall : []
     };
   }
 
@@ -1165,6 +1169,19 @@
       head.innerHTML=`<strong>${escapeHtml(responseModeLabel(response.mode))} · ${escapeHtml(responseStageLabel(response))}</strong><small>${escapeHtml(formatTime(response.submitted_at))}</small>`;
       const body=document.createElement("div");body.className="student-response-detail-body";
 
+      const customInspectorFields=ActivityModules?.invoke?.("teacher",response?.mode,"inspectorFields",response,snapshot);
+      if (Array.isArray(customInspectorFields)) {
+        const rows=customInspectorFields.map(field=>{
+          if (!field) return null;
+          if (field.kind==="chips") return createInspectorLine(field.label,Array.isArray(field.value)&&field.value.length ? chipListHtml(field.value) : "",{html:true});
+          return createInspectorLine(field.label,field.value);
+        }).filter(Boolean);
+        rows.forEach(row=>body.appendChild(row));
+        if (!rows.length) body.innerHTML='<div class="empty-v15">這筆作答沒有可顯示的內容。</div>';
+        card.append(head,body);detail.appendChild(card);
+        return;
+      }
+
       const selectedType=responseSelectedTypeLabel(response,snapshot);
       const selectedElements=Array.isArray(response.payload?.elementNames) && response.payload.elementNames.length
         ? response.payload.elementNames
@@ -1685,7 +1702,7 @@
     }
 
     const max=Math.max(...normalized.map(item=>item.count),1);
-    const sorted=normalized.slice().sort((a,b)=>b.count-a.count || a.order-b.order);
+    const sorted=normalized.slice().sort(shown ? ((a,b)=>b.count-a.count || a.order-b.order) : ((a,b)=>a.order-b.order));
     const keep=new Set(sorted.map(item=>item.id));
     existing.forEach((row,id)=>{ if(!keep.has(id)) row.remove(); });
 
@@ -1764,6 +1781,141 @@
     });
     wrap.append(pie,legend);body.appendChild(wrap);
     if (shown) { requestAnimationFrame(()=>wrap.classList.add("live-stats-revealed")); }
+  }
+
+  function moduleResponses(snapshot,mode) {
+    return (snapshot?.responses || []).filter(response=>
+      response.mode===mode &&
+      response.stage_key==="final" &&
+      (activeSession?.sessionKind!=="course" || !response.node_ref || response.node_ref===activeSession.currentNodeRef)
+    );
+  }
+
+  function renderScaleControl(snapshot) {
+    const panel=$("scaleSessionControl");
+    if (!panel || activeSession?.activityMode!=="scale-spectrum" || activeSession.status==="closed") { panel?.classList.add("hidden"); return; }
+    panel.classList.remove("hidden");
+    const responses=moduleResponses(snapshot,"scale-spectrum");
+    const total=Number(snapshot?.participant_count)||0;
+    $("scaleAnsweredBadge").textContent=`${new Set(responses.map(r=>r.participant_id)).size} / ${total}`;
+    const sample=responses.find(r=>Number(r.payload?.pointCount)>0);
+    const count=sample ? Math.max(3,Math.min(10,Number(sample?.payload?.pointCount)||5)) : 0;
+    const counts=count ? Array.from({length:count},(_,index)=>({id:String(index+1),label:String(index+1),count:0,order:index})) : [];
+    const values=[];
+    responses.forEach(response=>{
+      const value=Number(response.payload?.value ?? response.selected_type);
+      if (!Number.isFinite(value) || value<1 || value>count) return;
+      counts[value-1].count++;values.push(value);
+    });
+    const key=`scale:${activeSession?.id || ""}:${activeSession?.currentNodeRef || "activity"}`;
+    renderLiveBarStats($("scaleLiveDistribution"),counts,{key,totalParticipants:total,emptyText:"目前還沒有學生提交量表。"});
+    const shown=liveStatsIsShown(key);
+    values.sort((a,b)=>a-b);
+    const avg=values.length ? values.reduce((sum,value)=>sum+value,0)/values.length : 0;
+    const median=values.length ? (values.length%2 ? values[(values.length-1)/2] : (values[values.length/2-1]+values[values.length/2])/2) : 0;
+    $("scaleAverageValue").textContent=shown&&values.length ? avg.toFixed(2).replace(/\.00$/,"") : "—";
+    $("scaleMedianValue").textContent=shown&&values.length ? String(median) : "—";
+    $("scaleEndpointLabels").textContent=sample
+      ? `${sample.payload?.leftLabel || "低"} ← 1 ～ ${count} → ${sample.payload?.rightLabel || "高"}`
+      : "等待第一份量表作答後顯示量尺設定";
+    const list=$("scaleLiveDistribution");
+    if (list) list._rerenderLiveStats=()=>renderScaleControl(snapshot);
+  }
+
+  function renderRankingControl(snapshot) {
+    const panel=$("rankingSessionControl");
+    if (!panel || activeSession?.activityMode!=="ranking" || activeSession.status==="closed") { panel?.classList.add("hidden"); return; }
+    panel.classList.remove("hidden");
+    const responses=moduleResponses(snapshot,"ranking");
+    const total=Number(snapshot?.participant_count)||0;
+    $("rankingAnsweredBadge").textContent=`${new Set(responses.map(r=>r.participant_id)).size} / ${total}`;
+    const firstCounts=new Map();
+    const rankTotals=new Map();
+    const rankCounts=new Map();
+    responses.forEach(response=>{
+      const labels=Array.isArray(response.payload?.orderLabels) ? response.payload.orderLabels : [];
+      labels.forEach((label,index)=>{
+        const name=String(label || "").trim();if(!name)return;
+        rankTotals.set(name,(rankTotals.get(name)||0)+(index+1));
+        rankCounts.set(name,(rankCounts.get(name)||0)+1);
+      });
+      const first=String(labels[0] || response.payload?.selectedTypeName || "").trim();
+      if(first) firstCounts.set(first,(firstCounts.get(first)||0)+1);
+    });
+    const labels=[...new Set([...rankTotals.keys(),...firstCounts.keys()])].sort((a,b)=>a.localeCompare(b,"zh-Hant"));
+    const entries=labels.map((label,index)=>({id:label,label,count:firstCounts.get(label)||0,order:index}));
+    const key=`ranking:${activeSession?.id || ""}:${activeSession?.currentNodeRef || "activity"}`;
+    renderLiveBarStats($("rankingFirstDistribution"),entries,{key,totalParticipants:total,emptyText:"目前還沒有學生提交排序。"});
+    const shown=liveStatsIsShown(key);
+    const averageList=$("rankingAverageList");averageList.innerHTML="";
+    if (!labels.length) { averageList.innerHTML='<div class="empty-v15">目前還沒有平均排名資料。</div>'; }
+    else {
+      labels.map(label=>({label,average:(rankTotals.get(label)||0)/Math.max(1,rankCounts.get(label)||0),first:firstCounts.get(label)||0}))
+        .sort(shown
+          ? ((a,b)=>a.average-b.average || b.first-a.first || a.label.localeCompare(b.label,"zh-Hant"))
+          : ((a,b)=>a.label.localeCompare(b.label,"zh-Hant")))
+        .forEach((item,index)=>{
+          const row=document.createElement("div");row.className="ranking-average-row";
+          row.innerHTML=`<span>${index+1}</span><strong>${escapeHtml(item.label)}</strong><b>${shown?item.average.toFixed(2).replace(/\.00$/,""):"—"}</b>`;
+          averageList.appendChild(row);
+        });
+    }
+    const list=$("rankingFirstDistribution");
+    if (list) list._rerenderLiveStats=()=>renderRankingControl(snapshot);
+  }
+
+  function renderOpenTextControl(snapshot) {
+    const panel=$("openTextSessionControl");
+    if (!panel || activeSession?.activityMode!=="open-text" || activeSession.status==="closed") { panel?.classList.add("hidden"); return; }
+    panel.classList.remove("hidden");
+    const responses=moduleResponses(snapshot,"open-text").filter(response=>String(response.payload?.text||"").trim());
+    const total=Number(snapshot?.participant_count)||0;
+    $("openTextAnsweredCount").textContent=`已回答 ${new Set(responses.map(r=>r.participant_id)).size} / ${total}`;
+    const wall=$("openTextWall");wall.innerHTML="";
+    if (!responses.length) { wall.innerHTML='<div class="empty-v15">目前還沒有學生提交文字。</div>'; return; }
+    responses.slice().sort((a,b)=>new Date(b.submitted_at||0)-new Date(a.submitted_at||0)).forEach(response=>{
+      const card=document.createElement("article");card.className="open-text-wall-card";
+      const identity=openTextIdentityMode==="named" ? (response.student_code || "未命名學生") : "匿名學生";
+      card.innerHTML=`<div class="open-text-wall-meta-row"><strong>${escapeHtml(identity)}</strong><small>${escapeHtml(formatTime(response.submitted_at))}</small></div><p>${escapeHtml(response.payload.text)}</p>`;
+      wall.appendChild(card);
+    });
+  }
+
+  function renderScaleSessionSummary({snapshot,details,participants}) {
+    const responses=moduleResponses(snapshot,"scale-spectrum");
+    const values=responses.map(r=>Number(r.payload?.value ?? r.selected_type)).filter(Number.isFinite).sort((a,b)=>a-b);
+    const responders=new Set(responses.map(r=>r.participant_id)).size;
+    $("summaryCompletionRate").textContent=participants ? `${Math.round((responders/participants)*100)}%` : "—";
+    const avg=values.length ? values.reduce((a,b)=>a+b,0)/values.length : 0;
+    const median=values.length ? (values.length%2 ? values[(values.length-1)/2] : (values[values.length/2-1]+values[values.length/2])/2) : 0;
+    const section=document.createElement("section");section.className="summary-section";
+    section.innerHTML=`<div class="summary-section-head"><strong>量表摘要</strong><span>${responses.length} 筆</span></div><div class="wave-metrics"><div><span>平均</span><strong>${values.length?avg.toFixed(2).replace(/\.00$/,""):"—"}</strong></div><div><span>中位數</span><strong>${values.length?median:"—"}</strong></div></div>`;
+    details.appendChild(section);return true;
+  }
+
+  function renderRankingSessionSummary({snapshot,details,participants}) {
+    const responses=moduleResponses(snapshot,"ranking");
+    const responders=new Set(responses.map(r=>r.participant_id)).size;
+    $("summaryCompletionRate").textContent=participants ? `${Math.round((responders/participants)*100)}%` : "—";
+    const totals=new Map(),counts=new Map();
+    responses.forEach(r=>(r.payload?.orderLabels || []).forEach((label,index)=>{label=String(label||"");if(!label)return;totals.set(label,(totals.get(label)||0)+index+1);counts.set(label,(counts.get(label)||0)+1);}));
+    const section=document.createElement("section");section.className="summary-section";
+    section.innerHTML=`<div class="summary-section-head"><strong>平均排名</strong><span>${responses.length} 筆</span></div><div class="summary-node-list"></div>`;
+    const list=section.querySelector(".summary-node-list");
+    [...totals.keys()].map(label=>({label,avg:totals.get(label)/counts.get(label)})).sort((a,b)=>a.avg-b.avg||a.label.localeCompare(b.label,"zh-Hant")).forEach((item,index)=>{
+      const row=document.createElement("div");row.className="summary-node-row";row.innerHTML=`<div class="summary-node-main"><strong>${index+1}. ${escapeHtml(item.label)}</strong><small>全班平均順位</small></div><b>${item.avg.toFixed(2).replace(/\.00$/,"")}</b>`;list.appendChild(row);
+    });
+    if(!list.children.length) list.innerHTML='<div class="empty-v15">沒有足夠的排序資料。</div>';
+    details.appendChild(section);return true;
+  }
+
+  function renderOpenTextSessionSummary({snapshot,details,participants}) {
+    const responses=moduleResponses(snapshot,"open-text").filter(r=>String(r.payload?.text||"").trim());
+    const responders=new Set(responses.map(r=>r.participant_id)).size;
+    $("summaryCompletionRate").textContent=participants ? `${Math.round((responders/participants)*100)}%` : "—";
+    const section=document.createElement("section");section.className="summary-section";
+    section.innerHTML=`<div class="summary-section-head"><strong>開放文字摘要</strong><span>${responses.length} 筆</span></div><p class="subtle">文字內容保留在「個別學生檢視」中；課後摘要預設不自動公開學生文字。</p>`;
+    details.appendChild(section);return true;
   }
 
   function renderProgressiveControl(snapshot) {
@@ -2122,6 +2274,85 @@
       }
     });
 
+    register("scale-spectrum", {
+      renderControl:renderScaleControl,
+      participantHistory:(participantId,responses) => {
+        const response=responses.find(item=>item.participant_id===participantId && item.mode==="scale-spectrum" && item.stage_key==="final");
+        return response ? `<span class="judgement-chip">量表 ${escapeHtml(String(response.payload?.value ?? response.selected_type ?? "—"))}</span>` : "";
+      },
+      inspectorFields:response => [
+        {label:"量表位置",value:String(response.payload?.value ?? response.selected_type ?? "")},
+        {label:"光譜範圍",value:`${response.payload?.leftLabel || "低"} ～ ${response.payload?.rightLabel || "高"}`}
+      ],
+      presentationPhase:({responses}) => ({
+        responses:responses.filter(item=>item.mode==="scale-spectrum" && item.stage_key==="final"),
+        label:"量表分布"
+      }),
+      presentationExtras:({responses}) => {
+        const rows=responses.filter(item=>item.mode==="scale-spectrum" && item.stage_key==="final");
+        const values=rows.map(item=>Number(item.payload?.value ?? item.selected_type)).filter(Number.isFinite).sort((a,b)=>a-b);
+        if (!values.length) return {customMetrics:[]};
+        const average=values.reduce((sum,value)=>sum+value,0)/values.length;
+        const median=values.length%2 ? values[(values.length-1)/2] : (values[values.length/2-1]+values[values.length/2])/2;
+        const sample=rows.find(item=>Number(item.payload?.pointCount)>0);
+        const note=sample ? `${sample.payload?.leftLabel || "低"} ～ ${sample.payload?.rightLabel || "高"}` : "全班量表";
+        return {customMetrics:[
+          {label:"平均",value:average.toFixed(2).replace(/\.00$/,""),note},
+          {label:"中位數",value:String(median),note:`${values.length} 份回答`}
+        ]};
+      },
+      renderSummary:renderScaleSessionSummary,
+      suppressGenericSummaryDistribution:() => true
+    });
+
+    register("ranking", {
+      renderControl:renderRankingControl,
+      participantHistory:(participantId,responses) => {
+        const response=responses.find(item=>item.participant_id===participantId && item.mode==="ranking" && item.stage_key==="final");
+        const first=response?.payload?.orderLabels?.[0];
+        return first ? `<span class="judgement-chip">第一順位：${escapeHtml(first)}</span>` : "";
+      },
+      inspectorFields:response => [
+        {label:"排序結果",kind:"chips",value:Array.isArray(response.payload?.orderLabels)?response.payload.orderLabels.map((label,index)=>`${index+1}. ${label}`):[]}
+      ],
+      presentationPhase:({responses}) => ({
+        responses:responses.filter(item=>item.mode==="ranking" && item.stage_key==="final"),
+        label:"第一順位"
+      }),
+      presentationExtras:({responses}) => {
+        const totals=new Map(),counts=new Map();
+        responses.filter(item=>item.mode==="ranking" && item.stage_key==="final").forEach(item=>{
+          (item.payload?.orderLabels || []).forEach((label,index)=>{
+            const name=String(label||"").trim();if(!name)return;
+            totals.set(name,(totals.get(name)||0)+index+1);counts.set(name,(counts.get(name)||0)+1);
+          });
+        });
+        const secondaryList=[...totals.keys()].map(label=>({label,value:(totals.get(label)/Math.max(1,counts.get(label))).toFixed(2).replace(/\.00$/,""),note:"平均順位"}))
+          .sort((a,b)=>Number(a.value)-Number(b.value) || a.label.localeCompare(b.label,"zh-Hant")).slice(0,10);
+        return {secondaryList};
+      },
+      renderSummary:renderRankingSessionSummary,
+      suppressGenericSummaryDistribution:() => true
+    });
+
+    register("open-text", {
+      renderControl:renderOpenTextControl,
+      participantHistory:(participantId,responses) => responses.some(item=>item.participant_id===participantId && item.mode==="open-text" && item.stage_key==="final") ? '<span class="judgement-chip">已提交短答</span>' : "",
+      inspectorFields:response => [{label:"文字回答",value:response.payload?.text || ""}],
+      presentationPhase:({responses}) => ({
+        responses:responses.filter(item=>item.mode==="open-text" && item.stage_key==="final" && String(item.payload?.text||"").trim()),
+        label:"匿名文字牆"
+      }),
+      presentationExtras:({responses}) => ({
+        textWall:responses
+          .filter(item=>item.mode==="open-text" && item.stage_key==="final" && String(item.payload?.text||"").trim())
+          .slice().sort((a,b)=>new Date(b.submitted_at||0)-new Date(a.submitted_at||0))
+          .slice(0,18).map(item=>({text:String(item.payload.text)}))
+      }),
+      renderSummary:renderOpenTextSessionSummary,
+      suppressGenericSummaryDistribution:() => true
+    });
+
     register("layered-deliberation", {
       renderControl:renderDeliberationControl,
       publishSpecialPresentation:publishDeliberationPresentation,
@@ -2148,6 +2379,7 @@
   $("goCoursePrepBtn")?.addEventListener("click",()=>window.TeacherWorkflow?.switchView?.("courses"));
   $("goActivityPrepBtn")?.addEventListener("click",()=>window.TeacherWorkflow?.switchView?.("activities"));
 
+  $("openTextIdentityMode")?.addEventListener("change",event=>{openTextIdentityMode=event.target.value==="named"?"named":"anonymous";if(latestTeacherSnapshot)renderOpenTextControl(latestTeacherSnapshot);});
   document.querySelectorAll('input[name="sessionKind"]').forEach(input=>input.addEventListener("change",applySessionKindUI));
   $("sessionActivitySelect")?.addEventListener("change",renderActivityPreview);
   $("sessionCourseSelect")?.addEventListener("change",renderCoursePreview);

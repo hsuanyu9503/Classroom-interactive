@@ -27,6 +27,9 @@ let deliberationState = null;
 let deliberationLocalResponses = [];
 let sessionRealtime = null;
 let openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
+let scaleSelectedValue = 0;
+let rankingOrder = [];
+let openTextValue = "";
 
 // V2.15.2：依據與分類的判斷依據在學生進入頁面時隨機排列。
 // 同一頁面生命週期內以快取固定順序，避免同步重繪或第二次判斷時選項位置跳動。
@@ -188,6 +191,42 @@ function decodeStandardActivity(raw, mode = "drag-reveal") {
       revealDescription: c.d || "",
       discussionPrompt: c.q || ""
     }))
+  };
+}
+
+function decodeScaleSpectrum(raw) {
+  if (!raw?.sc) return null;
+  return {
+    title:raw.t||"",subtitle:raw.s||"",template:"scale-spectrum",
+    scale:{
+      question:String(raw.sc.q||""),
+      pointCount:Math.max(3,Math.min(10,Math.round(Number(raw.sc.n)||5))),
+      leftLabel:String(raw.sc.l||"完全不同意"),
+      rightLabel:String(raw.sc.r||"非常同意")
+    }
+  };
+}
+
+function decodeRanking(raw) {
+  if (!raw?.rk) return null;
+  return {
+    title:raw.t||"",subtitle:raw.s||"",template:"ranking",
+    ranking:{
+      question:String(raw.rk.q||""),
+      items:(Array.isArray(raw.rk.i)?raw.rk.i:[]).map((item,index)=>({id:String(item?.i||`item-${index+1}`),label:String(item?.l||item?.label||`選項 ${index+1}`)}))
+    }
+  };
+}
+
+function decodeOpenText(raw) {
+  if (!raw?.tx) return null;
+  return {
+    title:raw.t||"",subtitle:raw.s||"",template:"open-text",
+    openText:{
+      question:String(raw.tx.q||""),
+      placeholder:String(raw.tx.p||"請用一兩句話寫下你的想法"),
+      maxLength:Math.max(30,Math.min(1000,Math.round(Number(raw.tx.m)||240)))
+    }
   };
 }
 
@@ -356,6 +395,9 @@ function resetPanels() {
   el("progressiveInteraction").classList.add("hidden");
   el("openClassificationInteraction").classList.add("hidden");
   el("deliberationInteraction").classList.add("hidden");
+  el("scaleInteraction")?.classList.add("hidden");
+  el("rankingInteraction")?.classList.add("hidden");
+  el("openTextInteraction")?.classList.add("hidden");
   el("openClassificationWaitingPanel").classList.add("hidden");
   el("openClassificationResultPanel").classList.add("hidden");
   el("feedbackPanel").classList.add("hidden");
@@ -399,6 +441,135 @@ function renderWorkMedia(image, name) {
   }
 }
 
+
+function renderSimpleModuleHeader(kind,question) {
+  el("studentCaseIndex").textContent=kind;
+  el("studentCaseTitle").textContent=activity.title || kind;
+  renderWorkMedia("","");
+  el("studentCaseIntro").textContent=activity.subtitle || "";
+  el("studentCaseIntro").classList.toggle("hidden",!activity.subtitle);
+  el("studentCasePrompt").textContent=question || "";
+  el("lockBadge").textContent="作答中";
+}
+
+function renderScaleTask() {
+  const task=activity.scale || {};
+  renderSimpleModuleHeader("量表",task.question);
+  el("scaleInteraction").classList.remove("hidden");
+  el("scaleStudentQuestion").textContent=task.question || "請選擇最符合你目前想法的位置";
+  el("scaleStudentLeftLabel").textContent=task.leftLabel || "低";
+  el("scaleStudentRightLabel").textContent=task.rightLabel || "高";
+  const grid=el("scaleChoiceGrid");grid.innerHTML="";
+  const count=Math.max(3,Math.min(10,Math.round(Number(task.pointCount)||5)));
+  if (!scaleSelectedValue || scaleSelectedValue>count) scaleSelectedValue=0;
+  for (let value=1;value<=count;value++) {
+    const button=document.createElement("button");
+    button.type="button";button.className="scale-choice";button.dataset.value=String(value);button.textContent=String(value);
+    button.classList.toggle("selected",scaleSelectedValue===value);
+    button.addEventListener("click",()=>{
+      scaleSelectedValue=value;
+      grid.querySelectorAll(".scale-choice").forEach(node=>node.classList.toggle("selected",Number(node.dataset.value)===value));
+      el("scaleStudentStatus").textContent=`已選 ${value} / ${count}`;
+    });
+    grid.appendChild(button);
+  }
+  el("scaleStudentStatus").textContent=scaleSelectedValue ? `已選 ${scaleSelectedValue} / ${count}` : "尚未選擇";
+}
+
+async function submitScaleResponse() {
+  const task=activity.scale || {};
+  const count=Math.max(3,Math.min(10,Math.round(Number(task.pointCount)||5)));
+  if (!scaleSelectedValue) { showToast("請先選擇一個刻度"); return; }
+  await recordSessionResponse("scale-spectrum",{
+    selectedType:String(scaleSelectedValue),
+    payload:{value:scaleSelectedValue,pointCount:count,leftLabel:task.leftLabel||"",rightLabel:task.rightLabel||"",selectedTypeName:String(scaleSelectedValue)}
+  });
+  markCurrentTaskComplete();showComplete();
+}
+
+function renderRankingTask() {
+  const task=activity.ranking || {};
+  renderSimpleModuleHeader("排序",task.question);
+  el("rankingInteraction").classList.remove("hidden");
+  el("rankingStudentQuestion").textContent=task.question || "請依優先順序排列";
+  const ids=(task.items || []).map(item=>item.id);
+  if (rankingOrder.length!==ids.length || rankingOrder.some(id=>!ids.includes(id))) rankingOrder=shuffledCopy(ids);
+  renderRankingStudentList();
+}
+
+function moveRankingItem(id,delta) {
+  const index=rankingOrder.indexOf(id);
+  const target=index+delta;
+  if (index<0 || target<0 || target>=rankingOrder.length) return;
+  [rankingOrder[index],rankingOrder[target]]=[rankingOrder[target],rankingOrder[index]];
+  renderRankingStudentList();
+}
+
+function renderRankingStudentList() {
+  const task=activity.ranking || {};
+  const byId=new Map((task.items || []).map(item=>[item.id,item]));
+  const list=el("rankingStudentList");list.innerHTML="";
+  rankingOrder.forEach((id,index)=>{
+    const item=byId.get(id);if(!item) return;
+    const row=document.createElement("div");row.className="ranking-student-row";row.draggable=true;row.dataset.itemId=id;
+    row.innerHTML=`<span class="ranking-position">${index+1}</span><span class="ranking-drag" aria-hidden="true">⋮⋮</span><strong></strong><div class="ranking-move-actions"><button type="button" aria-label="往上移">↑</button><button type="button" aria-label="往下移">↓</button></div>`;
+    row.querySelector("strong").textContent=item.label;
+    const buttons=row.querySelectorAll("button");buttons[0].disabled=index===0;buttons[1].disabled=index===rankingOrder.length-1;
+    buttons[0].addEventListener("click",()=>moveRankingItem(id,-1));buttons[1].addEventListener("click",()=>moveRankingItem(id,1));
+    row.addEventListener("dragstart",event=>{event.dataTransfer.setData("text/plain",id);row.classList.add("dragging");});
+    row.addEventListener("dragend",()=>row.classList.remove("dragging"));
+    row.addEventListener("dragover",event=>{event.preventDefault();row.classList.add("drag-over");});
+    row.addEventListener("dragleave",()=>row.classList.remove("drag-over"));
+    row.addEventListener("drop",event=>{
+      event.preventDefault();row.classList.remove("drag-over");
+      const source=event.dataTransfer.getData("text/plain");if(!source || source===id) return;
+      const sourceIndex=rankingOrder.indexOf(source),targetIndex=rankingOrder.indexOf(id);
+      if(sourceIndex<0||targetIndex<0)return;rankingOrder.splice(sourceIndex,1);rankingOrder.splice(targetIndex,0,source);renderRankingStudentList();
+    });
+    list.appendChild(row);
+  });
+}
+
+async function submitRankingResponse() {
+  const task=activity.ranking || {};
+  const byId=new Map((task.items || []).map(item=>[item.id,item]));
+  if (rankingOrder.length<2) { showToast("排序資料不完整"); return; }
+  const labels=rankingOrder.map(id=>byId.get(id)?.label || id);
+  await recordSessionResponse("ranking",{
+    selectedElements:labels,
+    selectedType:rankingOrder[0] || "",
+    payload:{orderIds:[...rankingOrder],orderLabels:labels,selectedTypeName:labels[0] || ""}
+  });
+  markCurrentTaskComplete();showComplete();
+}
+
+function updateOpenTextCounter() {
+  const task=activity.openText || {};
+  const input=el("openTextStudentInput");
+  const max=Math.max(30,Math.min(1000,Math.round(Number(task.maxLength)||240)));
+  el("openTextCharCount").textContent=`${input.value.length} / ${max}`;
+}
+
+function renderOpenTextTask() {
+  const task=activity.openText || {};
+  renderSimpleModuleHeader("開放文字",task.question);
+  el("openTextInteraction").classList.remove("hidden");
+  el("openTextStudentQuestion").textContent=task.question || "寫下你的想法";
+  const input=el("openTextStudentInput");
+  input.maxLength=Math.max(30,Math.min(1000,Math.round(Number(task.maxLength)||240)));
+  input.placeholder=task.placeholder || "請用一兩句話寫下你的想法";
+  input.value=openTextValue;
+  updateOpenTextCounter();
+}
+
+async function submitOpenTextResponse() {
+  const input=el("openTextStudentInput");
+  const text=input.value.trim();
+  if (!text) { showToast("請先寫下你的想法"); return; }
+  openTextValue=text;
+  await recordSessionResponse("open-text",{payload:{text}});
+  markCurrentTaskComplete();showComplete();
+}
 
 const DELIBERATION_LABELS = {
   A:"完全不能接受",
@@ -1950,6 +2121,9 @@ function restart() {
   openInitialResponse = null;
   openFinalResponse = null;
   openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
+  scaleSelectedValue=0;
+  rankingOrder=[];
+  openTextValue="";
   clearInterval(openPollTimer);
   clearInterval(deliberationPollTimer);
   deliberationSelectedChoice="";
@@ -1992,6 +2166,10 @@ el("progressiveFinishBtn").addEventListener("click", showComplete);
 el("submitOpenClassificationBtn").addEventListener("click", submitOpenClassification);
 el("openPreviewRejudgeBtn").addEventListener("click", beginOpenPreviewRejudge);
 el("openClassificationFinishBtn").addEventListener("click", showComplete);
+el("submitScaleBtn")?.addEventListener("click",submitScaleResponse);
+el("submitRankingBtn")?.addEventListener("click",submitRankingResponse);
+el("submitOpenTextBtn")?.addEventListener("click",submitOpenTextResponse);
+el("openTextStudentInput")?.addEventListener("input",event=>{openTextValue=event.target.value;updateOpenTextCounter();});
 el("submitDeliberationBtn")?.addEventListener("click",submitDeliberationAnswer);
 el("submitDeliberationPostNoteBtn")?.addEventListener("click",submitDeliberationPostNote);
 el("submitDeliberationReflectionBtn")?.addEventListener("click",submitDeliberationReflection);
@@ -2033,6 +2211,9 @@ function registerStudentActivityModules() {
   registerCodec("element-type", decodeElementType);
   registerCodec("progressive-reveal", decodeProgressiveReveal);
   registerCodec("open-classification", decodeOpenClassification);
+  registerCodec("scale-spectrum", decodeScaleSpectrum);
+  registerCodec("ranking", decodeRanking);
+  registerCodec("open-text", decodeOpenText);
   registerCodec("layered-deliberation", decodeLayeredDeliberation);
 
   ["drag-reveal","open-tags"].forEach(mode => registerStudent(mode, {
@@ -2054,6 +2235,10 @@ function registerStudentActivityModules() {
     syncRealtime:refresh => syncOpenClassificationState(refresh),
     startPolling:startOpenPolling
   });
+
+  registerStudent("scale-spectrum", {render:() => { renderScaleTask(); return true; }});
+  registerStudent("ranking", {render:() => { renderRankingTask(); return true; }});
+  registerStudent("open-text", {render:() => { renderOpenTextTask(); return true; }});
 
   registerStudent("layered-deliberation", {
     render:() => { renderDeliberationTask(); return true; },

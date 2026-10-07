@@ -201,6 +201,40 @@
           </div>
         </div>
 
+        <div id="scaleInteraction" class="wave-student-interaction hidden">
+          <section class="wave-student-card">
+            <div class="classification-step-head">
+              <span class="step-number">量表</span>
+              <div><h3 id="scaleStudentQuestion">請選擇最符合你目前想法的位置</h3><p>沒有標準答案，請依你現在的判斷作答。</p></div>
+            </div>
+            <div id="scaleChoiceGrid" class="scale-choice-grid"></div>
+            <div class="scale-end-labels"><span id="scaleStudentLeftLabel"></span><span id="scaleStudentRightLabel"></span></div>
+            <div class="classification-step-footer"><span id="scaleStudentStatus">尚未選擇</span><button id="submitScaleBtn" class="btn btn-primary" type="button">提交量表</button></div>
+          </section>
+        </div>
+
+        <div id="rankingInteraction" class="wave-student-interaction hidden">
+          <section class="wave-student-card">
+            <div class="classification-step-head">
+              <span class="step-number">排序</span>
+              <div><h3 id="rankingStudentQuestion">請依優先順序排列</h3><p>可直接拖曳，也可以使用上下按鈕調整。</p></div>
+            </div>
+            <div id="rankingStudentList" class="ranking-student-list"></div>
+            <div class="classification-step-footer"><span>最上方代表第一順位</span><button id="submitRankingBtn" class="btn btn-primary" type="button">提交排序</button></div>
+          </section>
+        </div>
+
+        <div id="openTextInteraction" class="wave-student-interaction hidden">
+          <section class="wave-student-card">
+            <div class="classification-step-head">
+              <span class="step-number">短答</span>
+              <div><h3 id="openTextStudentQuestion">寫下你的想法</h3><p>用自己的話回答即可，不需要追求標準答案。</p></div>
+            </div>
+            <label class="field open-text-student-field"><textarea id="openTextStudentInput" rows="6"></textarea><small id="openTextCharCount">0 / 240</small></label>
+            <div class="classification-step-footer"><span>送出後老師會在文字牆看到這則回覆。</span><button id="submitOpenTextBtn" class="btn btn-primary" type="button">提交文字</button></div>
+          </section>
+        </div>
+
         <div id="deliberationInteraction" class="deliberation-interaction hidden">
           <section class="deliberation-layer-board">
             <div class="progressive-student-head">

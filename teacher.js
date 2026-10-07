@@ -1,4 +1,4 @@
-/* V2.18.0 compatibility loader.
+/* V2.19.0 compatibility loader.
    New index.html loads teacher-core.js, activity-editor.js and session-teacher.js directly.
    This file only protects older cached HTML that still requests teacher.js. */
 (() => {

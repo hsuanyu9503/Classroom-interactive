@@ -85,6 +85,10 @@ function renderPresentationResults(summary = presentationSummary) {
       note:`維持原判斷 ${summary.unchangedCount || 0} 人`
     });
   }
+  (Array.isArray(summary.customMetrics) ? summary.customMetrics : []).forEach(item=>{
+    if (!item || item.value===undefined || item.value===null || item.value==="") return;
+    metrics.push({label:String(item.label||"統計"),value:String(item.value),note:String(item.note||"")});
+  });
 
   $("presentationResultMetrics").innerHTML = metrics.map(item=>`
     <article class="presentation-result-metric">
@@ -96,6 +100,12 @@ function renderPresentationResults(summary = presentationSummary) {
   const distribution = Array.isArray(summary.distribution) ? summary.distribution : [];
   const section = $("presentationDistributionSection");
   const list = $("presentationDistributionList");
+  const secondary = Array.isArray(summary.secondaryList) ? summary.secondaryList : [];
+  const secondarySection = $("presentationSecondarySection");
+  const secondaryList = $("presentationSecondaryList");
+  const textWall = Array.isArray(summary.textWall) ? summary.textWall : [];
+  const textWallSection = $("presentationTextWallSection");
+  const textWallList = $("presentationTextWall");
   const empty = $("presentationResultsEmpty");
 
   if (distribution.length) {
@@ -108,10 +118,34 @@ function renderPresentationResults(summary = presentationSummary) {
       </div>`).join("");
     $("presentationDistributionTotal").textContent = `共 ${submittedCount} 份提交`;
     section.classList.remove("hidden");
-    empty.classList.add("hidden");
   } else {
     list.innerHTML = "";
     section.classList.add("hidden");
+  }
+
+  if (secondary.length) {
+    secondaryList.innerHTML=secondary.map((item,index)=>`
+      <div class="presentation-secondary-row">
+        <span>${index+1}</span><strong>${escapeHtml(item.label||"")}</strong><b>${escapeHtml(item.value||"")}</b><small>${escapeHtml(item.note||"")}</small>
+      </div>`).join("");
+    secondarySection.classList.remove("hidden");
+  } else {
+    secondaryList.innerHTML="";
+    secondarySection.classList.add("hidden");
+  }
+
+  if (textWall.length) {
+    textWallList.innerHTML=textWall.map(item=>`<article class="presentation-text-card">${escapeHtml(item.text||"")}</article>`).join("");
+    $("presentationTextWallTotal").textContent=`${textWall.length} 則回覆`;
+    textWallSection.classList.remove("hidden");
+  } else {
+    textWallList.innerHTML="";
+    textWallSection.classList.add("hidden");
+  }
+
+  if (distribution.length || secondary.length || textWall.length) {
+    empty.classList.add("hidden");
+  } else {
     empty.textContent = nodeType === "activity"
       ? (submittedCount ? "目前活動沒有適合公開的分類分布，但提交進度已更新。" : "目前還沒有學生提交這個階段。")
       : "這個節點以完成進度為主，不顯示個別學生資料。";

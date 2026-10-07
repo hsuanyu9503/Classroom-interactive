@@ -1,4 +1,4 @@
-/* Classroom Interactive V2.18.0 - Activity Module Registry
+/* Classroom Interactive V2.19.0 - Activity Module Registry
  * Centralizes activity metadata and context hooks so new activity types can be
  * registered without adding mode switch/if chains throughout the core files.
  */
@@ -238,6 +238,67 @@
     hasStudentContent:activity => Boolean(activity?.deliberation?.fixedQuestion),
     previewSummary:summary => `${Number(summary?.taskCount || 0)} 層情境 · 需雲端 Session`,
     completeText:"你完成了逐層思辨。這個活動不評分，也不要求你改變立場；重點是看見哪些新資訊、假設與價值影響了自己的判斷。"
+  });
+
+
+  define({
+    id:"scale-spectrum",
+    label:"量表／立場光譜",
+    shortLabel:"量表／立場光譜",
+    templateKicker:"模板 06",
+    templateTitle:"量表／立場光譜",
+    editorKind:"scale-spectrum",
+    editorClass:"scale-spectrum-mode",
+    editorSectionId:"scaleEditorSection",
+    dataKey:"scale",
+    collection:false,
+    teacherControlId:"scaleSessionControl",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.scale,
+    hasStudentContent:activity => Boolean(activity?.scale?.question),
+    previewSummary:summary => `${Number(summary?.taskCount || 1)} 題量表`,
+    completeText:"你已完成量表作答。比較全班分布時，也可以想想自己為什麼站在這個位置。"
+  });
+
+  define({
+    id:"ranking",
+    label:"排序／優先順序",
+    shortLabel:"排序",
+    templateKicker:"模板 07",
+    templateTitle:"排序／優先順序",
+    editorKind:"ranking",
+    editorClass:"ranking-mode",
+    editorSectionId:"rankingEditorSection",
+    dataKey:"ranking",
+    collection:false,
+    teacherControlId:"rankingSessionControl",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.ranking,
+    hasStudentContent:activity => Boolean(activity?.ranking?.question && activity?.ranking?.items?.length >= 2),
+    previewSummary:summary => `${Number(summary?.taskCount || 1)} 題排序`,
+    completeText:"你已完成排序。看看全班最常放在前面的項目，並比較彼此排序依據的差異。"
+  });
+
+  define({
+    id:"open-text",
+    label:"開放文字／文字牆",
+    shortLabel:"開放文字",
+    templateKicker:"模板 08",
+    templateTitle:"開放文字／文字牆",
+    editorKind:"open-text",
+    editorClass:"open-text-mode",
+    editorSectionId:"openTextEditorSection",
+    dataKey:"openText",
+    collection:false,
+    teacherControlId:"openTextSessionControl",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.openText,
+    hasStudentContent:activity => Boolean(activity?.openText?.question),
+    previewSummary:() => "1 題開放文字",
+    completeText:"你已提交想法。等待全班文字牆彙整後，可以看看有哪些相同、不同或值得追問的觀點。"
   });
 
   global.ClassroomActivityModules = Object.freeze({

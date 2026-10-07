@@ -1,4 +1,4 @@
-/* V2.18.0 | Activity Editor + layered deliberation + custom choices */
+/* V2.19.0 | Activity Editor + layered deliberation + custom choices */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -46,6 +46,19 @@ const deliberationReflectionKey = el("deliberationReflectionKey");
 const deliberationReflectionValue = el("deliberationReflectionValue");
 const deliberationReflectionAction = el("deliberationReflectionAction");
 const deliberationReflectionExtension = el("deliberationReflectionExtension");
+const scaleEditorSection = el("scaleEditorSection");
+const scaleQuestion = el("scaleQuestion");
+const scalePointCount = el("scalePointCount");
+const scaleLeftLabel = el("scaleLeftLabel");
+const scaleRightLabel = el("scaleRightLabel");
+const rankingEditorSection = el("rankingEditorSection");
+const rankingQuestion = el("rankingQuestion");
+const rankingItemsEditor = el("rankingItemsEditor");
+const addRankingItemBtn = el("addRankingItemBtn");
+const openTextEditorSection = el("openTextEditorSection");
+const openTextQuestion = el("openTextQuestion");
+const openTextPlaceholder = el("openTextPlaceholder");
+const openTextMaxLength = el("openTextMaxLength");
 const standardTaskToolbar = el("standardTaskToolbar");
 const shareDialog = el("shareDialog");
 const shareUrlInput = el("shareUrl");
@@ -176,6 +189,54 @@ function newOpenClassificationTask() {
   };
 }
 
+
+function newScaleActivityData() {
+  return {question:"",pointCount:5,leftLabel:"完全不同意",rightLabel:"非常同意"};
+}
+
+function newRankingActivityData() {
+  return {
+    question:"",
+    items:[
+      {id:createId(),label:"選項一"},
+      {id:createId(),label:"選項二"},
+      {id:createId(),label:"選項三"}
+    ]
+  };
+}
+
+function newOpenTextActivityData() {
+  return {question:"",placeholder:"請用一兩句話寫下你的想法",maxLength:240};
+}
+
+function normalizeScaleData(data) {
+  const base=newScaleActivityData();
+  const pointCount=Math.max(3,Math.min(10,Math.round(Number(data?.pointCount)||base.pointCount)));
+  return {
+    question:String(data?.question || ""),
+    pointCount,
+    leftLabel:String(data?.leftLabel || base.leftLabel),
+    rightLabel:String(data?.rightLabel || base.rightLabel)
+  };
+}
+
+function normalizeRankingData(data) {
+  const source=Array.isArray(data?.items) ? data.items : [];
+  const items=source.map((item,index)=>({
+    id:String(item?.id || createId()),
+    label:String(item?.label || "").trim() || `選項 ${index+1}`
+  })).slice(0,10);
+  return {question:String(data?.question || ""),items:items.length>=2 ? items : newRankingActivityData().items};
+}
+
+function normalizeOpenTextData(data) {
+  const base=newOpenTextActivityData();
+  return {
+    question:String(data?.question || ""),
+    placeholder:String(data?.placeholder || base.placeholder),
+    maxLength:Math.max(30,Math.min(1000,Math.round(Number(data?.maxLength)||base.maxLength)))
+  };
+}
 
 function defaultDeliberationLayers() {
   return [
@@ -423,7 +484,10 @@ function loadActivities() {
       tasks: [],
       progressive: null,
       openClassification: null,
-      deliberation: null
+      deliberation: null,
+      scale: null,
+      ranking: null,
+      openText: null
     };
 
     if (definition?.dataKey === "cases") {
@@ -434,6 +498,12 @@ function loadActivities() {
       normalized.progressive = activity.progressive || null;
     } else if (definition?.dataKey === "openClassification") {
       normalized.openClassification = activity.openClassification || null;
+    } else if (definition?.dataKey === "scale") {
+      normalized.scale = normalizeScaleData(activity.scale);
+    } else if (definition?.dataKey === "ranking") {
+      normalized.ranking = normalizeRankingData(activity.ranking);
+    } else if (definition?.dataKey === "openText") {
+      normalized.openText = normalizeOpenTextData(activity.openText);
     } else if (definition?.dataKey === "deliberation") {
       normalized.deliberation = {
         ...newDeliberationActivityData(),
@@ -474,7 +544,10 @@ function newBlankActivity() {
     tasks: [],
     progressive: null,
     openClassification: null,
-    deliberation: null
+    deliberation: null,
+    scale: null,
+    ranking: null,
+    openText: null
   };
 }
 
@@ -1189,6 +1262,65 @@ function readDeliberationEditor() {
   };
 }
 
+function refreshRankingItemRows() {
+  const rows=[...(rankingItemsEditor?.querySelectorAll(".ranking-editor-row") || [])];
+  rows.forEach((row,index)=>{
+    const label=row.querySelector(".ranking-editor-order");
+    if (label) label.textContent=`${index+1}`;
+    const remove=row.querySelector(".ranking-editor-remove");
+    if (remove) remove.disabled=rows.length<=2;
+  });
+  if (addRankingItemBtn) addRankingItemBtn.disabled=rows.length>=10;
+}
+
+function addRankingEditorItem(item=null) {
+  if (!rankingItemsEditor) return;
+  const count=rankingItemsEditor.querySelectorAll(".ranking-editor-row").length;
+  if (count>=10) { showToast("排序題最多 10 個項目"); return; }
+  const row=document.createElement("div");
+  row.className="ranking-editor-row";
+  row.dataset.itemId=String(item?.id || createId());
+  row.innerHTML=`<span class="ranking-editor-order">${count+1}</span><input class="ranking-editor-label" type="text" maxlength="100" placeholder="輸入排序項目" value="${escapeHtml(String(item?.label || ""))}"><button class="btn btn-danger-soft ranking-editor-remove" type="button">移除</button>`;
+  row.querySelector(".ranking-editor-remove").addEventListener("click",()=>{
+    if (rankingItemsEditor.querySelectorAll(".ranking-editor-row").length<=2) { showToast("排序題至少需要 2 個項目"); return; }
+    row.remove();refreshRankingItemRows();
+  });
+  rankingItemsEditor.appendChild(row);
+  refreshRankingItemRows();
+}
+
+function loadScaleEditor(data) {
+  const value=normalizeScaleData(data);
+  scaleQuestion.value=value.question;
+  scalePointCount.value=String(value.pointCount);
+  scaleLeftLabel.value=value.leftLabel;
+  scaleRightLabel.value=value.rightLabel;
+}
+function readScaleEditor() {
+  return normalizeScaleData({question:scaleQuestion.value.trim(),pointCount:scalePointCount.value,leftLabel:scaleLeftLabel.value.trim(),rightLabel:scaleRightLabel.value.trim()});
+}
+function loadRankingEditor(data) {
+  const value=normalizeRankingData(data);
+  rankingQuestion.value=value.question;
+  rankingItemsEditor.innerHTML="";
+  value.items.forEach(addRankingEditorItem);
+}
+function readRankingEditor() {
+  return normalizeRankingData({
+    question:rankingQuestion.value.trim(),
+    items:[...rankingItemsEditor.querySelectorAll(".ranking-editor-row")].map(row=>({id:row.dataset.itemId,label:row.querySelector(".ranking-editor-label").value.trim()}))
+  });
+}
+function loadOpenTextEditor(data) {
+  const value=normalizeOpenTextData(data);
+  openTextQuestion.value=value.question;
+  openTextPlaceholder.value=value.placeholder;
+  openTextMaxLength.value=String(value.maxLength);
+}
+function readOpenTextEditor() {
+  return normalizeOpenTextData({question:openTextQuestion.value.trim(),placeholder:openTextPlaceholder.value.trim(),maxLength:openTextMaxLength.value});
+}
+
 // ---------- 模式切換 ----------
 function getSelectedMode() {
   return modeInputs.find(input => input.checked)?.value || "drag-reveal";
@@ -1222,6 +1354,9 @@ function applyModeUI(mode) {
   progressiveEditorSection?.classList.toggle("hidden", editorKind !== "progressive-reveal");
   openClassificationEditorSection?.classList.toggle("hidden", editorKind !== "open-classification");
   deliberationEditorSection?.classList.toggle("hidden", editorKind !== "layered-deliberation");
+  scaleEditorSection?.classList.toggle("hidden", editorKind !== "scale-spectrum");
+  rankingEditorSection?.classList.toggle("hidden", editorKind !== "ranking");
+  openTextEditorSection?.classList.toggle("hidden", editorKind !== "open-text");
 
   document.querySelectorAll(".card-builder-label").forEach(label => {
     label.textContent = isOpen ? "標籤設定" : "字卡設定";
@@ -1257,6 +1392,9 @@ function loadIntoEditor(activity) {
   progressiveTaskEditor.innerHTML = "";
   openClassificationTaskEditor.innerHTML = "";
   deliberationLayersEditor.innerHTML = "";
+  if (rankingItemsEditor) rankingItemsEditor.innerHTML = "";
+  if (scaleQuestion) loadScaleEditor(newScaleActivityData());
+  if (openTextQuestion) loadOpenTextEditor(newOpenTextActivityData());
 
   const template = ActivityModules?.normalizeMode?.(activity.template) || "drag-reveal";
   const handled = ActivityModules?.invoke?.("editor", template, "load", activity);
@@ -1279,7 +1417,10 @@ function readEditor() {
     tasks: [],
     progressive: null,
     openClassification: null,
-    deliberation: null
+    deliberation: null,
+    scale: null,
+    ranking: null,
+    openText: null
   };
   const patch = ActivityModules?.invoke?.("editor", template, "read") || {};
   return {...base, ...patch, template};
@@ -1287,6 +1428,27 @@ function readEditor() {
 
 function splitKeywords(value) {
   return value.split(/[、,，]/).map(v => v.trim()).filter(Boolean);
+}
+
+function validateScaleActivity(activity) {
+  const data=normalizeScaleData(activity.scale);
+  if (!data.question.trim()) return "量表／立場光譜尚未填寫題目";
+  if (data.pointCount<3 || data.pointCount>10) return "量表刻度數需介於 3～10";
+  if (!data.leftLabel.trim() || !data.rightLabel.trim()) return "量表左右端標籤都需要填寫";
+  return "";
+}
+function validateRankingActivity(activity) {
+  const data=normalizeRankingData(activity.ranking);
+  if (!data.question.trim()) return "排序題尚未填寫題目";
+  if (data.items.length<2) return "排序題至少需要 2 個項目";
+  if (data.items.some(item=>!item.label.trim())) return "每個排序項目都需要填寫內容";
+  if (new Set(data.items.map(item=>item.label)).size!==data.items.length) return "排序項目不可重複";
+  return "";
+}
+function validateOpenTextActivity(activity) {
+  const data=normalizeOpenTextData(activity.openText);
+  if (!data.question.trim()) return "開放文字尚未填寫提問";
+  return "";
 }
 
 function validateDeliberationActivity(activity) {
@@ -1482,6 +1644,19 @@ function buildOpenClassificationSnapshot(activity) {
   };
 }
 
+
+function buildScaleSnapshot(activity) {
+  const d=normalizeScaleData(activity.scale);
+  return {q:d.question,n:d.pointCount,l:d.leftLabel,r:d.rightLabel};
+}
+function buildRankingSnapshot(activity) {
+  const d=normalizeRankingData(activity.ranking);
+  return {q:d.question,i:d.items.map(item=>({i:item.id,l:item.label}))};
+}
+function buildOpenTextSnapshot(activity) {
+  const d=normalizeOpenTextData(activity.openText);
+  return {q:d.question,p:d.placeholder,m:d.maxLength};
+}
 
 function buildDeliberationSnapshot(activity,{includeLayers=true,includeTeacherNotes=false}={}) {
   const d=activity.deliberation || newDeliberationActivityData();
@@ -1768,6 +1943,30 @@ function registerActivityEditorModules() {
     encode:activity => ({t:activity.title,s:activity.subtitle,m:"open-classification",o:buildOpenClassificationSnapshot(activity)})
   });
 
+  register("scale-spectrum", {
+    ensure:() => { loadScaleEditor(readScaleEditor?.() || newScaleActivityData()); return true; },
+    load:activity => { loadScaleEditor(activity.scale || newScaleActivityData()); return true; },
+    read:() => ({scale:readScaleEditor()}),
+    validate:validateScaleActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"scale-spectrum",sc:buildScaleSnapshot(activity)})
+  });
+
+  register("ranking", {
+    ensure:() => { if (!rankingItemsEditor.children.length) loadRankingEditor(newRankingActivityData()); return true; },
+    load:activity => { loadRankingEditor(activity.ranking || newRankingActivityData()); return true; },
+    read:() => ({ranking:readRankingEditor()}),
+    validate:validateRankingActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"ranking",rk:buildRankingSnapshot(activity)})
+  });
+
+  register("open-text", {
+    ensure:() => { loadOpenTextEditor(readOpenTextEditor?.() || newOpenTextActivityData()); return true; },
+    load:activity => { loadOpenTextEditor(activity.openText || newOpenTextActivityData()); return true; },
+    read:() => ({openText:readOpenTextEditor()}),
+    validate:validateOpenTextActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"open-text",tx:buildOpenTextSnapshot(activity)})
+  });
+
   register("layered-deliberation", {
     ensure:() => {
       if (!deliberationLayersEditor.children.length) loadDeliberationEditor(newDeliberationActivityData());
@@ -1820,6 +2019,7 @@ deliberationLayerCount?.addEventListener("keydown", event => {
 addDeliberationOptionBtn?.addEventListener("click", () => addDeliberationOption());
 addDeliberationReasonChoiceBtn?.addEventListener("click", () => addDeliberationReasonChoice());
 deliberationReasonMode?.addEventListener("change", () => updateDeliberationReasonModeUi({ensureChoice:true}));
+addRankingItemBtn?.addEventListener("click",()=>addRankingEditorItem());
 el("saveBtn").addEventListener("click", () => saveCurrent(true));
 
 el("duplicateBtn").addEventListener("click", () => {
@@ -1929,7 +2129,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.18.0",
+    appVersion:"2.19.0",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),
