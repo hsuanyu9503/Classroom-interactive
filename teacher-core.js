@@ -1,4 +1,4 @@
-/* V2.19.0 | Teacher Core: workflow + Course/Type/Work libraries */
+/* V2.26.1 | Teacher Core: workflow + collapsible Course/Lesson/Node editors */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2
@@ -336,8 +336,8 @@
       },
       activities:{
         kicker:"PREP · ACTIVITY",
-        title:"活動模板",
-        description:"把教材變成學生可操作的互動任務，再由 Course 的 Activity Node 引用。",
+        title:"活動模組",
+        description:"把教材變成學生可操作的互動模組，再由 Session 或 Course 的 Activity Node 引用。",
         stats:[
           [activities.length,"活動"],
           [activityModes,"使用模式"],
@@ -419,6 +419,8 @@
         select.dispatchEvent(new Event("change",{bubbles:true}));
       }
 
+      const sessionSetupDetails = $("sessionSetupDetails");
+      if (sessionSetupDetails) sessionSetupDetails.open = true;
       document.querySelector(".session-config-card")?.scrollIntoView({behavior:"smooth",block:"start"});
     },0);
   }
@@ -539,11 +541,63 @@
     $("courseAllowStudentNavigation").checked = resolved?.settings?.allowStudentNavigation !== false;
     $("courseShowProgress").checked = resolved?.settings?.showProgress !== false;
     $("lessonEditor").innerHTML = "";
-    (resolved?.lessons || []).forEach(addLessonCard);
+    (resolved?.lessons || []).forEach((lesson,index) => addLessonCard(lesson,{expanded:index===0}));
     updateCourseSaveState("saved", "已載入 V2 課程");
   }
 
-  function addLessonCard(data = {id:uuid(),title:"",shortTitle:"",goal:"",estimatedMinutes:40,teacherNote:"",nodes:[]}) {
+  function setLessonExpanded(card, expanded, {collapseSiblings=true}={}) {
+    if (!card) return;
+    if (expanded && collapseSiblings) {
+      [...$("lessonEditor").querySelectorAll(".lesson-card")].forEach(other => {
+        if (other !== card) setLessonExpanded(other,false,{collapseSiblings:false});
+      });
+    }
+    card.classList.toggle("collapsed",!expanded);
+    const toggle=card.querySelector(".lesson-collapse-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded",String(expanded));
+      toggle.textContent=expanded ? "⌃" : "⌄";
+      toggle.title=expanded ? "收合節次" : "展開節次";
+    }
+  }
+
+  function nodeTypeSummary(type) {
+    return ({
+      "work-wall":"🖼️ 材料牆",
+      "type-toolbox":"🧰 分類工具箱",
+      activity:"🧩 互動活動",
+      content:"📝 教學內容／收束"
+    })[normalizeNodeType(type)] || "📝 教學節點";
+  }
+
+  function updateNodeCompactSummary(node) {
+    if (!node) return;
+    const title=node.querySelector(".node-title")?.value?.trim() || "未命名節點";
+    const type=node.querySelector(".node-type")?.value || "content";
+    const titleEl=node.querySelector(".node-summary-title");
+    const typeEl=node.querySelector(".node-summary-type");
+    if (titleEl) titleEl.textContent=title;
+    if (typeEl) typeEl.textContent=nodeTypeSummary(type);
+  }
+
+  function setNodeExpanded(node, expanded, {collapseSiblings=true}={}) {
+    if (!node) return;
+    if (expanded && collapseSiblings) {
+      const list=node.closest(".lesson-node-list");
+      [...(list?.querySelectorAll(":scope > .lesson-node") || [])].forEach(other => {
+        if (other !== node) setNodeExpanded(other,false,{collapseSiblings:false});
+      });
+    }
+    node.classList.toggle("collapsed",!expanded);
+    const toggle=node.querySelector(".node-collapse-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded",String(expanded));
+      toggle.textContent=expanded ? "⌃" : "⌄";
+      toggle.title=expanded ? "收合節點" : "展開節點";
+    }
+  }
+
+  function addLessonCard(data = {id:uuid(),title:"",shortTitle:"",goal:"",estimatedMinutes:40,teacherNote:"",nodes:[]}, options={}) {
     const fragment = $("lessonTemplate").content.cloneNode(true);
     const card = fragment.querySelector(".lesson-card");
     card.dataset.id = data.id || uuid();
@@ -560,15 +614,25 @@
     });
     card.querySelector(".lesson-move-up").addEventListener("click", () => moveElement(card,-1,$("lessonEditor"),refreshLessonNumbers));
     card.querySelector(".lesson-move-down").addEventListener("click", () => moveElement(card,1,$("lessonEditor"),refreshLessonNumbers));
+    card.querySelector(".lesson-collapse-toggle")?.addEventListener("click",()=>{
+      const next=card.classList.contains("collapsed");
+      setLessonExpanded(card,next);
+      if (next && !card.querySelector(".lesson-node:not(.collapsed)")) {
+        const first=card.querySelector(".lesson-node");
+        if (first) setNodeExpanded(first,true);
+      }
+    });
     card.querySelector(".add-node-btn").addEventListener("click", () => {
-      addNode(card.querySelector(".lesson-node-list"));
+      setLessonExpanded(card,true);
+      addNode(card.querySelector(".lesson-node-list"),{}, {expanded:true});
       markCourseDirty();
     });
     card.querySelectorAll("input,textarea").forEach(input => input.addEventListener("input",markCourseDirty));
 
     $("lessonEditor").appendChild(fragment);
     const inserted = $("lessonEditor").lastElementChild;
-    (data.nodes || []).forEach(node => addNode(inserted.querySelector(".lesson-node-list"),node));
+    (data.nodes || []).forEach((node,index) => addNode(inserted.querySelector(".lesson-node-list"),node,{expanded:options.expanded===true && index===0}));
+    setLessonExpanded(inserted,options.expanded===true,{collapseSiblings:options.expanded===true});
     refreshLessonNumbers();
   }
 
@@ -627,7 +691,7 @@
     }
   }
 
-  function addNode(container,data={}) {
+  function addNode(container,data={},options={}) {
     const normalized = migrateLegacyNode(data);
     const fragment = $("nodeTemplate").content.cloneNode(true);
     const node = fragment.querySelector(".lesson-node");
@@ -655,12 +719,17 @@
     nextLabel.value = normalized.navigation?.nextLabel || "";
     allowBack.checked = normalized.navigation?.allowBack !== false;
     updateNodeVisibility(node);
+    updateNodeCompactSummary(node);
 
+    node.querySelector(".node-collapse-toggle")?.addEventListener("click",()=>{
+      setNodeExpanded(node,node.classList.contains("collapsed"));
+    });
     typeSelect.addEventListener("change", () => {
-      const previousType = normalized.type;
       updateNodeVisibility(node);
+      updateNodeCompactSummary(node);
       markCourseDirty();
     });
+    titleInput.addEventListener("input",()=>updateNodeCompactSummary(node));
     node.querySelectorAll("input,select,textarea").forEach(input => {
       input.addEventListener("input",markCourseDirty);
       input.addEventListener("change",markCourseDirty);
@@ -669,6 +738,8 @@
     node.querySelector(".node-up").addEventListener("click", () => moveElement(node,-1,container));
     node.querySelector(".node-down").addEventListener("click", () => moveElement(node,1,container));
     container.appendChild(fragment);
+    setNodeExpanded(node,options.expanded===true,{collapseSiblings:options.expanded===true});
+    updateNodeCompactSummary(node);
   }
 
   function refreshCourseActivityRefs() {
@@ -816,7 +887,7 @@
   ["courseAllowStudentNavigation","courseShowProgress"].forEach(id => $(id)?.addEventListener("change",markCourseDirty));
 
   $("addLessonBtn").addEventListener("click", () => {
-    addLessonCard();
+    addLessonCard(undefined,{expanded:true});
     markCourseDirty();
   });
   $("saveCourseBtn").addEventListener("click", () => saveCurrentCourse(true));

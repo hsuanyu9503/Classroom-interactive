@@ -78,7 +78,7 @@ function renderPresentationResults(summary = presentationSummary) {
       note:activityTemplateLabel(activityMode)
     });
   }
-  if (activityMode === "open-classification" && Number(summary.changedCount || 0) + Number(summary.unchangedCount || 0) > 0) {
+  if ((activityMode === "open-classification" || activityMode === "predict-reveal") && Number(summary.changedCount || 0) + Number(summary.unchangedCount || 0) > 0) {
     metrics.push({
       label:"改變判斷",
       value:String(summary.changedCount || 0),
@@ -106,6 +106,18 @@ function renderPresentationResults(summary = presentationSummary) {
   const textWall = Array.isArray(summary.textWall) ? summary.textWall : [];
   const textWallSection = $("presentationTextWallSection");
   const textWallList = $("presentationTextWall");
+  const wordCloud = Array.isArray(summary.wordCloud) ? summary.wordCloud : [];
+  const wordCloudSection = $("presentationWordCloudSection");
+  const wordCloudList = $("presentationWordCloud");
+  const stanceMap = summary.stanceMap && typeof summary.stanceMap === "object" ? summary.stanceMap : null;
+  const stanceMapSection = $("presentationStanceMapSection");
+  const stanceMapEl = $("presentationStanceMap");
+  const confidence = summary.confidence && typeof summary.confidence === "object" ? summary.confidence : null;
+  const confidenceSection = $("presentationConfidenceSection");
+  const confidenceList = $("presentationConfidenceDistribution");
+  const liveStance = summary.liveStance && typeof summary.liveStance === "object" ? summary.liveStance : null;
+  const liveStanceSection = $("presentationLiveStanceSection");
+  const liveStanceBoard = $("presentationLiveStanceBoard");
   const empty = $("presentationResultsEmpty");
 
   if (distribution.length) {
@@ -143,7 +155,83 @@ function renderPresentationResults(summary = presentationSummary) {
     textWallSection.classList.add("hidden");
   }
 
-  if (distribution.length || secondary.length || textWall.length) {
+  if (wordCloud.length) {
+    const maxCount=Math.max(...wordCloud.map(item=>Number(item.count)||0),1);
+    wordCloudList.innerHTML=wordCloud.map((item,index)=>{
+      const count=Math.max(1,Number(item.count)||1);
+      const size=18 + Math.round((count/maxCount)*34);
+      return `<span class="presentation-word-cloud-item" style="font-size:${size}px;--word-index:${index}">${escapeHtml(item.text||"")}<small>${count}</small></span>`;
+    }).join("");
+    $("presentationWordCloudTotal").textContent=`${wordCloud.length} 個關鍵詞`;
+    wordCloudSection.classList.remove("hidden");
+  } else {
+    wordCloudList.innerHTML="";
+    wordCloudSection.classList.add("hidden");
+  }
+
+  if (confidence && Array.isArray(confidence.distribution) && confidence.distribution.length) {
+    const cdist=confidence.distribution;
+    const max=Math.max(...cdist.map(item=>Number(item.count)||0),1);
+    confidenceList.innerHTML=cdist.map(item=>`
+      <div class="presentation-distribution-row">
+        <span>${escapeHtml(item.name||"")}</span>
+        <div class="presentation-distribution-bar"><i style="width:${(Number(item.count)||0)>0?Math.max(5,((Number(item.count)||0)/max)*100):0}%"></i></div>
+        <strong>${Number(item.count)||0}</strong>
+      </div>`).join("");
+    $("presentationConfidenceAverage").textContent=confidence.average===null || confidence.average===undefined ? "—" : Number(confidence.average).toFixed(2).replace(/\.00$/,"");
+    $("presentationConfidenceLabels").textContent=`${confidence.lowLabel||"不太確定"} ← 1 ～ ${confidence.pointCount||cdist.length} → ${confidence.highLabel||"非常確定"}`;
+    $("presentationConfidenceTotal").textContent=`${Number(confidence.answered)||0} 人已標記`;
+    confidenceSection.classList.remove("hidden");
+  } else {
+    confidenceList.innerHTML="";
+    confidenceSection.classList.add("hidden");
+  }
+
+  if (stanceMap && Array.isArray(stanceMap.points) && stanceMap.points.length) {
+    stanceMapEl.innerHTML=stanceMap.points.map((point,index)=>{
+      const x=Math.max(0,Math.min(100,Number(point.x)||0));
+      const y=Math.max(0,Math.min(100,Number(point.y)||0));
+      return `<span class="stance-cloud-point presentation-stance-point" style="left:${x}%;bottom:${y}%;--point-color:hsl(${(index*47)%360} 56% 53%)"></span>`;
+    }).join("");
+    if (stanceMap.average && Number.isFinite(Number(stanceMap.average.x)) && Number.isFinite(Number(stanceMap.average.y))) {
+      const ax=Math.max(0,Math.min(100,Number(stanceMap.average.x))), ay=Math.max(0,Math.min(100,Number(stanceMap.average.y)));
+      stanceMapEl.insertAdjacentHTML("beforeend",`<span class="presentation-stance-average" style="left:${ax}%;bottom:${ay}%" title="全班平均"></span>`);
+    }
+    const labels=stanceMap.labels || {};
+    $("presentationStanceXLeft").textContent=labels.xLeft || "左";
+    $("presentationStanceXRight").textContent=labels.xRight || "右";
+    $("presentationStanceYBottom").textContent=labels.yBottom || "下";
+    $("presentationStanceYTop").textContent=labels.yTop || "上";
+    $("presentationStanceMapTotal").textContent=`${stanceMap.points.length} 個匿名位置`;
+    stanceMapSection.classList.remove("hidden");
+  } else {
+    stanceMapEl.innerHTML="";
+    stanceMapSection.classList.add("hidden");
+  }
+
+  if (liveStance && liveStanceBoard) {
+    const left=Math.max(0,Number(liveStance.left)||0);
+    const right=Math.max(0,Number(liveStance.right)||0);
+    const undecided=Math.max(0,Number(liveStance.undecided)||0);
+    const decided=left+right;
+    const leftPct=decided ? Math.round(left/decided*100) : 50;
+    const rightPct=decided ? 100-leftPct : 50;
+    const knot=decided ? Math.max(4,Math.min(96,left/decided*100)) : 50;
+    liveStanceBoard.style.setProperty("--tug-position",`${knot}%`);
+    liveStanceBoard.innerHTML=`
+      <div class="live-stance-tug-score left"><span>${escapeHtml(liveStance.leftLabel||"左側立場")}</span><strong>${left}</strong><small>${decided?leftPct+"%":"—"}</small></div>
+      <div class="live-stance-tug-arena"><span class="live-stance-center-flag">中心</span><div class="live-stance-rope"></div><div class="live-stance-knot"><span>●</span></div></div>
+      <div class="live-stance-tug-score right"><span>${escapeHtml(liveStance.rightLabel||"右側立場")}</span><strong>${right}</strong><small>${decided?rightPct+"%":"—"}</small></div>
+      ${liveStance.allowUndecided!==false?`<div class="live-stance-undecided-count"><span>${escapeHtml(liveStance.undecidedLabel||"還不確定")}</span><strong>${undecided}</strong></div>`:""}
+    `;
+    $("presentationLiveStanceTotal").textContent=`已表態 ${Number(liveStance.answered)||0} / ${Number(liveStance.total)||participantCount}`;
+    liveStanceSection.classList.remove("hidden");
+  } else {
+    if(liveStanceBoard) liveStanceBoard.innerHTML="";
+    liveStanceSection?.classList.add("hidden");
+  }
+
+  if (distribution.length || secondary.length || textWall.length || wordCloud.length || (stanceMap && Array.isArray(stanceMap.points) && stanceMap.points.length) || (confidence && Array.isArray(confidence.distribution) && confidence.distribution.length) || liveStance) {
     empty.classList.add("hidden");
   } else {
     empty.textContent = nodeType === "activity"

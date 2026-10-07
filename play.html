@@ -235,6 +235,85 @@
           </section>
         </div>
 
+
+
+        <div id="questionWallInteraction" class="wave-student-interaction hidden">
+          <section class="wave-student-card question-wall-student-card">
+            <div class="classification-step-head">
+              <span class="step-number">提問</span>
+              <div><h3 id="questionWallStudentQuestion">你最想追問什麼？</h3><p>你的名字不會顯示給同學。送出後可以看看大家還在意哪些問題，也能回應同學。</p></div>
+            </div>
+            <label class="field open-text-student-field"><textarea id="questionWallStudentInput" rows="4"></textarea><small id="questionWallCharCount">0 / 180</small></label>
+            <div class="classification-step-footer"><span id="questionWallSubmitStatus">尚未提出問題</span><button id="submitQuestionWallBtn" class="btn btn-primary" type="button">匿名送出問題</button></div>
+          </section>
+          <section class="wave-student-card question-wall-browse-card">
+            <div class="question-wall-browser-head"><div><span class="summary-label">全班匿名提問</span><p id="questionWallBrowseHelp">按「＋1 我也想知道」表示共同關注；展開回應可匿名補充想法。</p></div><div class="question-wall-sort-tabs" role="group" aria-label="提問排序"><button id="questionWallHotBtn" class="btn btn-secondary active" type="button">🔥 熱門</button><button id="questionWallNewBtn" class="btn btn-ghost" type="button">🕒 最新</button></div></div>
+            <div id="questionWallStudentList" class="question-wall-list"><div class="empty-v15">目前還沒有匿名提問。</div></div>
+          </section>
+        </div>
+
+
+        <div id="groupConsensusInteraction" class="wave-student-interaction hidden">
+          <section class="wave-student-card group-consensus-student-card">
+            <div class="classification-step-head">
+              <span id="groupConsensusStudentPhase" class="step-number">個人</span>
+              <div><h3 id="groupConsensusStudentQuestion">先做自己的判斷</h3><p id="groupConsensusStudentHelp">先獨立選擇，不需要先和同學討論。</p></div>
+              <span id="groupConsensusStudentSyncBadge" class="sync-badge">等待同步</span>
+            </div>
+            <div id="groupConsensusOwnSummary" class="group-consensus-own-summary hidden"></div>
+            <div id="groupConsensusGroupCard" class="group-consensus-members-card hidden"></div>
+            <div id="groupConsensusStudentOptions" class="deliberation-choice-grid"></div>
+            <label id="groupConsensusReasonField" class="field group-consensus-reason-field hidden"><span id="groupConsensusReasonLabel">共識理由</span><textarea id="groupConsensusReasonInput" rows="4"></textarea><small id="groupConsensusReasonCounter">0 / 220</small></label>
+            <div class="classification-step-footer"><span id="groupConsensusStudentStatus">尚未選擇</span><button id="submitGroupConsensusBtn" class="btn btn-primary" type="button">提交個人判斷</button></div>
+          </section>
+          <section id="groupConsensusWaitingPanel" class="progressive-waiting-panel hidden">
+            <div class="waiting-icon">👥</div><h3>個人判斷已提交</h3><p>等待老師完成分組並開放小組討論…</p>
+          </section>
+        </div>
+
+
+        <div id="predictRevealInteraction" class="wave-student-interaction hidden">
+          <section id="predictInitialPanel" class="wave-student-card">
+            <div class="classification-step-head"><span class="step-number">預測</span><div><h3 id="predictStudentQuestion">先做你的預測</h3><p>只根據目前資訊作答；第二階段會揭曉新資訊。</p></div></div>
+            <div id="predictInitialOptions" class="deliberation-choice-grid"></div>
+            <div class="classification-step-footer"><span id="predictInitialStatus">尚未選擇</span><button id="submitPredictInitialBtn" class="btn btn-primary" type="button">提交預測</button></div>
+          </section>
+          <section id="predictWaitingPanel" class="progressive-waiting-panel hidden"><div class="waiting-icon">⏳</div><h3>預測已提交</h3><p>等待老師揭曉新資訊並開放再次判斷。</p><button id="predictLocalRevealBtn" class="btn btn-primary hidden" type="button">查看揭曉 →</button></section>
+          <section id="predictFinalPanel" class="wave-student-card hidden">
+            <div class="predict-reveal-card"><span class="summary-label">結果揭曉</span><h3 id="predictRevealTitleText">揭曉</h3><p id="predictRevealContentText"></p></div>
+            <div class="classification-step-head"><span class="step-number">再判斷</span><div><h3 id="predictRejudgePromptText">看完揭曉後，你現在怎麼判斷？</h3><p>可以維持原本答案，也可以改變。</p></div></div>
+            <div id="predictFinalOptions" class="deliberation-choice-grid"></div>
+            <div class="classification-step-footer"><span id="predictFinalStatus">尚未選擇</span><button id="submitPredictFinalBtn" class="btn btn-primary" type="button">提交再次判斷</button></div>
+          </section>
+        </div>
+
+        <div id="stanceMapInteraction" class="wave-student-interaction hidden">
+          <section class="wave-student-card">
+            <div class="classification-step-head"><span class="step-number">定位</span><div><h3 id="stanceStudentQuestion">請在圖上標出你的立場</h3><p>點一下或拖曳標記，同時表達兩個判斷維度。</p></div></div>
+            <div class="stance-student-layout">
+              <div class="stance-axis-y"><span id="stanceYTopLabel">高</span><span id="stanceYBottomLabel">低</span></div>
+              <div class="stance-main"><div id="stanceStudentMap" class="stance-map-canvas" role="application" aria-label="二維立場圖"><button id="stancePoint" class="stance-point hidden" type="button" aria-label="目前立場位置"></button></div><div class="stance-axis-x"><span id="stanceXLeftLabel">左</span><span id="stanceXRightLabel">右</span></div></div>
+            </div>
+            <div class="classification-step-footer"><span id="stanceStudentStatus">尚未定位</span><button id="submitStanceBtn" class="btn btn-primary" type="button">提交位置</button></div>
+          </section>
+        </div>
+
+
+        <div id="liveStanceInteraction" class="wave-student-interaction hidden">
+          <section class="wave-student-card live-stance-student-card">
+            <div class="classification-step-head">
+              <span class="step-number">即時立場</span>
+              <div><h3 id="liveStanceStudentQuestion">你目前站在哪一邊？</h3><p>老師說明過程中，你可以隨時改變目前立場；每次點選都會立即同步。</p></div>
+              <span id="liveStanceStudentStateBadge" class="sync-badge">開放表態</span>
+            </div>
+            <div id="liveStanceStudentChoices" class="live-stance-student-choices"></div>
+            <div class="live-stance-student-status">
+              <strong id="liveStanceStudentCurrent">尚未表態</strong>
+              <span id="liveStanceStudentHint">選擇後可隨時換邊。</span>
+            </div>
+          </section>
+        </div>
+
         <div id="deliberationInteraction" class="deliberation-interaction hidden">
           <section class="deliberation-layer-board">
             <div class="progressive-student-head">
@@ -320,6 +399,14 @@
             <button id="submitCaseBtn" class="btn btn-primary">送出判斷</button>
           </div>
         </div>
+
+
+
+        <section id="confidencePanel" class="confidence-student-panel hidden">
+          <div class="confidence-student-head"><div><span class="summary-label">信心程度</span><strong>你對這次答案有多確定？</strong></div><span id="confidenceStatus">尚未選擇</span></div>
+          <div id="confidenceChoiceGrid" class="confidence-choice-grid"></div>
+          <div class="confidence-end-labels"><span id="confidenceLowLabel"></span><span id="confidenceHighLabel"></span></div>
+        </section>
 
         <div id="feedbackPanel" class="feedback-panel hidden">
           <div id="feedbackIcon" class="feedback-icon">✨</div>

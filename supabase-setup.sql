@@ -1,4 +1,10 @@
--- V2.15.0 SQL SETUP
+-- V2.26.1 SQL SETUP (schema / RPC unchanged from V2.26.0)
+-- 新增可重用的小組底層：Session 分組、組員關係與每組共同提交；首波整合「小組共識」活動。
+-- 保留 V2.25.0 匿名提問牆＋同儕回應。
+-- 同時保留 V2.20.0 的 predict-reveal 學生狀態還原能力。
+-- 本檔可直接整份重新執行；既有 schema 採 IF NOT EXISTS / CREATE OR REPLACE，可安全重跑。
+
+-- V2.15.0 基礎相容修正
 -- 修正 get_student_session_state() 中：
 --   select s.*, p.id into v_session, v_participant_id
 -- 造成 PostgreSQL 42601：
@@ -50,6 +56,89 @@ create table if not exists public.student_responses (
 -- V2.9.1：既有資料庫安全升級；必須在任何引用 is_hidden 的 RPC 建立前執行。
 alter table public.student_responses
   add column if not exists is_hidden boolean not null default false;
+
+-- V2.24.0：匿名提問牆與同儕認同票
+create table if not exists public.question_wall_posts (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.classroom_sessions(id) on delete cascade,
+  participant_id uuid not null references public.session_participants(id) on delete cascade,
+  node_ref text not null default '',
+  text_value text not null check (char_length(text_value) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.question_wall_votes (
+  post_id uuid not null references public.question_wall_posts(id) on delete cascade,
+  participant_id uuid not null references public.session_participants(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, participant_id)
+);
+
+-- V2.25.0：每位學生對每則他人提問最多一則同儕回應；再次送出為更新。
+create table if not exists public.question_wall_replies (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.classroom_sessions(id) on delete cascade,
+  post_id uuid not null references public.question_wall_posts(id) on delete cascade,
+  participant_id uuid not null references public.session_participants(id) on delete cascade,
+  text_value text not null check (char_length(text_value) between 1 and 300),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(post_id, participant_id)
+);
+
+-- V2.26.0：Session 共用分組底層。之後其他活動模組可直接沿用。
+create table if not exists public.session_groups (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.classroom_sessions(id) on delete cascade,
+  group_index integer not null,
+  label text not null,
+  created_at timestamptz not null default now(),
+  unique(session_id, group_index)
+);
+
+create table if not exists public.session_group_members (
+  session_id uuid not null references public.classroom_sessions(id) on delete cascade,
+  group_id uuid not null references public.session_groups(id) on delete cascade,
+  participant_id uuid not null references public.session_participants(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key(session_id, participant_id),
+  unique(group_id, participant_id)
+);
+
+create table if not exists public.group_consensus_submissions (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.classroom_sessions(id) on delete cascade,
+  group_id uuid not null references public.session_groups(id) on delete cascade,
+  node_ref text not null default '',
+  selected_type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  submitted_by uuid not null references public.session_participants(id) on delete cascade,
+  submitted_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(session_id, group_id, node_ref)
+);
+
+create index if not exists session_groups_session_idx on public.session_groups(session_id, group_index);
+create index if not exists session_group_members_group_idx on public.session_group_members(group_id);
+create index if not exists group_consensus_submissions_session_idx on public.group_consensus_submissions(session_id, group_id);
+
+alter table public.session_groups enable row level security;
+alter table public.session_group_members enable row level security;
+alter table public.group_consensus_submissions enable row level security;
+revoke all on table public.session_groups from anon, authenticated;
+revoke all on table public.session_group_members from anon, authenticated;
+revoke all on table public.group_consensus_submissions from anon, authenticated;
+
+create index if not exists question_wall_posts_session_idx on public.question_wall_posts(session_id, created_at desc);
+create index if not exists question_wall_votes_post_idx on public.question_wall_votes(post_id);
+create index if not exists question_wall_replies_session_idx on public.question_wall_replies(session_id, post_id, created_at);
+
+alter table public.question_wall_posts enable row level security;
+alter table public.question_wall_votes enable row level security;
+alter table public.question_wall_replies enable row level security;
+revoke all on table public.question_wall_posts from anon, authenticated;
+revoke all on table public.question_wall_votes from anon, authenticated;
+revoke all on table public.question_wall_replies from anon, authenticated;
 
 
 -- V1.8：教師同步逐層揭露狀態（也可安全套用在既有 V1.7 資料庫）
@@ -358,10 +447,41 @@ begin
       from public.student_responses r
       where r.session_id = v_session.id
         and r.participant_id = v_participant_id
-        and r.mode in ('progressive-reveal','open-classification')
+        and r.mode in ('progressive-reveal','open-classification','predict-reveal','live-stance')
     ), '[]'::jsonb),
 
     -- V1.9：學生只取得全班「匿名聚合」結果，不取得其他學生的座號或個別作答。
+    'group_consensus', case when v_session.activity_mode='group-consensus' then jsonb_build_object(
+      'group', (
+        select jsonb_build_object(
+          'id',g.id,
+          'group_index',g.group_index,
+          'label',g.label,
+          'member_count',(select count(*) from public.session_group_members mc where mc.group_id=g.id),
+          'members',coalesce((
+            select jsonb_agg(jsonb_build_object('participant_id',gm2.participant_id,'student_code',p2.student_code) order by p2.student_code)
+            from public.session_group_members gm2
+            join public.session_participants p2 on p2.id=gm2.participant_id
+            where gm2.group_id=g.id
+          ),'[]'::jsonb)
+        )
+        from public.session_group_members gm
+        join public.session_groups g on g.id=gm.group_id
+        where gm.session_id=v_session.id and gm.participant_id=v_participant_id
+        limit 1
+      ),
+      'submission', (
+        select jsonb_build_object(
+          'id',gs.id,'selected_type',gs.selected_type,'payload',gs.payload,'updated_at',gs.updated_at
+        )
+        from public.group_consensus_submissions gs
+        join public.session_group_members gm on gm.group_id=gs.group_id and gm.participant_id=v_participant_id
+        where gs.session_id=v_session.id
+          and (v_session.session_kind <> 'course' or coalesce(gs.node_ref,'')=v_session.current_node_ref)
+        limit 1
+      )
+    ) else null end,
+
     'open_stats', jsonb_build_object(
       'initial', coalesce((
         select jsonb_agg(
@@ -722,7 +842,8 @@ begin
       revision = revision + 1,
       activity_mode = coalesce(p_activity_mode,''),
       current_stage = 1,
-      stage_count = greatest(1,coalesce(p_stage_count,1))
+      stage_count = greatest(1,coalesce(p_stage_count,1)),
+      round_state = 'open'
   where id = p_session_id
     and teacher_token = p_teacher_token
     and session_kind = 'course'
@@ -891,6 +1012,40 @@ begin
       where r.session_id = v_session.id
     ), '[]'::jsonb),
 
+    'groups', case when v_session.activity_mode='group-consensus' then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', g.id,
+        'group_index', g.group_index,
+        'label', g.label,
+        'members', coalesce((
+          select jsonb_agg(jsonb_build_object('participant_id',gm.participant_id,'student_code',p.student_code) order by p.student_code)
+          from public.session_group_members gm
+          join public.session_participants p on p.id=gm.participant_id
+          where gm.group_id=g.id
+        ),'[]'::jsonb)
+      ) order by g.group_index)
+      from public.session_groups g
+      where g.session_id=v_session.id
+    ),'[]'::jsonb) else '[]'::jsonb end,
+
+    'group_submissions', case when v_session.activity_mode='group-consensus' then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id',gs.id,
+        'group_id',gs.group_id,
+        'node_ref',coalesce(gs.node_ref,''),
+        'selected_type',gs.selected_type,
+        'payload',gs.payload,
+        'submitted_by',gs.submitted_by,
+        'submitted_by_code',p.student_code,
+        'submitted_at',gs.submitted_at,
+        'updated_at',gs.updated_at
+      ) order by gs.updated_at)
+      from public.group_consensus_submissions gs
+      join public.session_participants p on p.id=gs.submitted_by
+      where gs.session_id=v_session.id
+        and (v_session.session_kind <> 'course' or coalesce(gs.node_ref,'')=v_session.current_node_ref)
+    ),'[]'::jsonb) else '[]'::jsonb end,
+
     'progress', coalesce((
       select jsonb_agg(jsonb_build_object(
         'participant_id', cp.participant_id,
@@ -992,7 +1147,7 @@ begin
       from public.student_responses r
       where r.session_id = v_session.id
         and r.participant_id = v_participant_id
-        and r.mode in ('progressive-reveal','open-classification')
+        and r.mode in ('progressive-reveal','open-classification','predict-reveal','live-stance')
         and (
           v_session.session_kind <> 'course'
           or coalesce(r.node_ref,'') = v_session.current_node_ref
@@ -1354,6 +1509,40 @@ begin
 end;
 $$;
 
+-- V2.22.0：即時立場拉鋸可由教師鎖定／重新開放表態。
+create or replace function public.set_live_stance_state(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_round_state text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_state text;
+begin
+  if p_round_state not in ('open','locked') then
+    raise exception 'invalid live stance state';
+  end if;
+
+  update public.classroom_sessions
+  set round_state = p_round_state
+  where id = p_session_id
+    and teacher_token = p_teacher_token
+    and status = 'active'
+    and activity_mode = 'live-stance'
+  returning round_state into v_state;
+
+  if v_state is null then
+    raise exception 'invalid teacher token or live stance session';
+  end if;
+
+  return jsonb_build_object('round_state',v_state);
+end;
+$$;
+
 -- V2.15.0：覆寫作答 RPC，伺服器端限制逐層思辨作答時機，依活動設定驗證文字必填規則與自訂選項。
 create or replace function public.submit_classroom_response(
   p_session_id uuid,
@@ -1435,6 +1624,33 @@ begin
       end if;
     else
       raise exception 'invalid deliberation stage key';
+    end if;
+  end if;
+
+  if v_activity_mode = 'live-stance' then
+    if p_mode <> 'live-stance' then
+      raise exception 'invalid live stance response mode';
+    end if;
+    if v_stage_key <> 'final' then
+      raise exception 'invalid live stance stage key';
+    end if;
+    if v_round_state <> 'open' then
+      raise exception 'live stance is locked';
+    end if;
+    if coalesce(p_selected_type,'') not in ('left','right','undecided') then
+      raise exception 'invalid live stance choice';
+    end if;
+  end if;
+
+  if v_activity_mode = 'group-consensus' then
+    if p_mode <> 'group-consensus' then
+      raise exception 'invalid group consensus response mode';
+    end if;
+    if v_stage_key <> 'individual' then
+      raise exception 'invalid group consensus stage key';
+    end if;
+    if v_current_stage <> 1 then
+      raise exception 'individual response stage is closed';
     end if;
   end if;
 
@@ -1521,10 +1737,15 @@ begin
       where p.session_id = v_session.id
     ),
 
-    'response_count', (
-      select count(*) from public.student_responses r
-      where r.session_id = v_session.id
-    ),
+    'response_count', case when v_session.activity_mode='question-wall' then (
+      (select count(*) from public.question_wall_posts q where q.session_id=v_session.id)
+      + (select count(*) from public.question_wall_replies rr where rr.session_id=v_session.id)
+    ) when v_session.activity_mode='group-consensus' then (
+      (select count(*) from public.student_responses r where r.session_id=v_session.id and r.mode='group-consensus')
+      + (select count(*) from public.group_consensus_submissions gs where gs.session_id=v_session.id)
+    ) else (
+      select count(*) from public.student_responses r where r.session_id=v_session.id
+    ) end,
 
     'responses', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -1546,6 +1767,70 @@ begin
       where r.session_id = v_session.id
     ), '[]'::jsonb),
 
+    'question_wall_posts', case when v_session.activity_mode = 'question-wall' then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', q.id,
+        'participant_id', q.participant_id,
+        'student_code', p.student_code,
+        'node_ref', coalesce(q.node_ref,''),
+        'text', q.text_value,
+        'vote_count', (select count(*) from public.question_wall_votes v where v.post_id=q.id),
+        'reply_count', (select count(*) from public.question_wall_replies rr where rr.post_id=q.id),
+        'replies', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', rr.id,
+            'participant_id', rr.participant_id,
+            'student_code', rp.student_code,
+            'text', rr.text_value,
+            'created_at', rr.created_at,
+            'updated_at', rr.updated_at
+          ) order by rr.created_at)
+          from public.question_wall_replies rr
+          join public.session_participants rp on rp.id=rr.participant_id
+          where rr.post_id=q.id
+        ), '[]'::jsonb),
+        'created_at', q.created_at
+      ) order by q.created_at desc)
+      from public.question_wall_posts q
+      join public.session_participants p on p.id=q.participant_id
+      where q.session_id=v_session.id
+        and (v_session.session_kind <> 'course' or coalesce(q.node_ref,'')=v_session.current_node_ref)
+    ), '[]'::jsonb) else '[]'::jsonb end,
+
+    'groups', case when v_session.activity_mode='group-consensus' then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', g.id,
+        'group_index', g.group_index,
+        'label', g.label,
+        'members', coalesce((
+          select jsonb_agg(jsonb_build_object('participant_id',gm.participant_id,'student_code',p.student_code) order by p.student_code)
+          from public.session_group_members gm
+          join public.session_participants p on p.id=gm.participant_id
+          where gm.group_id=g.id
+        ),'[]'::jsonb)
+      ) order by g.group_index)
+      from public.session_groups g
+      where g.session_id=v_session.id
+    ),'[]'::jsonb) else '[]'::jsonb end,
+
+    'group_submissions', case when v_session.activity_mode='group-consensus' then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id',gs.id,
+        'group_id',gs.group_id,
+        'node_ref',coalesce(gs.node_ref,''),
+        'selected_type',gs.selected_type,
+        'payload',gs.payload,
+        'submitted_by',gs.submitted_by,
+        'submitted_by_code',p.student_code,
+        'submitted_at',gs.submitted_at,
+        'updated_at',gs.updated_at
+      ) order by gs.updated_at)
+      from public.group_consensus_submissions gs
+      join public.session_participants p on p.id=gs.submitted_by
+      where gs.session_id=v_session.id
+        and (v_session.session_kind <> 'course' or coalesce(gs.node_ref,'')=v_session.current_node_ref)
+    ),'[]'::jsonb) else '[]'::jsonb end,
+
     'progress', coalesce((
       select jsonb_agg(jsonb_build_object(
         'participant_id', cp.participant_id,
@@ -1565,14 +1850,21 @@ begin
         'id', p.id,
         'student_code', p.student_code,
         'joined_at', p.joined_at,
-        'response_count', (
-          select count(*) from public.student_responses r
-          where r.participant_id = p.id
-        ),
-        'last_submitted_at', (
-          select max(r.submitted_at) from public.student_responses r
-          where r.participant_id = p.id
-        )
+        'response_count', case when v_session.activity_mode='question-wall' then (
+          (select count(*) from public.question_wall_posts q where q.participant_id=p.id and q.session_id=v_session.id)
+          + (select count(*) from public.question_wall_replies rr where rr.participant_id=p.id and rr.session_id=v_session.id)
+        ) else (
+          select count(*) from public.student_responses r where r.participant_id=p.id
+        ) end,
+        'last_submitted_at', case when v_session.activity_mode='question-wall' then (
+          select max(x.ts) from (
+            select q.created_at as ts from public.question_wall_posts q where q.participant_id=p.id and q.session_id=v_session.id
+            union all
+            select rr.updated_at as ts from public.question_wall_replies rr where rr.participant_id=p.id and rr.session_id=v_session.id
+          ) x
+        ) else (
+          select max(r.submitted_at) from public.student_responses r where r.participant_id=p.id
+        ) end
       ) order by p.student_code)
       from public.session_participants p
       where p.session_id = v_session.id
@@ -1645,12 +1937,69 @@ begin
       from public.student_responses r
       where r.session_id = v_session.id
         and r.participant_id = v_participant_id
-        and r.mode in ('progressive-reveal','open-classification','layered-deliberation')
+        and r.mode in ('progressive-reveal','open-classification','layered-deliberation','predict-reveal','live-stance','group-consensus')
         and (
           v_session.session_kind <> 'course'
           or coalesce(r.node_ref,'') = v_session.current_node_ref
         )
     ), '[]'::jsonb),
+
+    'question_wall_posts', case when v_session.activity_mode = 'question-wall' then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', q.id,
+        'text', q.text_value,
+        'vote_count', (select count(*) from public.question_wall_votes v where v.post_id=q.id),
+        'voted_by_me', exists(select 1 from public.question_wall_votes v where v.post_id=q.id and v.participant_id=v_participant_id),
+        'is_own', q.participant_id=v_participant_id,
+        'reply_count', (select count(*) from public.question_wall_replies rr where rr.post_id=q.id),
+        'replies', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', rr.id,
+            'text', rr.text_value,
+            'is_own', rr.participant_id=v_participant_id,
+            'created_at', rr.created_at,
+            'updated_at', rr.updated_at
+          ) order by rr.created_at)
+          from public.question_wall_replies rr
+          where rr.post_id=q.id
+        ), '[]'::jsonb),
+        'created_at', q.created_at
+      ) order by q.created_at desc)
+      from public.question_wall_posts q
+      where q.session_id=v_session.id
+        and (v_session.session_kind <> 'course' or coalesce(q.node_ref,'')=v_session.current_node_ref)
+    ), '[]'::jsonb) else '[]'::jsonb end,
+
+    'group_consensus', case when v_session.activity_mode='group-consensus' then jsonb_build_object(
+      'group', (
+        select jsonb_build_object(
+          'id',g.id,
+          'group_index',g.group_index,
+          'label',g.label,
+          'member_count',(select count(*) from public.session_group_members mc where mc.group_id=g.id),
+          'members',coalesce((
+            select jsonb_agg(jsonb_build_object('participant_id',gm2.participant_id,'student_code',p2.student_code) order by p2.student_code)
+            from public.session_group_members gm2
+            join public.session_participants p2 on p2.id=gm2.participant_id
+            where gm2.group_id=g.id
+          ),'[]'::jsonb)
+        )
+        from public.session_group_members gm
+        join public.session_groups g on g.id=gm.group_id
+        where gm.session_id=v_session.id and gm.participant_id=v_participant_id
+        limit 1
+      ),
+      'submission', (
+        select jsonb_build_object(
+          'id',gs.id,'selected_type',gs.selected_type,'payload',gs.payload,'updated_at',gs.updated_at
+        )
+        from public.group_consensus_submissions gs
+        join public.session_group_members gm on gm.group_id=gs.group_id and gm.participant_id=v_participant_id
+        where gs.session_id=v_session.id
+          and (v_session.session_kind <> 'course' or coalesce(gs.node_ref,'')=v_session.current_node_ref)
+        limit 1
+      )
+    ) else null end,
 
     'open_stats', jsonb_build_object(
       'initial', coalesce((
@@ -1736,6 +2085,8 @@ revoke all on function public.get_student_session_state(uuid,text) from public;
 
 grant execute on function public.create_deliberation_session(text,text,text,text,jsonb,integer) to anon, authenticated;
 grant execute on function public.set_deliberation_round(uuid,text,integer,text) to anon, authenticated;
+revoke all on function public.set_live_stance_state(uuid,text,text) from public;
+grant execute on function public.set_live_stance_state(uuid,text,text) to anon, authenticated;
 grant execute on function public.submit_classroom_response(uuid,text,integer,text,text,jsonb,text,jsonb,text) to anon, authenticated;
 grant execute on function public.get_teacher_session(uuid,text) to anon, authenticated;
 grant execute on function public.get_student_session_state(uuid,text) to anon, authenticated;
@@ -1784,3 +2135,536 @@ $$;
 
 revoke all on function public.set_deliberation_reason_visibility(uuid,text,uuid,boolean) from public;
 grant execute on function public.set_deliberation_reason_visibility(uuid,text,uuid,boolean) to anon, authenticated;
+
+-- =========================================================
+-- V2.22.0：即時立場拉鋸 V2 — 完整事件歷程與教師節點
+-- =========================================================
+
+create table if not exists public.live_stance_events (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.classroom_sessions(id) on delete cascade,
+  participant_id uuid not null references public.session_participants(id) on delete cascade,
+  side text not null check (side in ('left','right','undecided')),
+  previous_side text,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  check (previous_side is null or previous_side = '' or previous_side in ('left','right','undecided'))
+);
+
+create index if not exists live_stance_events_session_created_idx
+  on public.live_stance_events(session_id, created_at);
+create index if not exists live_stance_events_participant_created_idx
+  on public.live_stance_events(participant_id, created_at);
+
+create table if not exists public.live_stance_checkpoints (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.classroom_sessions(id) on delete cascade,
+  label text not null,
+  snapshot jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists live_stance_checkpoints_session_created_idx
+  on public.live_stance_checkpoints(session_id, created_at);
+
+alter table public.live_stance_events enable row level security;
+alter table public.live_stance_checkpoints enable row level security;
+revoke all on table public.live_stance_events from anon, authenticated;
+revoke all on table public.live_stance_checkpoints from anon, authenticated;
+
+-- 若從 V2.21.0 升級，既有目前立場可回填成歷程的起始點；
+-- 無法還原升級前已經發生但未保存的中間換邊。
+insert into public.live_stance_events(session_id,participant_id,side,previous_side,payload,created_at)
+select r.session_id,r.participant_id,r.selected_type,null,r.payload,r.submitted_at
+from public.student_responses r
+where r.mode='live-stance'
+  and r.stage_key='final'
+  and r.selected_type in ('left','right','undecided')
+  and not exists (
+    select 1 from public.live_stance_events e
+    where e.session_id=r.session_id and e.participant_id=r.participant_id
+  );
+
+create or replace function public.capture_live_stance_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_previous text;
+begin
+  if new.mode <> 'live-stance' or new.stage_key <> 'final' then
+    return new;
+  end if;
+  if coalesce(new.selected_type,'') not in ('left','right','undecided') then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    v_previous := coalesce(old.selected_type,'');
+    if v_previous = coalesce(new.selected_type,'') then
+      return new;
+    end if;
+  else
+    v_previous := '';
+  end if;
+
+  insert into public.live_stance_events(
+    session_id,participant_id,side,previous_side,payload,created_at
+  ) values (
+    new.session_id,new.participant_id,new.selected_type,
+    nullif(v_previous,''),coalesce(new.payload,'{}'::jsonb),now()
+  );
+  return new;
+end;
+$$;
+
+revoke all on function public.capture_live_stance_event() from public;
+
+drop trigger if exists trg_capture_live_stance_event on public.student_responses;
+create trigger trg_capture_live_stance_event
+after insert or update of selected_type, payload
+on public.student_responses
+for each row
+execute function public.capture_live_stance_event();
+
+create or replace function public.get_live_stance_history(
+  p_session_id uuid,
+  p_teacher_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.classroom_sessions s
+    where s.id=p_session_id
+      and s.teacher_token=p_teacher_token
+      and s.activity_mode='live-stance'
+  ) then
+    raise exception 'invalid teacher token or live stance session';
+  end if;
+
+  return jsonb_build_object(
+    'live_stance_events', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id',e.id,
+        'participant_id',e.participant_id,
+        'student_code',p.student_code,
+        'side',e.side,
+        'previous_side',coalesce(e.previous_side,''),
+        'payload',e.payload,
+        'created_at',e.created_at
+      ) order by e.created_at,e.id)
+      from public.live_stance_events e
+      join public.session_participants p on p.id=e.participant_id
+      where e.session_id=p_session_id
+    ),'[]'::jsonb),
+    'live_stance_checkpoints', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id',c.id,
+        'label',c.label,
+        'snapshot',c.snapshot,
+        'created_at',c.created_at
+      ) order by c.created_at,c.id)
+      from public.live_stance_checkpoints c
+      where c.session_id=p_session_id
+    ),'[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.create_live_stance_checkpoint(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_label text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_label text;
+  v_left integer;
+  v_right integer;
+  v_undecided integer;
+  v_total integer;
+  v_round_state text;
+  v_created timestamptz;
+begin
+  select s.round_state into v_round_state
+  from public.classroom_sessions s
+  where s.id=p_session_id
+    and s.teacher_token=p_teacher_token
+    and s.status='active'
+    and s.activity_mode='live-stance'
+  limit 1;
+
+  if v_round_state is null then
+    raise exception 'invalid teacher token or live stance session';
+  end if;
+
+  select
+    count(*) filter (where r.selected_type='left'),
+    count(*) filter (where r.selected_type='right'),
+    count(*) filter (where r.selected_type='undecided')
+  into v_left,v_right,v_undecided
+  from public.student_responses r
+  where r.session_id=p_session_id
+    and r.mode='live-stance'
+    and r.stage_key='final';
+
+  select count(*) into v_total
+  from public.session_participants p
+  where p.session_id=p_session_id;
+
+  v_label:=coalesce(nullif(trim(coalesce(p_label,'')),''),
+    '節點 ' || ((select count(*)+1 from public.live_stance_checkpoints c where c.session_id=p_session_id)::text));
+
+  insert into public.live_stance_checkpoints(session_id,label,snapshot)
+  values(
+    p_session_id,
+    left(v_label,120),
+    jsonb_build_object(
+      'left',coalesce(v_left,0),
+      'right',coalesce(v_right,0),
+      'undecided',coalesce(v_undecided,0),
+      'answered',coalesce(v_left,0)+coalesce(v_right,0)+coalesce(v_undecided,0),
+      'total',coalesce(v_total,0),
+      'round_state',v_round_state
+    )
+  ) returning id,created_at into v_id,v_created;
+
+  return jsonb_build_object(
+    'id',v_id,
+    'label',left(v_label,120),
+    'snapshot',jsonb_build_object(
+      'left',coalesce(v_left,0),'right',coalesce(v_right,0),'undecided',coalesce(v_undecided,0),
+      'answered',coalesce(v_left,0)+coalesce(v_right,0)+coalesce(v_undecided,0),
+      'total',coalesce(v_total,0),'round_state',v_round_state
+    ),
+    'created_at',v_created
+  );
+end;
+$$;
+
+create or replace function public.delete_live_stance_checkpoint(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_checkpoint_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.classroom_sessions s
+    where s.id=p_session_id
+      and s.teacher_token=p_teacher_token
+      and s.activity_mode='live-stance'
+  ) then
+    raise exception 'invalid teacher token or live stance session';
+  end if;
+
+  delete from public.live_stance_checkpoints c
+  where c.id=p_checkpoint_id and c.session_id=p_session_id;
+  if not found then raise exception 'live stance checkpoint not found'; end if;
+  return true;
+end;
+$$;
+
+revoke all on function public.get_live_stance_history(uuid,text) from public;
+revoke all on function public.create_live_stance_checkpoint(uuid,text,text) from public;
+revoke all on function public.delete_live_stance_checkpoint(uuid,text,uuid) from public;
+grant execute on function public.get_live_stance_history(uuid,text) to anon, authenticated;
+grant execute on function public.create_live_stance_checkpoint(uuid,text,text) to anon, authenticated;
+grant execute on function public.delete_live_stance_checkpoint(uuid,text,uuid) to anon, authenticated;
+
+
+-- =========================================================
+-- V2.26.0：可重用分組＋小組共識 RPC
+-- =========================================================
+create or replace function public.assign_session_groups(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_group_size integer default 4
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.classroom_sessions%rowtype;
+  v_total integer;
+  v_size integer;
+  v_group_count integer;
+begin
+  select s.* into v_session from public.classroom_sessions s
+  where s.id=p_session_id and s.teacher_token=p_teacher_token limit 1;
+  if v_session.id is null then raise exception 'invalid teacher token'; end if;
+  if v_session.status <> 'active' then raise exception 'session closed'; end if;
+
+  select count(*) into v_total from public.session_participants p where p.session_id=p_session_id;
+  if v_total < 2 then raise exception 'at least two participants required'; end if;
+  v_size:=greatest(2,least(6,coalesce(p_group_size,4)));
+  -- 「每組約 N 人」：避免因尾數形成單人小組；必要時讓部分小組比建議人數多 1 人。
+  v_group_count:=greatest(1,least(ceil(v_total::numeric/v_size)::integer,floor(v_total::numeric/2)::integer));
+
+  delete from public.group_consensus_submissions gs where gs.session_id=p_session_id;
+  delete from public.session_group_members gm where gm.session_id=p_session_id;
+  delete from public.session_groups g where g.session_id=p_session_id;
+
+  insert into public.session_groups(session_id,group_index,label)
+  select p_session_id,i,'第 '||i::text||' 組' from generate_series(1,v_group_count) as i;
+
+  with ranked as (
+    select p.id,row_number() over(order by random()) as rn
+    from public.session_participants p
+    where p.session_id=p_session_id
+  )
+  insert into public.session_group_members(session_id,group_id,participant_id)
+  select p_session_id,g.id,r.id
+  from ranked r
+  join public.session_groups g
+    on g.session_id=p_session_id
+   and g.group_index=(((r.rn-1) % v_group_count)+1)::integer;
+
+  return jsonb_build_object('participant_count',v_total,'group_count',v_group_count,'group_size',v_size);
+end;
+$$;
+
+create or replace function public.submit_group_consensus(
+  p_session_id uuid,
+  p_participant_token text,
+  p_selected_type text,
+  p_payload jsonb default '{}'::jsonb,
+  p_node_ref text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.classroom_sessions%rowtype;
+  v_participant_id uuid;
+  v_group_id uuid;
+  v_node text;
+  v_row public.group_consensus_submissions%rowtype;
+begin
+  select s.* into v_session from public.classroom_sessions s where s.id=p_session_id limit 1;
+  select p.id into v_participant_id from public.session_participants p
+    where p.session_id=p_session_id and p.participant_token=p_participant_token limit 1;
+  if v_session.id is null or v_participant_id is null then raise exception 'invalid participant token'; end if;
+  if v_session.status <> 'active' then raise exception 'session closed'; end if;
+  if v_session.activity_mode <> 'group-consensus' then raise exception 'group consensus is not active'; end if;
+  if v_session.current_stage < 2 then raise exception 'group consensus is not open'; end if;
+  if length(trim(coalesce(p_selected_type,'')))=0 then raise exception 'consensus choice required'; end if;
+
+  select gm.group_id into v_group_id from public.session_group_members gm
+  where gm.session_id=p_session_id and gm.participant_id=v_participant_id limit 1;
+  if v_group_id is null then raise exception 'participant is not assigned to a group'; end if;
+  v_node:=case when v_session.session_kind='course' then coalesce(nullif(trim(coalesce(p_node_ref,'')),''),v_session.current_node_ref,'') else '' end;
+
+  insert into public.group_consensus_submissions(session_id,group_id,node_ref,selected_type,payload,submitted_by)
+  values(p_session_id,v_group_id,v_node,trim(p_selected_type),coalesce(p_payload,'{}'::jsonb),v_participant_id)
+  on conflict(session_id,group_id,node_ref) do update set
+    selected_type=excluded.selected_type, payload=excluded.payload, submitted_by=excluded.submitted_by, updated_at=now()
+  returning * into v_row;
+  return jsonb_build_object('id',v_row.id,'group_id',v_row.group_id,'updated_at',v_row.updated_at);
+end;
+$$;
+
+revoke all on function public.assign_session_groups(uuid,text,integer) from public;
+revoke all on function public.submit_group_consensus(uuid,text,text,jsonb,text) from public;
+grant execute on function public.assign_session_groups(uuid,text,integer) to anon, authenticated;
+grant execute on function public.submit_group_consensus(uuid,text,text,jsonb,text) to anon, authenticated;
+
+
+-- =========================================================
+-- V2.24.0：匿名提問牆＋認同票 RPC
+-- =========================================================
+create or replace function public.submit_question_wall_post(
+  p_session_id uuid,
+  p_participant_token text,
+  p_text text,
+  p_node_ref text default null,
+  p_max_posts integer default 3
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.classroom_sessions%rowtype;
+  v_participant_id uuid;
+  v_count integer;
+  v_id uuid;
+  v_created timestamptz;
+  v_text text;
+  v_limit integer;
+  v_node text;
+begin
+  select s.* into v_session from public.classroom_sessions s where s.id=p_session_id limit 1;
+  select p.id into v_participant_id from public.session_participants p
+    where p.session_id=p_session_id and p.participant_token=p_participant_token limit 1;
+  if v_session.id is null or v_participant_id is null then raise exception 'invalid participant token'; end if;
+  if v_session.status <> 'active' then raise exception 'session closed'; end if;
+  if v_session.activity_mode <> 'question-wall' then raise exception 'question wall is not active'; end if;
+
+  v_text:=trim(coalesce(p_text,''));
+  if char_length(v_text)<1 then raise exception 'question cannot be empty'; end if;
+  if char_length(v_text)>500 then raise exception 'question too long'; end if;
+  v_limit:=greatest(1,least(5,coalesce(p_max_posts,3)));
+  v_node:=case when v_session.session_kind='course' then coalesce(nullif(trim(coalesce(p_node_ref,'')),''),v_session.current_node_ref,'') else '' end;
+
+  select count(*) into v_count from public.question_wall_posts q
+    where q.session_id=p_session_id and q.participant_id=v_participant_id and coalesce(q.node_ref,'')=v_node;
+  if v_count>=v_limit then raise exception 'question post limit reached'; end if;
+
+  insert into public.question_wall_posts(session_id,participant_id,node_ref,text_value)
+  values(p_session_id,v_participant_id,v_node,v_text) returning id,created_at into v_id,v_created;
+  return jsonb_build_object('id',v_id,'created_at',v_created);
+end;
+$$;
+
+create or replace function public.toggle_question_wall_vote(
+  p_session_id uuid,
+  p_participant_token text,
+  p_post_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.classroom_sessions%rowtype;
+  v_participant_id uuid;
+  v_post public.question_wall_posts%rowtype;
+  v_voted boolean;
+  v_count integer;
+begin
+  select s.* into v_session from public.classroom_sessions s where s.id=p_session_id limit 1;
+  select p.id into v_participant_id from public.session_participants p
+    where p.session_id=p_session_id and p.participant_token=p_participant_token limit 1;
+  select q.* into v_post from public.question_wall_posts q where q.id=p_post_id and q.session_id=p_session_id limit 1;
+  if v_session.id is null or v_participant_id is null then raise exception 'invalid participant token'; end if;
+  if v_session.status <> 'active' then raise exception 'session closed'; end if;
+  if v_session.activity_mode <> 'question-wall' or v_post.id is null then raise exception 'question not found'; end if;
+  if v_post.participant_id=v_participant_id then raise exception 'cannot vote for own question'; end if;
+
+  if exists(select 1 from public.question_wall_votes v where v.post_id=p_post_id and v.participant_id=v_participant_id) then
+    delete from public.question_wall_votes v where v.post_id=p_post_id and v.participant_id=v_participant_id;
+    v_voted:=false;
+  else
+    insert into public.question_wall_votes(post_id,participant_id) values(p_post_id,v_participant_id);
+    v_voted:=true;
+  end if;
+  select count(*) into v_count from public.question_wall_votes v where v.post_id=p_post_id;
+  return jsonb_build_object('voted',v_voted,'vote_count',v_count);
+end;
+$$;
+
+create or replace function public.delete_question_wall_post(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_post_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists(select 1 from public.classroom_sessions s where s.id=p_session_id and s.teacher_token=p_teacher_token) then
+    raise exception 'invalid teacher token';
+  end if;
+  delete from public.question_wall_posts q where q.id=p_post_id and q.session_id=p_session_id;
+  if not found then raise exception 'question not found'; end if;
+  return true;
+end;
+$$;
+
+-- V2.25.0：新增／更新一層匿名同儕回應。
+create or replace function public.submit_question_wall_reply(
+  p_session_id uuid,
+  p_participant_token text,
+  p_post_id uuid,
+  p_text text,
+  p_max_length integer default 140
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.classroom_sessions%rowtype;
+  v_participant_id uuid;
+  v_post public.question_wall_posts%rowtype;
+  v_reply public.question_wall_replies%rowtype;
+  v_text text;
+  v_limit integer;
+begin
+  select s.* into v_session from public.classroom_sessions s where s.id=p_session_id limit 1;
+  select p.id into v_participant_id from public.session_participants p
+    where p.session_id=p_session_id and p.participant_token=p_participant_token limit 1;
+  select q.* into v_post from public.question_wall_posts q where q.id=p_post_id and q.session_id=p_session_id limit 1;
+  if v_session.id is null or v_participant_id is null then raise exception 'invalid participant token'; end if;
+  if v_session.status <> 'active' then raise exception 'session closed'; end if;
+  if v_session.activity_mode <> 'question-wall' or v_post.id is null then raise exception 'question not found'; end if;
+  if v_post.participant_id=v_participant_id then raise exception 'cannot reply to own question'; end if;
+
+  v_text:=trim(coalesce(p_text,''));
+  v_limit:=greatest(30,least(300,coalesce(p_max_length,140)));
+  if char_length(v_text)<1 then raise exception 'reply cannot be empty'; end if;
+  if char_length(v_text)>v_limit then raise exception 'reply too long'; end if;
+
+  insert into public.question_wall_replies(session_id,post_id,participant_id,text_value)
+  values(p_session_id,p_post_id,v_participant_id,v_text)
+  on conflict(post_id,participant_id) do update set text_value=excluded.text_value, updated_at=now()
+  returning * into v_reply;
+  return jsonb_build_object('id',v_reply.id,'created_at',v_reply.created_at,'updated_at',v_reply.updated_at);
+end;
+$$;
+
+create or replace function public.delete_question_wall_reply(
+  p_session_id uuid,
+  p_teacher_token text,
+  p_reply_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists(select 1 from public.classroom_sessions s where s.id=p_session_id and s.teacher_token=p_teacher_token) then
+    raise exception 'invalid teacher token';
+  end if;
+  delete from public.question_wall_replies r where r.id=p_reply_id and r.session_id=p_session_id;
+  if not found then raise exception 'reply not found'; end if;
+  return true;
+end;
+$$;
+
+revoke all on function public.submit_question_wall_post(uuid,text,text,text,integer) from public;
+revoke all on function public.toggle_question_wall_vote(uuid,text,uuid) from public;
+revoke all on function public.delete_question_wall_post(uuid,text,uuid) from public;
+revoke all on function public.submit_question_wall_reply(uuid,text,uuid,text,integer) from public;
+revoke all on function public.delete_question_wall_reply(uuid,text,uuid) from public;
+grant execute on function public.submit_question_wall_post(uuid,text,text,text,integer) to anon, authenticated;
+grant execute on function public.toggle_question_wall_vote(uuid,text,uuid) to anon, authenticated;
+grant execute on function public.delete_question_wall_post(uuid,text,uuid) to anon, authenticated;
+grant execute on function public.submit_question_wall_reply(uuid,text,uuid,text,integer) to anon, authenticated;
+grant execute on function public.delete_question_wall_reply(uuid,text,uuid) to anon, authenticated;

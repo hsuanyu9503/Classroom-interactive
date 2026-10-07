@@ -84,6 +84,17 @@
           </div>
           <div id="presentationDistributionList" class="presentation-distribution-list"></div>
         </div>
+        <div id="presentationConfidenceSection" class="presentation-distribution-section hidden">
+          <div class="presentation-results-section-head">
+            <strong>作答信心</strong>
+            <span id="presentationConfidenceTotal"></span>
+          </div>
+          <div class="presentation-confidence-summary">
+            <div><span>平均信心</span><strong id="presentationConfidenceAverage">—</strong></div>
+            <p id="presentationConfidenceLabels" class="subtle">—</p>
+          </div>
+          <div id="presentationConfidenceDistribution" class="presentation-distribution-list"></div>
+        </div>
         <div id="presentationSecondarySection" class="presentation-distribution-section hidden">
           <div class="presentation-results-section-head">
             <strong>進一步統計</strong>
@@ -97,6 +108,36 @@
             <span id="presentationTextWallTotal"></span>
           </div>
           <div id="presentationTextWall" class="presentation-text-wall"></div>
+        </div>
+        <div id="presentationWordCloudSection" class="presentation-distribution-section hidden">
+          <div class="presentation-results-section-head">
+            <strong>關鍵詞雲</strong>
+            <span id="presentationWordCloudTotal"></span>
+          </div>
+          <div id="presentationWordCloud" class="presentation-word-cloud" aria-label="全班關鍵詞雲"></div>
+        </div>
+        <div id="presentationStanceMapSection" class="presentation-distribution-section hidden">
+          <div class="presentation-results-section-head">
+            <strong>二維立場分布</strong>
+            <span id="presentationStanceMapTotal"></span>
+          </div>
+          <div class="presentation-stance-layout">
+            <div class="presentation-stance-y">
+              <span id="presentationStanceYTop">上</span><span id="presentationStanceYBottom">下</span>
+            </div>
+            <div>
+              <div id="presentationStanceMap" class="stance-map-canvas presentation-stance-map"></div>
+              <div class="stance-axis-x"><span id="presentationStanceXLeft">左</span><span id="presentationStanceXRight">右</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="presentationLiveStanceSection" class="presentation-distribution-section hidden">
+          <div class="presentation-results-section-head">
+            <strong>即時立場拉鋸</strong>
+            <span id="presentationLiveStanceTotal"></span>
+          </div>
+          <div id="presentationLiveStanceBoard" class="live-stance-tug-board projection"></div>
         </div>
         <div id="presentationResultsEmpty" class="presentation-results-empty hidden">
           目前還沒有可以公開的全班結果。

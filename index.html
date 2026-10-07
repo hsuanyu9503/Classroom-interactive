@@ -21,7 +21,7 @@
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
     </div>
-    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.19.0</span></div>
+    <div class="topbar-actions"><button id="dataManagementBtn" class="btn btn-secondary" type="button">⚙️ 資料管理</button><span class="workspace-version">V2.26.1</span></div>
   </header>
 
   <section class="teacher-workflow-nav" aria-label="教師工作流程">
@@ -40,7 +40,7 @@
       <button class="workspace-tab active" data-view="courses">🧭 課程編排</button>
       <button class="workspace-tab" data-view="works">🗂️ 材料庫</button>
       <button class="workspace-tab" data-view="types">🧰 分類工具箱</button>
-      <button class="workspace-tab" data-view="activities">🧩 活動模板</button>
+      <button class="workspace-tab" data-view="activities">🧩 活動模組</button>
     </div>
 
     <div class="workspace-tabs workflow-subnav hidden" data-workflow-nav="teach" aria-label="上課工具">
@@ -288,9 +288,9 @@
   <section class="workspace-view" data-workspace-view="activities">
     <div class="activity-template-toolbar">
       <div>
-        <span class="section-kicker">INTERACTION TEMPLATES</span>
-        <h2>活動模板</h2>
-        <p>依學生要進行的認知操作選擇模板；教材資料可從「材料庫」與「分類工具箱」重複引用。</p>
+        <span class="section-kicker">ACTIVITY MODULES</span>
+        <h2>活動模組</h2>
+        <p>依學生要進行的操作選擇活動模組；教材資料可從「材料庫」與「分類工具箱」重複引用。</p>
       </div>
       <button id="newActivityVisibleBtn" class="btn btn-primary">＋ 建立活動</button>
     </div>
@@ -314,107 +314,200 @@
     <section class="panel editor-panel">
       <div class="panel-heading editor-title-row">
         <div>
-          <span id="templateKicker" class="section-kicker">模板 01</span>
+          <span id="templateKicker" class="section-kicker">選擇與分類</span>
           <h2 id="templateTitle">探索式拖曳揭密</h2>
         </div>
-        <span class="status-chip">活動模板</span>
+        <span class="status-chip">活動模組</span>
       </div>
 
-      <section class="mode-selector-wrap">
-        <span class="field-label">選擇教學活動模板</span>
-        <div class="mode-selector" role="radiogroup" aria-label="活動模板">
-          <label class="mode-option">
-            <input type="radio" name="activityMode" value="drag-reveal" checked />
-            <span class="mode-option-body">
-              <strong>🎯 選擇與揭示</strong>
-              <small>學生先做選擇或判斷，再揭露答案、關鍵資訊或教師整理。</small>
-            </span>
-          </label>
+      <details id="activityModulePicker" class="mode-selector-wrap activity-module-picker">
+        <summary class="activity-module-picker-summary">
+          <div>
+            <span class="section-kicker">CURRENT MODULE</span>
+            <strong id="activityModulePickerCurrent">探索式拖曳揭密</strong>
+            <small>點一下可切換活動模組；選定後會自動收合。</small>
+          </div>
+          <span class="activity-module-picker-action">變更模組 <b aria-hidden="true">⌄</b></span>
+        </summary>
+        <div class="activity-module-picker-body">
+        <div class="mode-selector-intro">
+          <div>
+            <span class="field-label">選擇活動模組</span>
+            <p class="mode-selector-help">依課堂中希望學生進行的操作選擇模組。模組依用途分組，設定完成後可直接建立 Session 或放入支援的 Course 節點。</p>
+          </div>
+          <span class="mode-selector-count">14 種模組</span>
+        </div>
 
-          <label id="legacyOpenTagsOption" class="mode-option">
-            <input type="radio" name="activityMode" value="open-tags" />
-            <span class="mode-option-body">
-              <strong>🏷️ 特徵選擇</strong>
-              <small>學生可複選多個特徵、依據或標籤並說明理由；適合沒有唯一答案的活動。</small>
-            </span>
-          </label>
-
-          <div class="mode-family-card classification-family">
+        <div class="mode-selector" role="radiogroup" aria-label="活動模組">
+          <div class="mode-family-card foundation-family">
             <div class="mode-family-head">
               <div>
-                <strong>🧩 依據與分類</strong>
-                <small>先找出判斷依據，再進行分類；依課程需要決定是否加入全班比較與再次判斷。</small>
+                <strong>🎯 選擇與分類</strong>
+                <small>從選項、特徵與材料依據出發，適合快速判斷、辨識特徵與建立分類理由。</small>
               </div>
-              <span class="mode-family-badge">兩種流程</span>
+              <span class="mode-family-badge">4 種模組</span>
             </div>
             <div class="mode-flow-grid">
               <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="drag-reveal" checked />
+                <span class="mode-flow-body">
+                  <b>🎯 選擇與揭示</b>
+                  <small>先做選擇或判斷，再揭露答案、關鍵資訊或教師整理。</small>
+                </span>
+              </label>
+              <label id="legacyOpenTagsOption" class="mode-flow-option">
+                <input type="radio" name="activityMode" value="open-tags" />
+                <span class="mode-flow-body">
+                  <b>🏷️ 特徵選擇</b>
+                  <small>複選特徵、依據或標籤，再說明自己的判斷理由。</small>
+                </span>
+              </label>
+              <label class="mode-flow-option">
                 <input type="radio" name="activityMode" value="element-type" />
                 <span class="mode-flow-body">
-                  <b>基礎分類</b>
-                  <small>選依據 → 選分類 → 查看結果</small>
+                  <b>🧩 基礎分類</b>
+                  <small>選依據 → 選分類 → 查看結果。</small>
                 </span>
               </label>
               <label class="mode-flow-option">
                 <input type="radio" name="activityMode" value="open-classification" />
                 <span class="mode-flow-body">
-                  <b>討論後再判斷</b>
-                  <small>選依據 → 分類 → 看全班 → 維持或修改</small>
+                  <b>🔁 討論後再判斷</b>
+                  <small>選依據 → 分類 → 看全班 → 維持或修改。</small>
                 </span>
               </label>
             </div>
           </div>
 
-          <div class="mode-family-card first-wave-family">
+          <div class="mode-family-card quick-response-family">
             <div class="mode-family-head">
               <div>
-                <strong>✨ 快速互動</strong>
-                <small>補齊態度、優先順序與開放觀點三種常用課堂互動，可直接進入 Session 統計。</small>
+                <strong>✨ 快速蒐集</strong>
+                <small>快速掌握全班態度、優先順序或開放觀點，適合暖身、形成性評量與討論前蒐集。</small>
               </div>
-              <span class="mode-family-badge">第一波新模組</span>
+              <span class="mode-family-badge">3 種模組</span>
             </div>
-            <div class="mode-flow-grid first-wave-grid">
+            <div class="mode-flow-grid">
               <label class="mode-flow-option">
                 <input type="radio" name="activityMode" value="scale-spectrum" />
                 <span class="mode-flow-body">
                   <b>📏 量表／立場光譜</b>
-                  <small>1～N 程度選擇 → 看全班分布與平均</small>
+                  <small>1～N 程度選擇 → 看全班分布與平均。</small>
                 </span>
               </label>
               <label class="mode-flow-option">
                 <input type="radio" name="activityMode" value="ranking" />
                 <span class="mode-flow-body">
                   <b>↕️ 排序／優先順序</b>
-                  <small>拖曳排序 → 比較第一順位與平均排名</small>
+                  <small>拖曳排序 → 比較第一順位與平均排名。</small>
                 </span>
               </label>
               <label class="mode-flow-option">
                 <input type="radio" name="activityMode" value="open-text" />
                 <span class="mode-flow-body">
                   <b>💬 開放文字／文字牆</b>
-                  <small>短答蒐集 → 匿名或具名即時文字牆</small>
+                  <small>短答蒐集 → 匿名或具名檢視，也可切換詞雲。</small>
                 </span>
               </label>
             </div>
           </div>
 
-          <label class="mode-option">
-            <input type="radio" name="activityMode" value="progressive-reveal" />
-            <span class="mode-option-body">
-              <strong>🪄 逐步揭露</strong>
-              <small>資訊逐步增加；學生每獲得一項新資訊，就重新做一次判斷。</small>
-            </span>
-          </label>
+          <div class="mode-family-card peer-interaction-family">
+            <div class="mode-family-head">
+              <div>
+                <strong>🤝 同儕互動</strong>
+                <small>讓學生彼此交流，也支援從個人判斷走向小組共同決策，保留討論前後的差異。</small>
+              </div>
+              <span class="mode-family-badge">2 種模組</span>
+            </div>
+            <div class="mode-flow-grid">
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="question-wall" />
+                <span class="mode-flow-body">
+                  <b>🙋 匿名提問牆＋認同＋回應</b>
+                  <small>匿名發問 → 看同學問題 → ＋1 認同 → 留下一層匿名同儕回應。</small>
+                </span>
+              </label>
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="group-consensus" />
+                <span class="mode-flow-body">
+                  <b>👥 小組共識</b>
+                  <small>個人先判斷 → 老師分組 → 小組討論 → 共同提交答案與理由。</small>
+                </span>
+              </label>
+            </div>
+          </div>
 
-          <label class="mode-option">
-            <input type="radio" name="activityMode" value="layered-deliberation" />
-            <span class="mode-option-body">
-              <strong>⚖️ 逐層思辨</strong>
-              <small>逐層增加情境資訊，記錄每一階段的立場、理由與判斷變化。</small>
-            </span>
-          </label>
+          <div class="mode-family-card reasoning-family">
+            <div class="mode-family-head">
+              <div>
+                <strong>🧠 推理與修正</strong>
+                <small>讓資訊逐步增加，保留前後判斷差異，適合觀察學生如何因新證據調整想法。</small>
+              </div>
+              <span class="mode-family-badge">3 種模組</span>
+            </div>
+            <div class="mode-flow-grid">
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="predict-reveal" />
+                <span class="mode-flow-body">
+                  <b>🔮 預測 → 揭曉 → 再判斷</b>
+                  <small>先預測 → 教師揭曉資訊 → 再次作答。</small>
+                </span>
+              </label>
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="progressive-reveal" />
+                <span class="mode-flow-body">
+                  <b>🪄 逐步揭露</b>
+                  <small>逐步增加資訊，每獲得一項新資訊就重新判斷。</small>
+                </span>
+              </label>
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="layered-deliberation" />
+                <span class="mode-flow-body">
+                  <b>⚖️ 逐層思辨</b>
+                  <small>逐層增加情境，記錄各階段的立場、理由與判斷變化。</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="mode-family-card stance-interaction-family">
+            <div class="mode-family-head">
+              <div>
+                <strong>🗺️ 立場與即時互動</strong>
+                <small>呈現立場的位置或變化，適合需要看見班級分布、移動與拉鋸過程的討論。</small>
+              </div>
+              <span class="mode-family-badge">2 種模組</span>
+            </div>
+            <div class="mode-flow-grid">
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="stance-map" />
+                <span class="mode-flow-body">
+                  <b>🗺️ 二維立場圖</b>
+                  <small>在兩個判斷維度上定位 → 看全班分布與中心位置。</small>
+                </span>
+              </label>
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="live-stance" />
+                <span class="mode-flow-body">
+                  <b>🪢 即時立場拉鋸</b>
+                  <small>隨時換邊 → 即時拉鋸 → 可鎖定、記錄節點與檢視變化。</small>
+                </span>
+              </label>
+            </div>
+          </div>
         </div>
-      </section>
+        </div>
+      </details>
+
+      <section class="activity-core-settings" aria-label="活動基本設定">
+        <div class="activity-editor-section-head">
+          <div>
+            <span class="section-kicker">BASIC SETTINGS</span>
+            <h3>活動基本設定</h3>
+          </div>
+          <small>先確認名稱與說明，再往下設定活動內容。</small>
+        </div>
 
       <div class="form-grid two-col">
         <label class="field">
@@ -427,6 +520,21 @@
           <input id="activitySubtitle" type="text" placeholder="例如：找出關鍵依據，再說明你的判斷" />
         </label>
       </div>
+
+
+
+      <section id="confidenceEditorCard" class="confidence-editor-card">
+        <div class="confidence-editor-head">
+          <div><span class="section-kicker">OPTIONAL FOLLOW-UP</span><h3>信心程度</h3><p class="field-help">可附加在多數個人作答活動後，讓學生同時標記「我有多確定」。</p></div>
+          <label class="toggle-line"><input id="confidenceEnabled" type="checkbox" /><span>啟用信心程度</span></label>
+        </div>
+        <div id="confidenceSettings" class="form-grid three-col hidden">
+          <label class="field"><span>刻度數</span><input id="confidencePointCount" type="number" min="3" max="7" value="5" /></label>
+          <label class="field"><span>低信心標籤</span><input id="confidenceLowLabel" type="text" maxlength="30" value="不太確定" /></label>
+          <label class="field"><span>高信心標籤</span><input id="confidenceHighLabel" type="text" maxlength="30" value="非常確定" /></label>
+        </div>
+      </section>
+      </section>
 
       <div id="standardTaskToolbar" class="editor-toolbar">
         <div>
@@ -505,6 +613,39 @@
         </div>
       </section>
 
+
+
+      <section id="predictRevealEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div><span class="section-kicker">PREDICT / REVEAL / REJUDGE</span><h3>預測 → 揭曉 → 再判斷</h3><p class="field-help">學生先做預測，教師再揭曉新資訊或真實結果，最後重新判斷。</p></div>
+          <button id="addPredictOptionBtn" class="btn btn-secondary" type="button">＋ 新增選項</button>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>預測題目</span><textarea id="predictQuestion" rows="3" placeholder="例如：你預測接下來會發生什麼？"></textarea></label>
+          <div id="predictOptionsEditor" class="ranking-items-editor"></div>
+          <div class="form-grid two-col">
+            <label class="field"><span>揭曉標題</span><input id="predictRevealTitle" type="text" maxlength="80" placeholder="例如：實驗結果／真實案例結果" /></label>
+            <label class="field"><span>再次判斷提示</span><input id="predictRejudgePrompt" type="text" maxlength="120" placeholder="看完揭曉後，你現在怎麼判斷？" /></label>
+          </div>
+          <label class="field wave-wide"><span>揭曉內容</span><textarea id="predictRevealContent" rows="5" placeholder="輸入教師要在第二階段公開的結果、證據或補充資訊。"></textarea></label>
+        </div>
+      </section>
+
+      <section id="stanceMapEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div><span class="section-kicker">2D STANCE MAP</span><h3>二維立場圖</h3><p class="field-help">讓學生同時依兩個維度定位，例如「合理程度 × 傷害程度」。</p></div>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>題目</span><textarea id="stanceQuestion" rows="3" placeholder="例如：你如何評估這個行為？"></textarea></label>
+          <div class="form-grid two-col">
+            <label class="field"><span>X 軸左端</span><input id="stanceXLeft" type="text" maxlength="40" value="不合理" /></label>
+            <label class="field"><span>X 軸右端</span><input id="stanceXRight" type="text" maxlength="40" value="合理" /></label>
+            <label class="field"><span>Y 軸下端</span><input id="stanceYBottom" type="text" maxlength="40" value="影響小" /></label>
+            <label class="field"><span>Y 軸上端</span><input id="stanceYTop" type="text" maxlength="40" value="影響大" /></label>
+          </div>
+        </div>
+      </section>
+
       <section id="openTextEditorSection" class="wave-editor-section hidden">
         <div class="editor-toolbar">
           <div>
@@ -518,6 +659,76 @@
           <div class="form-grid two-col">
             <label class="field"><span>輸入提示</span><input id="openTextPlaceholder" type="text" maxlength="80" placeholder="請用一兩句話寫下你的想法" /></label>
             <label class="field"><span>字數上限</span><input id="openTextMaxLength" type="number" min="30" max="1000" value="240" /></label>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="questionWallEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div>
+            <span class="section-kicker">PEER QUESTION WALL</span>
+            <h3>匿名提問牆＋認同＋回應</h3>
+            <p class="field-help">學生匿名提出問題並即時看到同學的提問；可按「＋1」表達共同關注，也可對別人的問題留下 1 則匿名回應。學生端永遠不顯示作者，教師端可自行切換匿名／顯示學生。</p>
+          </div>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>提問提示</span><textarea id="questionWallQuestion" rows="3" placeholder="例如：看完這個案例後，你最想追問什麼？"></textarea></label>
+          <div class="form-grid two-col">
+            <label class="field"><span>輸入提示</span><input id="questionWallPlaceholder" type="text" maxlength="80" placeholder="寫下你還想知道的問題" /></label>
+            <label class="field"><span>單則字數上限</span><input id="questionWallMaxLength" type="number" min="30" max="500" value="180" /></label>
+            <label class="field"><span>每人最多提問</span><input id="questionWallMaxPosts" type="number" min="1" max="5" value="3" /></label>
+            <label class="toggle-line"><input id="questionWallAllowReplies" type="checkbox" checked /><span>允許同儕匿名回應</span></label>
+            <label class="field"><span>回應字數上限</span><input id="questionWallReplyMaxLength" type="number" min="30" max="300" value="140" /></label>
+          </div>
+          <p class="field-help">每位學生對同一則問題最多只能按一次 ＋1，並最多留下 1 則回應；再次送出會更新自己的回應。學生不能替自己的問題按 ＋1 或留下回應。</p>
+        </div>
+      </section>
+
+
+      <section id="groupConsensusEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div>
+            <span class="section-kicker">GROUP CONSENSUS</span>
+            <h3>小組共識｜個人 → 小組</h3>
+            <p class="field-help">學生先獨立作答，老師再依目前加入人數自動分組並開放小組討論。每組共享一份共識答案，任何組員都可在討論後更新。</p>
+          </div>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>核心提問</span><textarea id="groupConsensusQuestion" rows="3" placeholder="例如：如果只能選一項最重要的原則，你們會選哪一項？"></textarea></label>
+          <div class="editor-toolbar compact-editor-toolbar">
+            <div><span class="field-label">共識選項</span><p class="field-help">2～8 個選項；個人與小組階段使用同一組選項。</p></div>
+            <button id="addGroupConsensusOptionBtn" class="btn btn-secondary" type="button">＋ 新增選項</button>
+          </div>
+          <div id="groupConsensusOptionsEditor" class="ranking-items-editor"></div>
+          <div class="form-grid two-col group-consensus-settings">
+            <label class="field"><span>建議每組人數</span><input id="groupConsensusGroupSize" type="number" min="2" max="6" value="4" /><small>實際分組由老師上課時依加入人數建立，可再調整。</small></label>
+            <label class="field"><span>共識理由提示</span><input id="groupConsensusReasonPrompt" type="text" maxlength="120" value="請寫下你們形成這個共識的主要理由" /></label>
+            <label class="field"><span>理由字數上限</span><input id="groupConsensusReasonMaxLength" type="number" min="30" max="500" value="220" /></label>
+            <label class="toggle-line"><input id="groupConsensusReasonRequired" type="checkbox" checked /><span>小組提交時必須填寫共識理由</span></label>
+          </div>
+          <p class="field-help">V2.26 先提供單選共識題；「分組／組員／共同提交」底層是 Session 共用能力，後續排序與分類模組可直接沿用。</p>
+        </div>
+      </section>
+
+
+      <section id="liveStanceEditorSection" class="wave-editor-section hidden">
+        <div class="editor-toolbar">
+          <div>
+            <span class="section-kicker">LIVE STANCE TUG</span>
+            <h3>即時立場拉鋸</h3>
+            <p class="field-help">學生在教師說明過程中可隨時改變目前立場；教師端會即時呈現左右人數與拉鋸位置。</p>
+          </div>
+        </div>
+        <div class="wave-editor-card">
+          <label class="field wave-wide"><span>核心提問</span><textarea id="liveStanceQuestion" rows="3" placeholder="例如：你目前支持公開這張照片嗎？"></textarea></label>
+          <div class="form-grid two-col">
+            <label class="field"><span>左側立場</span><input id="liveStanceLeftLabel" type="text" maxlength="60" placeholder="支持公開" /></label>
+            <label class="field"><span>右側立場</span><input id="liveStanceRightLabel" type="text" maxlength="60" placeholder="不應公開" /></label>
+          </div>
+          <div class="live-stance-undecided-settings">
+            <label class="toggle-line"><input id="liveStanceAllowUndecided" type="checkbox" checked /><span>允許學生選擇「未決定」</span></label>
+            <label id="liveStanceUndecidedLabelField" class="field"><span>未決定文字</span><input id="liveStanceUndecidedLabel" type="text" maxlength="60" value="還不確定" /></label>
           </div>
         </div>
       </section>
@@ -628,13 +839,14 @@
       <div class="sticky-actions">
         <div class="action-left">
           <button id="saveBtn" class="btn btn-primary">儲存活動</button>
-          <button id="duplicateBtn" class="btn btn-secondary">複製活動</button>
-          <button id="deleteBtn" class="btn btn-danger-soft">刪除</button>
+          <button id="duplicateBtn" class="btn btn-secondary activity-secondary-action">複製活動</button>
+          <button id="deleteBtn" class="btn btn-danger-soft activity-secondary-action">刪除</button>
         </div>
         <div class="action-right">
-          <button id="startActivitySessionBtn" class="btn btn-teach">📡 用這個活動上課</button>
-          <button id="previewBtn" class="btn btn-secondary">預覽學生畫面</button>
-          <button id="shareBtn" class="btn btn-accent">🔗 分享獨立活動</button>
+          <button id="startActivitySessionBtn" class="btn btn-teach activity-secondary-action">📡 用這個活動上課</button>
+          <button id="previewBtn" class="btn btn-secondary activity-secondary-action">預覽學生畫面</button>
+          <button id="shareBtn" class="btn btn-accent activity-secondary-action">🔗 分享獨立活動</button>
+          <button id="activityMoreToggleBtn" class="btn btn-secondary activity-more-toggle" type="button" aria-expanded="false">⋯ 更多</button>
         </div>
       </div>
     </section>
@@ -651,7 +863,10 @@
             <h2>今天要上什麼？</h2>
             <p class="subtle">從準備完成的課程或活動直接開始，也可以繼續最近一次尚未結束的 Session。</p>
           </div>
-          <button id="openSessionSetupBtn" class="btn btn-secondary" type="button">＋ 自訂建立 Session</button>
+          <div class="teach-home-head-actions">
+            <button id="toggleTeachHomeFocusBtn" class="btn btn-ghost teach-home-focus-toggle hidden" type="button" aria-expanded="false">展開其他課堂操作</button>
+            <button id="openSessionSetupBtn" class="btn btn-secondary" type="button">＋ 自訂建立 Session</button>
+          </div>
         </div>
 
         <div class="teach-home-metrics">
@@ -681,7 +896,7 @@
           <section class="teach-launch-panel">
             <div class="teach-launch-head">
               <div><span class="section-kicker">READY ACTIVITIES</span><h3>單一活動</h3></div>
-              <button id="goActivityPrepBtn" class="btn btn-ghost" type="button">回活動模板</button>
+              <button id="goActivityPrepBtn" class="btn btn-ghost" type="button">回活動模組</button>
             </div>
             <div id="teachReadyActivityList" class="teach-ready-list"></div>
           </section>
@@ -697,6 +912,16 @@
           </div>
           <span id="cloudModeBadge" class="cloud-mode-badge local">本機測試模式</span>
         </div>
+
+        <details id="sessionSetupDetails" class="session-setup-details">
+          <summary class="session-setup-summary">
+            <div>
+              <strong>＋ 建立或調整 Session</strong>
+              <small>選擇活動／完整課程、設定名稱，或調整雲端連線。</small>
+            </div>
+            <span>展開設定 <b aria-hidden="true">⌄</b></span>
+          </summary>
+          <div class="session-setup-body">
 
         <details id="cloudSettingsPanel" class="cloud-settings">
           <summary>
@@ -770,6 +995,8 @@
           </div>
           <button id="createSessionBtn" class="btn btn-primary" type="button">＋ 建立課堂 Session</button>
         </div>
+          </div>
+        </details>
       </section>
 
       <section id="activeSessionCard" class="panel active-session-card hidden">
@@ -813,7 +1040,7 @@
             <strong id="sessionParticipantCount">0</strong>
           </div>
           <div class="session-metric">
-            <span>已記錄作答</span>
+            <span>回傳紀錄</span>
             <strong id="sessionResponseCount">0</strong>
           </div>
           <div class="session-metric">
@@ -950,10 +1177,122 @@
         <section id="openTextSessionControl" class="wave-session-control hidden">
           <div class="session-section-head">
             <div><span class="section-kicker">LIVE TEXT WALL</span><h3>即時文字牆</h3></div>
-            <label class="reason-identity-control" for="openTextIdentityMode"><span>顯示方式</span><select id="openTextIdentityMode"><option value="anonymous">匿名</option><option value="named">顯示學生</option></select></label>
+            <div class="open-text-view-controls"><label class="reason-identity-control" for="openTextViewMode"><span>檢視</span><select id="openTextViewMode"><option value="wall">文字牆</option><option value="cloud">詞雲</option></select></label><label class="reason-identity-control" for="openTextIdentityMode"><span>顯示方式</span><select id="openTextIdentityMode"><option value="anonymous">匿名</option><option value="named">顯示學生</option></select></label></div>
           </div>
           <div class="text-wall-meta"><span id="openTextAnsweredCount">已回答 0 / 0</span><small>此切換只影響教師目前的文字牆檢視。</small></div>
           <div id="openTextWall" class="open-text-wall"><div class="empty-v15">目前還沒有學生提交文字。</div></div>
+          <div id="openTextWordCloud" class="teacher-word-cloud hidden"><div class="empty-v15">目前還沒有可建立詞雲的文字。</div></div>
+        </section>
+
+
+
+        <section id="questionWallSessionControl" class="wave-session-control hidden">
+          <div class="session-section-head">
+            <div><span class="section-kicker">LIVE QUESTION WALL</span><h3>匿名提問牆</h3></div>
+            <div class="open-text-view-controls">
+              <label class="reason-identity-control" for="questionWallSortMode"><span>排序</span><select id="questionWallSortMode"><option value="hot">熱門</option><option value="new">最新</option></select></label>
+              <label class="reason-identity-control" for="questionWallIdentityMode"><span>教師檢視</span><select id="questionWallIdentityMode"><option value="anonymous">匿名</option><option value="named">顯示學生</option></select></label>
+            </div>
+          </div>
+          <div class="text-wall-meta"><span id="questionWallPostCount">目前 0 則提問 · 0 則回應</span><small>學生端固定匿名；顯示學生只影響教師目前的提問與回應檢視。</small></div>
+          <div id="questionWallTeacherList" class="question-wall-list teacher-question-wall"><div class="empty-v15">目前還沒有學生提問。</div></div>
+        </section>
+
+
+        <section id="groupConsensusSessionControl" class="wave-session-control group-consensus-session-control hidden">
+          <div class="session-section-head">
+            <div><span class="section-kicker">GROUP CONSENSUS</span><h3>小組共識控制台</h3></div>
+            <span id="groupConsensusPhaseBadge" class="stage-badge">個人作答</span>
+          </div>
+          <div class="group-consensus-teacher-toolbar">
+            <div class="group-consensus-stage-actions">
+              <button id="groupConsensusIndividualBtn" class="btn btn-secondary" type="button">← 個人作答</button>
+              <button id="groupConsensusGroupBtn" class="btn btn-primary" type="button">開放小組討論 →</button>
+            </div>
+            <div class="group-consensus-assign-controls">
+              <label class="field compact-field"><span>每組約</span><input id="groupConsensusTeacherGroupSize" type="number" min="2" max="6" value="4" /></label>
+              <button id="groupConsensusAssignBtn" class="btn btn-secondary" type="button">👥 自動分組</button>
+            </div>
+          </div>
+          <p id="groupConsensusTeacherHint" class="field-help">先讓學生完成個人判斷；準備討論時再分組並開放小組階段。</p>
+          <div class="wave-session-grid group-consensus-distributions">
+            <div><span class="summary-label">個人判斷分布</span><div id="groupConsensusIndividualDistribution" class="stage-distribution-list"></div></div>
+            <div><span class="summary-label">小組共識分布</span><div id="groupConsensusGroupDistribution" class="stage-distribution-list"></div></div>
+          </div>
+          <div class="group-consensus-group-head"><div><span class="summary-label">目前分組</span><small id="groupConsensusGroupMeta">尚未分組</small></div></div>
+          <div id="groupConsensusGroupList" class="group-consensus-group-list"><div class="empty-v15">學生加入後，可按「自動分組」建立討論小組。</div></div>
+        </section>
+
+
+        <section id="predictRevealSessionControl" class="wave-session-control hidden">
+          <div class="session-section-head"><div><span class="section-kicker">LIVE PREDICTION</span><h3>預測 → 揭曉 → 再判斷</h3></div><span id="predictPhaseBadge" class="stage-badge">預測階段</span></div>
+          <div class="wave-session-grid">
+            <div><span class="summary-label">目前階段</span><strong id="predictPhaseText">學生正在進行初次預測</strong><p id="predictAnsweredText" class="subtle">已提交 0 / 0</p><div class="progressive-control-actions"><button id="predictBackBtn" class="btn btn-secondary" type="button">← 回到預測</button><button id="predictRevealBtn" class="btn btn-primary" type="button">揭曉並開放再次判斷 →</button></div></div>
+            <div><span class="summary-label">目前分布</span><div id="predictLiveDistribution" class="stage-distribution-list"></div></div>
+          </div>
+          <div id="predictChangeSummary" class="open-change-summary hidden"><div><span>改變答案</span><strong id="predictChangedCount">0</strong></div><div><span>維持答案</span><strong id="predictUnchangedCount">0</strong></div></div>
+        </section>
+
+        <section id="stanceMapSessionControl" class="wave-session-control hidden">
+          <div class="session-section-head"><div><span class="section-kicker">LIVE 2D MAP</span><h3>二維立場分布</h3></div><span id="stanceAnsweredBadge" class="stage-badge">0 / 0</span></div>
+          <div class="stance-teacher-grid"><div id="stanceTeacherMap" class="stance-map-canvas teacher-stance-map"></div><div class="wave-metric-panel"><span class="summary-label">全班中心位置</span><div class="wave-metrics"><div><span>X 平均</span><strong id="stanceAverageX">—</strong></div><div><span>Y 平均</span><strong id="stanceAverageY">—</strong></div></div><p id="stanceTeacherAxes" class="subtle">等待學生作答</p></div></div>
+        </section>
+
+
+        <section id="liveStanceSessionControl" class="wave-session-control live-stance-session-control hidden">
+          <div class="session-section-head">
+            <div><span class="section-kicker">LIVE STANCE TUG</span><h3>即時立場拉鋸</h3></div>
+            <span id="liveStanceStateBadge" class="stage-badge">開放表態</span>
+          </div>
+          <div class="live-stance-control-meta">
+            <span id="liveStanceAnsweredText">已表態 0 / 0</span>
+            <small>學生可在開放期間隨時改變目前立場。</small>
+          </div>
+          <div id="liveStanceTugBoard" class="live-stance-tug-board" aria-live="polite"></div>
+          <div class="progressive-control-actions live-stance-actions">
+            <button id="liveStanceOpenBtn" class="btn btn-secondary" type="button">🔓 重新開放</button>
+            <button id="liveStanceLockBtn" class="btn btn-secondary" type="button">🔒 鎖定表態</button>
+            <button id="liveStanceProjectionBtn" class="btn btn-primary" type="button">🖥️ 投影模式</button>
+          </div>
+          <p class="field-help">投影模式只顯示匿名全班分布，不會顯示學生姓名。</p>
+
+          <div class="live-stance-history-panel">
+            <div class="live-stance-history-head">
+              <div>
+                <span class="section-kicker">STANCE HISTORY</span>
+                <h4>立場變化歷程</h4>
+                <p class="subtle">記錄學生每一次換邊，並可在老師說明的重要時刻留下節點。</p>
+              </div>
+              <span id="liveStanceHistoryBadge" class="stage-badge">0 次變動</span>
+            </div>
+            <div class="live-stance-checkpoint-toolbar">
+              <label class="field live-stance-checkpoint-field">
+                <span>節點名稱</span>
+                <input id="liveStanceCheckpointLabel" type="text" maxlength="120" placeholder="例如：補充「當事人曾明確拒絕公開」後" />
+              </label>
+              <button id="liveStanceCheckpointBtn" class="btn btn-secondary" type="button">📍 記錄此刻</button>
+            </div>
+            <div id="liveStanceHistoryMetrics" class="live-stance-history-metrics"></div>
+            <div class="live-stance-history-block">
+              <div class="live-stance-history-block-head"><strong>全班立場變化</strong><small>依每次表態事件呈現；虛線為老師記錄的節點。</small></div>
+              <div id="liveStanceTrendChart" class="live-stance-trend-chart"><div class="empty-v15">尚未有立場歷程。</div></div>
+            </div>
+            <div class="live-stance-history-grid">
+              <div class="live-stance-history-block">
+                <div class="live-stance-history-block-head"><strong>節點記錄</strong><small>比較不同說明時刻的全班分布。</small></div>
+                <div id="liveStanceCheckpointList" class="live-stance-checkpoint-list"><div class="empty-v15">尚未記錄節點。</div></div>
+              </div>
+              <div class="live-stance-history-block">
+                <div class="live-stance-history-block-head"><strong>最近立場變動</strong><small>僅教師可見學生身分。</small></div>
+                <div id="liveStanceEventList" class="live-stance-event-list"><div class="empty-v15">尚未有立場變動。</div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="confidenceSessionControl" class="wave-session-control hidden">
+          <div class="session-section-head"><div><span class="section-kicker">CONFIDENCE</span><h3>作答信心程度</h3></div><span id="confidenceAnsweredBadge" class="stage-badge">0 / 0</span></div>
+          <div class="wave-session-grid"><div class="wave-metric-panel"><span class="summary-label">平均信心</span><div class="wave-metrics"><div><span>平均</span><strong id="confidenceAverageValue">—</strong></div></div><p id="confidenceLabels" class="subtle">—</p></div><div><span class="summary-label">信心分布</span><div id="confidenceDistribution" class="stage-distribution-list"></div></div></div>
         </section>
 
         <section id="deliberationSessionControl" class="deliberation-session-control hidden">
@@ -1002,14 +1341,15 @@
           </div>
         </section>
 
-        <section class="session-participants-section">
-          <div class="session-section-head">
+        <details class="session-participants-section session-participants-details">
+          <summary class="session-section-head session-participants-summary">
             <div>
               <span class="section-kicker">PARTICIPANTS</span>
               <h3>學生加入狀態</h3>
             </div>
             <small>依目前活動階段即時顯示作答分布，並保留每位學生的判斷歷程。</small>
-          </div>
+          </summary>
+          <div class="session-participants-body">
           <div id="sessionParticipantList" class="session-participant-list">
             <div class="empty-v15">還沒有學生加入。</div>
           </div>
@@ -1032,7 +1372,9 @@
               <div class="empty-v15">選擇一位學生後，即可查看他的作答選項、依據與理由。</div>
             </div>
           </div>
-        </section>
+
+          </div>
+        </details>
       </section>
 
       <section id="sessionSummaryCard" class="panel session-summary-card hidden">
@@ -1090,7 +1432,7 @@
       <button class="dialog-close" aria-label="關閉">×</button>
       <span class="section-kicker">DATA MANAGEMENT</span>
       <h2>教材資料管理</h2>
-      <p class="subtle">備份與還原 V2 Course／Lesson／Node、分類工具箱、材料庫與活動模板。Supabase 金鑰、Session 紀錄與學生作答不會寫入備份檔。</p>
+      <p class="subtle">備份與還原 V2 Course／Lesson／Node、分類工具箱、材料庫與活動模組。Supabase 金鑰、Session 紀錄與學生作答不會寫入備份檔。</p>
 
       <div class="backup-summary-grid">
         <div><span>課程</span><strong id="backupCourseCount">0</strong></div>
@@ -1425,6 +1767,7 @@
     <article class="lesson-card">
       <div class="lesson-card-head">
         <div class="lesson-title-group">
+          <button type="button" class="lesson-collapse-toggle" aria-expanded="true" title="收合／展開節次">⌄</button>
           <span class="lesson-number">第 1 節</span>
           <input class="lesson-title-input" type="text" placeholder="例如：案例觀察與分類" />
         </div>
@@ -1434,6 +1777,7 @@
           <button type="button" class="icon-btn lesson-remove" title="刪除節次">🗑</button>
         </div>
       </div>
+      <div class="lesson-card-body">
       <div class="lesson-meta-grid">
         <label class="field">
           <span>短標題 <span class="optional-tag">學生進度列</span></span>
@@ -1454,12 +1798,26 @@
       </label>
       <div class="lesson-node-list"></div>
       <button type="button" class="btn btn-secondary add-node-btn">＋ 加入教學節點</button>
+      </div>
     </article>
   </template>
 
   <template id="nodeTemplate">
     <div class="lesson-node">
-      <div class="node-grip">⋮⋮</div>
+      <div class="node-compact-head">
+        <button type="button" class="node-collapse-toggle" aria-expanded="true" title="收合／展開節點">⌄</button>
+        <span class="node-grip">⋮⋮</span>
+        <div class="node-compact-summary">
+          <strong class="node-summary-title">未命名節點</strong>
+          <small class="node-summary-type">🖼️ 材料牆</small>
+        </div>
+        <div class="node-actions">
+          <button type="button" class="icon-btn node-up" title="往上">↑</button>
+          <button type="button" class="icon-btn node-down" title="往下">↓</button>
+          <button type="button" class="icon-btn node-remove" title="刪除">×</button>
+        </div>
+      </div>
+      <div class="node-editor-body">
       <div class="node-main">
         <div class="node-v2-top">
           <select class="node-type">
@@ -1491,10 +1849,6 @@
         </div>
         <textarea class="node-note" rows="2" placeholder="教師備註（學生不會看到）"></textarea>
       </div>
-      <div class="node-actions">
-        <button type="button" class="icon-btn node-up" title="往上">↑</button>
-        <button type="button" class="icon-btn node-down" title="往下">↓</button>
-        <button type="button" class="icon-btn node-remove" title="刪除">×</button>
       </div>
     </div>
   </template>
@@ -1505,6 +1859,17 @@
       <button type="button" class="icon-btn simple-row-remove" title="刪除">×</button>
     </div>
   </template>
+
+
+  <div id="liveStanceProjectionOverlay" class="live-stance-projection-overlay hidden" role="dialog" aria-modal="true" aria-label="即時立場拉鋸投影">
+    <button id="liveStanceProjectionCloseBtn" class="live-stance-projection-close" type="button">✕ 關閉投影</button>
+    <div class="live-stance-projection-shell">
+      <span class="section-kicker">LIVE STANCE TUG</span>
+      <h2 id="liveStanceProjectionQuestion">即時立場拉鋸</h2>
+      <p id="liveStanceProjectionMeta" class="subtle">已表態 0 / 0</p>
+      <div id="liveStanceProjectionBoard" class="live-stance-tug-board projection"></div>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

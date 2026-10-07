@@ -1,4 +1,4 @@
-/* V2.19.0 | Teacher Session + student inspector + reason identity controls */
+/* V2.26.1 | Teacher Session + focus mode + group consensus */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -22,13 +22,17 @@
   })();
   const liveStatsShown = new Map();
   let openTextIdentityMode = "anonymous";
+  let openTextViewMode = "wall";
+  let questionWallIdentityMode = "anonymous";
+  let questionWallSortMode = "hot";
+  const questionWallTeacherExpandedPosts = new Set();
   const LIVE_STATS_PALETTE=["#3b6fb6","#e38b2c","#2f8f66","#8a5db7","#d65b5b","#2b9cb3","#c59a2b","#c35a8a","#61758a","#8a6846"];
 
   function stableLiveStatColor(value,fallbackIndex=0) {
     const text=String(value ?? "").trim();
     let paletteIndex=Math.abs(Number(fallbackIndex)||0)%LIVE_STATS_PALETTE.length;
 
-    // V2.19.0：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
+    // V2.22.0：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
     // 這可保證 Realtime 更新、新選項首次出現或學生改答案時，既有選項永遠不換色。
     if (/^\d+$/.test(text)) {
       paletteIndex=Number(text)%LIVE_STATS_PALETTE.length;
@@ -398,7 +402,7 @@
       if (!name) return;
       counts.set(name,(counts.get(name)||0)+1);
     });
-    const distribution = [...counts.entries()]
+    let distribution = [...counts.entries()]
       .map(([name,count])=>({name,count}))
       .sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name,"zh-Hant"));
 
@@ -407,6 +411,7 @@
       currentStage:Math.max(1,Number(activeSession.currentStage)||1),
       snapshot
     }) || {};
+    if (extras.suppressDistribution) distribution=[];
 
     return {
       participantCount:participants,
@@ -418,7 +423,11 @@
       unchangedCount:Number(extras.unchangedCount || 0),
       customMetrics:Array.isArray(extras.customMetrics) ? extras.customMetrics : [],
       secondaryList:Array.isArray(extras.secondaryList) ? extras.secondaryList : [],
-      textWall:Array.isArray(extras.textWall) ? extras.textWall : []
+      textWall:Array.isArray(extras.textWall) ? extras.textWall : [],
+      wordCloud:Array.isArray(extras.wordCloud) ? extras.wordCloud : [],
+      stanceMap:extras.stanceMap && typeof extras.stanceMap === "object" ? extras.stanceMap : null,
+      liveStance:extras.liveStance && typeof extras.liveStance === "object" ? extras.liveStance : null,
+      confidence:buildPresentationConfidence(responses,Math.max(1,Number(activeSession.currentStage)||1))
     };
   }
 
@@ -572,6 +581,12 @@
     }
   }
 
+  function openSessionSetup({scroll=true} = {}) {
+    const details = $("sessionSetupDetails");
+    if (details) details.open = true;
+    if (scroll) document.querySelector(".session-config-card")?.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+
   function prepareSessionSelection(kind, resourceId = "") {
     const sessionKind = kind === "course" ? "course" : "activity";
     const radio = $(sessionKind === "course" ? "sessionKindCourse" : "sessionKindActivity");
@@ -584,7 +599,7 @@
       select.value = resourceId;
       select.dispatchEvent(new Event("change",{bubbles:true}));
     }
-    document.querySelector(".session-config-card")?.scrollIntoView({behavior:"smooth",block:"start"});
+    openSessionSetup();
   }
 
   function downloadJsonFile(filename, payload) {
@@ -662,6 +677,36 @@
     }
   }
 
+  function syncTeachHomeFocusMode({reset=false}={}) {
+    const dashboard=$("teachHomeDashboard");
+    const toggle=$("toggleTeachHomeFocusBtn");
+    if (!dashboard || !toggle) return;
+    const focused=Boolean(activeSession && activeSession.status === "active");
+    dashboard.classList.toggle("focus-mode",focused);
+    toggle.classList.toggle("hidden",!focused);
+    if (!focused) {
+      dashboard.classList.remove("focus-collapsed");
+    } else if (reset) {
+      dashboard.classList.add("focus-collapsed");
+    }
+    const collapsed=dashboard.classList.contains("focus-collapsed");
+    const heading=dashboard.querySelector(".teach-home-head h2");
+    const description=dashboard.querySelector(".teach-home-head p.subtle");
+    if (heading) heading.textContent=focused ? "其他課堂操作" : "今天要上什麼？";
+    if (description) description.textContent=focused
+      ? "目前有進行中的 Session；需要切換課程或建立另一個 Session 時再展開。"
+      : "從準備完成的課程或活動直接開始，也可以繼續最近一次尚未結束的 Session。";
+    toggle.setAttribute("aria-expanded",String(focused && !collapsed));
+    toggle.textContent=collapsed ? "展開其他課堂操作" : "收合其他課堂操作";
+  }
+
+  function toggleTeachHomeFocusMode() {
+    const dashboard=$("teachHomeDashboard");
+    if (!dashboard?.classList.contains("focus-mode")) return;
+    dashboard.classList.toggle("focus-collapsed");
+    syncTeachHomeFocusMode();
+  }
+
   async function renderTeachHome() {
     const courseList = $("teachReadyCourseList");
     const activityList = $("teachReadyActivityList");
@@ -717,7 +762,7 @@
     }));
     const readyActivityCount = activityResults.filter(item=>item.ready).length;
     $("teachReadyActivityCount").textContent = String(readyActivityCount);
-    activityList.innerHTML = activityResults.length ? "" : '<div class="teach-ready-empty">還沒有活動。先到「備課 → 活動模板」建立互動任務。</div>';
+    activityList.innerHTML = activityResults.length ? "" : '<div class="teach-ready-empty">還沒有活動。先到「備課 → 活動模組」建立互動任務。</div>';
     activityResults.slice(0,8).forEach(({activity,ready,reason})=>{
       const row=document.createElement("div");
       row.className=`teach-ready-item ${ready ? "" : "unready"}`;
@@ -840,10 +885,14 @@
           shellEncoded:snapshot.shellEncoded || "",
           deliberationData:snapshot.deliberationData || null
         });
+        activeSession.moduleData=snapshot.moduleData || null;
         activeCourseSnapshot = null;
       }
       await renderActiveSession();
       renderHistory();
+      const setupDetails = $("sessionSetupDetails");
+      if (setupDetails) setupDetails.open = false;
+      $("activeSessionCard")?.scrollIntoView({behavior:"smooth",block:"start"});
     } catch (error) {
       showSessionToast(error.message || "建立 Session 失敗");
     } finally {
@@ -878,6 +927,10 @@
     clearInterval(refreshTimer);
     stopSessionRealtime();
     $("activeSessionCard").classList.remove("hidden");
+    const sessionWorkspace = document.querySelector(".session-workspace");
+    sessionWorkspace?.classList.add("has-active-session");
+    sessionWorkspace?.classList.toggle("session-is-closed",activeSession.status === "closed");
+    syncTeachHomeFocusMode({reset:activeSession.status === "active"});
     $("activeSessionTitle").textContent = activeSession.title;
     $("activeSessionCode").textContent = activeSession.code;
     $("activeSessionMode").textContent = activeSession.mode === "cloud" ? "☁️ 雲端 Session" : "🧪 本機測試 Session";
@@ -959,6 +1012,8 @@
     latestTeacherSnapshot = null;
     $("activeSessionCard")?.classList.add("hidden");
     $("sessionSummaryCard")?.classList.add("hidden");
+    document.querySelector(".session-workspace")?.classList.remove("has-active-session","session-is-closed");
+    syncTeachHomeFocusMode();
     renderHistory();
     await renderTeachHome();
     showSessionToast("這個 Session 的教師控制權已轉移到其他裝置");
@@ -983,6 +1038,8 @@
 
       $("sessionParticipantCount").textContent = snapshot.participant_count ?? 0;
       $("sessionResponseCount").textContent = snapshot.response_count ?? 0;
+      document.querySelector(".session-workspace")?.classList.toggle("session-is-closed",activeSession.status === "closed");
+      syncTeachHomeFocusMode();
       $("activeSessionStatus").textContent = activeSession.status === "active" ? "進行中" : "已結束";
       $("activeSessionStatus").classList.toggle("active",activeSession.status === "active");
       $("closeSessionBtn").disabled = activeSession.status === "closed";
@@ -1006,6 +1063,7 @@
       renderStudentInspector(snapshot);
       await renderCourseControl(snapshot);
       ActivityModules?.invoke?.("teacher", activeSession.activityMode, "renderControl", snapshot);
+      renderConfidenceControl(snapshot);
       ActivityModules?.invoke?.("teacher", activeSession.activityMode, "publishSpecialPresentation", snapshot);
       await renderSessionSummary(snapshot);
       await publishPresentationState(snapshot);
@@ -1109,7 +1167,9 @@
 
   function responseStageLabel(response) {
     const key=String(response?.stage_key || "");
+    if (key==="initial" && response?.mode === "predict-reveal") return "初次預測";
     if (key==="initial") return "初次判斷";
+    if (key==="final" && response?.mode === "predict-reveal") return "再次判斷";
     if (key==="final" && response?.mode === "open-classification") return "最終判斷";
     if (key==="final") return `第 ${Number(response?.task_index || 0)+1} 題`;
     if (key==="reflection") return "課後反思";
@@ -1153,10 +1213,34 @@
     const responses=(snapshot?.responses || [])
       .filter(item=>item.participant_id===participant.id)
       .slice().sort((a,b)=>new Date(a.submitted_at||0)-new Date(b.submitted_at||0));
+    const questionPosts=activeSession?.activityMode==="question-wall"
+      ? (snapshot?.question_wall_posts || []).filter(item=>item.participant_id===participant.id).slice().sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0))
+      : [];
+    const questionReplies=activeSession?.activityMode==="question-wall"
+      ? (snapshot?.question_wall_posts || []).flatMap(post=>(post.replies||[]).filter(reply=>reply.participant_id===participant.id).map(reply=>({...reply,parent_text:post.text||""}))).sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0))
+      : [];
     detail.innerHTML="";
     const summary=document.createElement("div");summary.className="student-inspector-summary";
-    summary.innerHTML=`<strong>${escapeHtml(participant.student_code || "未命名學生")}</strong><span>${responses.length} 筆作答</span><span>加入：${escapeHtml(formatTime(participant.joined_at))}</span>`;
+    const recordCount=responses.length+questionPosts.length+questionReplies.length;
+    summary.innerHTML=`<strong>${escapeHtml(participant.student_code || "未命名學生")}</strong><span>${recordCount} 筆紀錄</span><span>加入：${escapeHtml(formatTime(participant.joined_at))}</span>`;
     detail.appendChild(summary);
+
+    if (questionPosts.length) {
+      questionPosts.forEach((post,index)=>{
+        const card=document.createElement("div");card.className="student-response-detail-card";
+        card.innerHTML=`<div class="student-response-detail-head"><strong>匿名提問 ${index+1}</strong><small>${escapeHtml(formatTime(post.created_at))}</small></div><div class="student-response-detail-body"><div class="student-response-detail-line"><span>問題</span><div>${escapeHtml(post.text||"")}</div></div><div class="student-response-detail-line"><span>同儕認同</span><div>＋${Math.max(0,Number(post.vote_count)||0)}</div></div></div>`;
+        detail.appendChild(card);
+      });
+    }
+    if (questionReplies.length) {
+      questionReplies.forEach((reply,index)=>{
+        const card=document.createElement("div");card.className="student-response-detail-card";
+        card.innerHTML=`<div class="student-response-detail-head"><strong>同儕回應 ${index+1}</strong><small>${escapeHtml(formatTime(reply.updated_at||reply.created_at))}</small></div><div class="student-response-detail-body"><div class="student-response-detail-line"><span>回應的問題</span><div>${escapeHtml(reply.parent_text||"")}</div></div><div class="student-response-detail-line"><span>回應內容</span><div>${escapeHtml(reply.text||"")}</div></div></div>`;
+        detail.appendChild(card);
+      });
+    }
+
+    if (!responses.length && (questionPosts.length || questionReplies.length)) return;
 
     if (!responses.length) {
       detail.insertAdjacentHTML("beforeend",'<div class="empty-v15">這位學生目前還沒有作答紀錄。</div>');
@@ -1176,8 +1260,9 @@
           if (field.kind==="chips") return createInspectorLine(field.label,Array.isArray(field.value)&&field.value.length ? chipListHtml(field.value) : "",{html:true});
           return createInspectorLine(field.label,field.value);
         }).filter(Boolean);
-        rows.forEach(row=>body.appendChild(row));
-        if (!rows.length) body.innerHTML='<div class="empty-v15">這筆作答沒有可顯示的內容。</div>';
+        if(response.payload?.confidence){rows.push(createInspectorLine("信心程度",`${response.payload.confidence.value} / ${response.payload.confidence.pointCount}（${response.payload.confidence.lowLabel || "低"} ～ ${response.payload.confidence.highLabel || "高"}）`));}
+        rows.filter(Boolean).forEach(row=>body.appendChild(row));
+        if (!rows.filter(Boolean).length) body.innerHTML='<div class="empty-v15">這筆作答沒有可顯示的內容。</div>';
         card.append(head,body);detail.appendChild(card);
         return;
       }
@@ -1205,7 +1290,8 @@
         createInspectorLine("關鍵理解",response.payload?.key),
         createInspectorLine("價值判斷",response.payload?.value),
         createInspectorLine("行動選擇",response.payload?.action),
-        createInspectorLine("延伸思考",response.payload?.extension)
+        createInspectorLine("延伸思考",response.payload?.extension),
+        response.payload?.confidence ? createInspectorLine("信心程度",`${response.payload.confidence.value} / ${response.payload.confidence.pointCount}（${response.payload.confidence.lowLabel || "低"} ～ ${response.payload.confidence.highLabel || "高"}）`) : null
       ].filter(Boolean);
       rows.forEach(row=>body.appendChild(row));
       if (!rows.length) body.innerHTML='<div class="empty-v15">這筆作答沒有額外的選項或理由文字。</div>';
@@ -1791,6 +1877,277 @@
     );
   }
 
+  function liveStanceRows(snapshot) {
+    return moduleResponses(snapshot,"live-stance");
+  }
+
+  function liveStanceSummaryFromRows(rows,totalParticipants=0) {
+    const counts={left:0,right:0,undecided:0};
+    rows.forEach(response=>{
+      const side=String(response.selected_type || response.payload?.side || "");
+      if(side in counts) counts[side] += 1;
+    });
+    const sample=rows.find(response=>response.payload?.leftLabel || response.payload?.rightLabel)?.payload || {};
+    const decided=counts.left+counts.right;
+    const answered=counts.left+counts.right+counts.undecided;
+    return {
+      counts,
+      decided,
+      answered,
+      totalParticipants:Number(totalParticipants)||0,
+      leftLabel:sample.leftLabel || "左側立場",
+      rightLabel:sample.rightLabel || "右側立場",
+      undecidedLabel:sample.undecidedLabel || "還不確定",
+      allowUndecided:sample.allowUndecided !== false,
+      question:sample.question || ""
+    };
+  }
+
+  function renderLiveStanceBoard(container,summary,{large=false}={}) {
+    if(!container)return;
+    const left=summary.counts.left || 0;
+    const right=summary.counts.right || 0;
+    const undecided=summary.counts.undecided || 0;
+    const decided=Math.max(0,left+right);
+    const leftPct=decided ? Math.round(left/decided*100) : 50;
+    const rightPct=decided ? 100-leftPct : 50;
+    const knot=decided ? Math.max(4,Math.min(96,right/decided*100)) : 50;
+    container.classList.toggle("large",Boolean(large));
+    container.style.setProperty("--tug-position",`${knot}%`);
+    container.innerHTML=`
+      <div class="live-stance-tug-score left">
+        <span>${escapeHtml(summary.leftLabel)}</span>
+        <strong>${left}</strong>
+        <small>${decided ? `${leftPct}%` : "—"}</small>
+      </div>
+      <div class="live-stance-tug-arena" aria-label="左右立場拉鋸">
+        <span class="live-stance-center-flag">中心</span>
+        <div class="live-stance-rope"></div>
+        <div class="live-stance-knot" title="目前拉鋸位置"><span>●</span></div>
+      </div>
+      <div class="live-stance-tug-score right">
+        <span>${escapeHtml(summary.rightLabel)}</span>
+        <strong>${right}</strong>
+        <small>${decided ? `${rightPct}%` : "—"}</small>
+      </div>
+      ${summary.allowUndecided ? `<div class="live-stance-undecided-count"><span>${escapeHtml(summary.undecidedLabel)}</span><strong>${undecided}</strong></div>` : ""}
+    `;
+  }
+
+  function liveStanceHistoryArrays(snapshot) {
+    const events=(Array.isArray(snapshot?.live_stance_events) ? snapshot.live_stance_events : [])
+      .slice().sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+    const checkpoints=(Array.isArray(snapshot?.live_stance_checkpoints) ? snapshot.live_stance_checkpoints : [])
+      .slice().sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+    return {events,checkpoints};
+  }
+
+  function liveStanceSideLabel(side,payload={}) {
+    if(side==="left") return payload?.leftLabel || "左側立場";
+    if(side==="right") return payload?.rightLabel || "右側立場";
+    if(side==="undecided") return payload?.undecidedLabel || "還不確定";
+    return side || "—";
+  }
+
+  function liveStanceSideChip(side,label) {
+    const safeSide=["left","right","undecided"].includes(side) ? side : "undecided";
+    return `<span class="live-stance-side-chip ${safeSide}">${escapeHtml(label || liveStanceSideLabel(side))}</span>`;
+  }
+
+  function buildLiveStanceTrend(events) {
+    const states=new Map();
+    const counts={left:0,right:0,undecided:0};
+    return events.map((event,index)=>{
+      const participant=String(event.participant_id || event.student_code || index);
+      const previous=states.get(participant) || "";
+      if(previous && Object.prototype.hasOwnProperty.call(counts,previous)) counts[previous]=Math.max(0,counts[previous]-1);
+      const side=String(event.side || "");
+      if(Object.prototype.hasOwnProperty.call(counts,side)) counts[side]+=1;
+      states.set(participant,side);
+      const answered=counts.left+counts.right+counts.undecided;
+      return {
+        index,
+        createdAt:event.created_at || "",
+        left:answered ? counts.left/answered*100 : 0,
+        right:answered ? counts.right/answered*100 : 0,
+        undecided:answered ? counts.undecided/answered*100 : 0,
+        counts:{...counts},
+        answered
+      };
+    });
+  }
+
+  function renderLiveStanceTrendChart(container,events,checkpoints) {
+    if(!container)return;
+    if(!events.length){container.innerHTML='<div class="empty-v15">尚未有立場歷程。</div>';return;}
+    const points=buildLiveStanceTrend(events);
+    const width=1000,height=260,left=38,right=970,top=24,bottom=220;
+    const plotW=right-left,plotH=bottom-top;
+    const eventTimes=events.map(event=>new Date(event.created_at || 0).getTime());
+    const firstTime=eventTimes[0];
+    const lastTime=eventTimes.at(-1);
+    const xAt=index=>{
+      if(points.length<=1)return left+plotW/2;
+      const time=eventTimes[index];
+      if(Number.isFinite(time) && Number.isFinite(firstTime) && Number.isFinite(lastTime) && lastTime>firstTime) return left+Math.max(0,Math.min(1,(time-firstTime)/(lastTime-firstTime)))*plotW;
+      return left+(index/(points.length-1))*plotW;
+    };
+    const yAt=pct=>bottom-(Math.max(0,Math.min(100,pct))/100)*plotH;
+    const poly=key=>points.map((point,index)=>`${xAt(index).toFixed(1)},${yAt(point[key]).toFixed(1)}`).join(" ");
+    const checkpointLines=checkpoints.map((checkpoint,index)=>{
+      const time=new Date(checkpoint.created_at || 0).getTime();
+      let x=left;
+      if(Number.isFinite(time) && lastTime>firstTime) x=left+Math.max(0,Math.min(1,(time-firstTime)/(lastTime-firstTime)))*plotW;
+      else if(points.length>1){
+        const eventIndex=Math.max(0,events.findLastIndex?.(event=>new Date(event.created_at||0).getTime()<=time) ?? 0);
+        x=xAt(eventIndex);
+      }
+      const label=String(checkpoint.label || `節點 ${index+1}`);
+      const short=label.length>14 ? `${label.slice(0,13)}…` : label;
+      const labelY=index%2 ? 18 : 10;
+      return `<line class="live-stance-trend-checkpoint" x1="${x.toFixed(1)}" y1="${top}" x2="${x.toFixed(1)}" y2="${bottom}"/><text class="live-stance-trend-checkpoint-label" x="${Math.min(right-70,Math.max(left,x+5)).toFixed(1)}" y="${labelY}">${escapeHtml(short)}</text>`;
+    }).join("");
+    const grid=[0,50,100].map(value=>{
+      const y=yAt(value);
+      return `<line class="live-stance-trend-grid" x1="${left}" y1="${y}" x2="${right}" y2="${y}"/><text class="live-stance-trend-axis-label" x="4" y="${y+4}">${value}%</text>`;
+    }).join("");
+    container.innerHTML=`
+      <svg class="live-stance-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="全班立場變化趨勢">
+        ${grid}
+        ${checkpointLines}
+        <polyline class="live-stance-trend-left" points="${poly("left")}"/>
+        <polyline class="live-stance-trend-right" points="${poly("right")}"/>
+        <polyline class="live-stance-trend-undecided" points="${poly("undecided")}"/>
+      </svg>
+      <div class="live-stance-trend-legend">
+        <span><i style="--legend-color:#3b82f6"></i>${escapeHtml(liveStanceSideLabel("left",events.at(-1)?.payload||{}))}</span>
+        <span><i style="--legend-color:#ef476f"></i>${escapeHtml(liveStanceSideLabel("right",events.at(-1)?.payload||{}))}</span>
+        <span><i style="--legend-color:#8b95a5"></i>${escapeHtml(liveStanceSideLabel("undecided",events.at(-1)?.payload||{}))}</span>
+      </div>`;
+  }
+
+  function renderLiveStanceHistory(snapshot,summary) {
+    const {events,checkpoints}=liveStanceHistoryArrays(snapshot);
+    const changes=events.filter(event=>event.previous_side && event.previous_side!==event.side);
+    const changedStudents=new Set(changes.map(event=>event.participant_id || event.student_code)).size;
+    const badge=$("liveStanceHistoryBadge");
+    if(badge) badge.textContent=`${changes.length} 次變動`;
+    const metrics=$("liveStanceHistoryMetrics");
+    if(metrics) metrics.innerHTML=`
+      <div class="live-stance-history-metric"><span>累積換邊</span><strong>${changes.length}</strong></div>
+      <div class="live-stance-history-metric"><span>曾改變學生</span><strong>${changedStudents}</strong></div>
+      <div class="live-stance-history-metric"><span>說明節點</span><strong>${checkpoints.length}</strong></div>`;
+    renderLiveStanceTrendChart($("liveStanceTrendChart"),events,checkpoints);
+
+    const checkpointList=$("liveStanceCheckpointList");
+    if(checkpointList){
+      checkpointList.innerHTML="";
+      if(!checkpoints.length) checkpointList.innerHTML='<div class="empty-v15">尚未記錄節點。</div>';
+      checkpoints.slice().reverse().forEach(checkpoint=>{
+        const snap=checkpoint.snapshot || {};
+        const node=document.createElement("div");node.className="live-stance-checkpoint-item";
+        node.innerHTML=`<div class="live-stance-checkpoint-item-head"><strong>${escapeHtml(checkpoint.label || "未命名節點")}</strong><span class="live-stance-history-time">${escapeHtml(formatTime(checkpoint.created_at))}</span></div>
+          <div class="live-stance-checkpoint-dist"><span class="left">${escapeHtml(summary.leftLabel)} ${Number(snap.left)||0}</span><span class="right">${escapeHtml(summary.rightLabel)} ${Number(snap.right)||0}</span>${summary.allowUndecided?`<span class="undecided">${escapeHtml(summary.undecidedLabel)} ${Number(snap.undecided)||0}</span>`:""}</div>`;
+        const head=node.querySelector(".live-stance-checkpoint-item-head");
+        const del=document.createElement("button");del.type="button";del.className="live-stance-checkpoint-delete";del.textContent="×";del.title="刪除此節點";
+        del.addEventListener("click",()=>removeLiveStanceCheckpoint(checkpoint.id));head?.appendChild(del);
+        checkpointList.appendChild(node);
+      });
+    }
+
+    const eventList=$("liveStanceEventList");
+    if(eventList){
+      eventList.innerHTML="";
+      if(!events.length) eventList.innerHTML='<div class="empty-v15">尚未有立場變動。</div>';
+      events.slice(-12).reverse().forEach(event=>{
+        const node=document.createElement("div");node.className="live-stance-event-item";
+        const side=String(event.side || "");
+        const prev=String(event.previous_side || "");
+        const currentLabel=liveStanceSideLabel(side,event.payload||{});
+        const previousLabel=prev ? liveStanceSideLabel(prev,event.payload||{}) : "開始";
+        node.innerHTML=`<div class="live-stance-event-item-head"><strong>${escapeHtml(event.student_code || "學生")}</strong><span class="live-stance-history-time">${escapeHtml(formatTime(event.created_at))}</span></div><div class="live-stance-event-transition">${prev?liveStanceSideChip(prev,previousLabel):'<span class="live-stance-side-chip undecided">開始</span>'}<span class="live-stance-event-arrow">→</span>${liveStanceSideChip(side,currentLabel)}</div>`;
+        eventList.appendChild(node);
+      });
+    }
+  }
+
+  async function createLiveStanceCheckpointFromUi() {
+    if(!activeSession || activeSession.activityMode!=="live-stance")return;
+    const button=$("liveStanceCheckpointBtn"),input=$("liveStanceCheckpointLabel");
+    if(button)button.disabled=true;
+    try{
+      await window.ClassroomSessionAPI.createLiveStanceCheckpoint(activeSession,input?.value || "");
+      if(input)input.value="";
+      await refreshActiveSession(true);
+      showSessionToast("已記錄目前的全班立場節點");
+    }catch(error){showSessionToast(error.message || "記錄立場節點失敗");}
+    finally{if(button)button.disabled=false;}
+  }
+
+  async function removeLiveStanceCheckpoint(checkpointId) {
+    if(!activeSession || activeSession.activityMode!=="live-stance")return;
+    try{
+      await window.ClassroomSessionAPI.deleteLiveStanceCheckpoint(activeSession,checkpointId);
+      await refreshActiveSession(true);
+      showSessionToast("已刪除立場節點");
+    }catch(error){showSessionToast(error.message || "刪除立場節點失敗");}
+  }
+
+  function renderLiveStanceControl(snapshot) {
+    const panel=$("liveStanceSessionControl");
+    if(!panel || activeSession?.activityMode!=="live-stance" || activeSession.status==="closed"){panel?.classList.add("hidden");if(activeSession?.status==="closed")closeLiveStanceProjection();return;}
+    panel.classList.remove("hidden");
+    const rows=liveStanceRows(snapshot);
+    const total=Number(snapshot?.participant_count)||0;
+    const summary=liveStanceSummaryFromRows(rows,total);
+    const state=snapshot?.round_state || activeSession.roundState || "open";
+    activeSession.roundState=state;
+    $("liveStanceStateBadge").textContent=state==="locked" ? "🔒 已鎖定" : "⚡ 開放表態";
+    $("liveStanceAnsweredText").textContent=`已表態 ${summary.answered} / ${total}`;
+    $("liveStanceOpenBtn").disabled=state==="open";
+    $("liveStanceLockBtn").disabled=state==="locked";
+    renderLiveStanceBoard($("liveStanceTugBoard"),summary);
+    renderLiveStanceHistory(snapshot,summary);
+    updateLiveStanceProjection(summary,state);
+  }
+
+  async function changeLiveStanceState(roundState) {
+    if(!activeSession || activeSession.activityMode!=="live-stance" || activeSession.status==="closed")return;
+    try{
+      await window.ClassroomSessionAPI.setLiveStanceState(activeSession,roundState);
+      await refreshActiveSession();
+      showSessionToast(roundState==="locked" ? "已鎖定學生表態" : "已重新開放學生表態");
+    }catch(error){showSessionToast(error.message || "更新立場拉鋸狀態失敗");}
+  }
+
+  function updateLiveStanceProjection(summary=null,state=null) {
+    const overlay=$("liveStanceProjectionOverlay");
+    if(!overlay || overlay.classList.contains("hidden"))return;
+    const rows=liveStanceRows(latestTeacherSnapshot || {});
+    const total=Number(latestTeacherSnapshot?.participant_count)||0;
+    const data=summary || liveStanceSummaryFromRows(rows,total);
+    $("liveStanceProjectionQuestion").textContent=data.question || activeSession?.title || "即時立場拉鋸";
+    const latestCheckpoint=(latestTeacherSnapshot?.live_stance_checkpoints || []).slice().sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0)).at(-1);
+    $("liveStanceProjectionMeta").textContent=`${state==="locked"?"已鎖定":"即時更新"} · 已表態 ${data.answered} / ${total}${latestCheckpoint?.label?` · ${latestCheckpoint.label}`:""}`;
+    renderLiveStanceBoard($("liveStanceProjectionBoard"),data,{large:true});
+  }
+
+  function openLiveStanceProjection() {
+    const overlay=$("liveStanceProjectionOverlay");
+    if(!overlay)return;
+    overlay.classList.remove("hidden");
+    updateLiveStanceProjection();
+    try { overlay.requestFullscreen?.(); } catch {}
+  }
+
+  function closeLiveStanceProjection() {
+    const overlay=$("liveStanceProjectionOverlay");
+    overlay?.classList.add("hidden");
+    if(document.fullscreenElement===overlay){
+      try { document.exitFullscreen?.(); } catch {}
+    }
+  }
+
   function renderScaleControl(snapshot) {
     const panel=$("scaleSessionControl");
     if (!panel || activeSession?.activityMode!=="scale-spectrum" || activeSession.status==="closed") { panel?.classList.add("hidden"); return; }
@@ -1864,6 +2221,27 @@
     if (list) list._rerenderLiveStats=()=>renderRankingControl(snapshot);
   }
 
+  const WORD_CLOUD_STOP_WORDS=new Set(["的","了","是","在","我","有","和","就","也","都","很","不","與","及","或","而","被","把","讓","要","會","可以","因為","所以","如果","一個","這個","那個","覺得","認為"]);
+  function tokenizeWordCloud(text) {
+    const source=String(text||"").trim();if(!source)return [];
+    let tokens=[];
+    try {
+      if(typeof Intl?.Segmenter==="function"){
+        const seg=new Intl.Segmenter("zh-Hant",{granularity:"word"});
+        tokens=[...seg.segment(source)].filter(item=>item.isWordLike).map(item=>item.segment);
+      }
+    } catch {}
+    if(!tokens.length) tokens=source.split(/[\s、，。！？；：,.!?;:()（）「」『』【】\[\]{}]+/);
+    return tokens.map(token=>token.trim().toLowerCase()).filter(token=>token.length>=2 && token.length<=12 && !WORD_CLOUD_STOP_WORDS.has(token) && !/^\d+$/.test(token));
+  }
+  function renderTeacherWordCloud(container,responses) {
+    const counts=new Map();responses.forEach(response=>tokenizeWordCloud(response.payload?.text).forEach(token=>counts.set(token,(counts.get(token)||0)+1)));
+    const words=[...counts.entries()].map(([text,count])=>({text,count})).sort((a,b)=>b.count-a.count || a.text.localeCompare(b.text,"zh-Hant")).slice(0,40);
+    container.innerHTML="";if(!words.length){container.innerHTML='<div class="empty-v15">目前還沒有足夠的關鍵詞可建立詞雲。</div>';return;}
+    const max=Math.max(...words.map(item=>item.count),1),min=Math.min(...words.map(item=>item.count),1);
+    words.forEach((item,index)=>{const span=document.createElement("span");span.className="teacher-word-cloud-item";span.textContent=item.text;span.title=`${item.count} 次`;const ratio=max===min?0.55:(item.count-min)/(max-min);span.style.fontSize=`${Math.round(16+ratio*28)}px`;span.style.setProperty("--word-cloud-color",stableLiveStatColor(item.text,index));container.appendChild(span);});
+  }
+
   function renderOpenTextControl(snapshot) {
     const panel=$("openTextSessionControl");
     if (!panel || activeSession?.activityMode!=="open-text" || activeSession.status==="closed") { panel?.classList.add("hidden"); return; }
@@ -1871,14 +2249,150 @@
     const responses=moduleResponses(snapshot,"open-text").filter(response=>String(response.payload?.text||"").trim());
     const total=Number(snapshot?.participant_count)||0;
     $("openTextAnsweredCount").textContent=`已回答 ${new Set(responses.map(r=>r.participant_id)).size} / ${total}`;
-    const wall=$("openTextWall");wall.innerHTML="";
-    if (!responses.length) { wall.innerHTML='<div class="empty-v15">目前還沒有學生提交文字。</div>'; return; }
+    const wall=$("openTextWall"),cloud=$("openTextWordCloud");
+    wall.classList.toggle("hidden",openTextViewMode!=="wall");cloud?.classList.toggle("hidden",openTextViewMode!=="cloud");
+    wall.innerHTML="";
+    if (!responses.length) { wall.innerHTML='<div class="empty-v15">目前還沒有學生提交文字。</div>'; if(cloud)renderTeacherWordCloud(cloud,[]); return; }
     responses.slice().sort((a,b)=>new Date(b.submitted_at||0)-new Date(a.submitted_at||0)).forEach(response=>{
       const card=document.createElement("article");card.className="open-text-wall-card";
       const identity=openTextIdentityMode==="named" ? (response.student_code || "未命名學生") : "匿名學生";
       card.innerHTML=`<div class="open-text-wall-meta-row"><strong>${escapeHtml(identity)}</strong><small>${escapeHtml(formatTime(response.submitted_at))}</small></div><p>${escapeHtml(response.payload.text)}</p>`;
       wall.appendChild(card);
     });
+    if(cloud)renderTeacherWordCloud(cloud,responses);
+  }
+
+  function renderQuestionWallControl(snapshot) {
+    const panel=$("questionWallSessionControl");
+    if(!panel || activeSession?.activityMode!=="question-wall" || activeSession.status==="closed"){panel?.classList.add("hidden");return;}
+    panel.classList.remove("hidden");
+    const posts=[...(Array.isArray(snapshot?.question_wall_posts)?snapshot.question_wall_posts:[])];
+    posts.sort(questionWallSortMode==="new"
+      ? ((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))
+      : ((a,b)=>(Number(b.vote_count)||0)-(Number(a.vote_count)||0) || new Date(b.created_at||0)-new Date(a.created_at||0)));
+    const totalReplies=posts.reduce((sum,post)=>sum+(Array.isArray(post.replies)?post.replies.length:(Number(post.reply_count)||0)),0);
+    $("questionWallPostCount").textContent=`目前 ${posts.length} 則提問 · ${totalReplies} 則回應`;
+    const list=$("questionWallTeacherList");list.innerHTML="";
+    if(!posts.length){list.innerHTML='<div class="empty-v15">目前還沒有學生提問。</div>';return;}
+    posts.forEach((post,index)=>{
+      const card=document.createElement("article");card.className="question-wall-card";
+      const identity=questionWallIdentityMode==="named" ? (post.student_code||"未命名學生") : "匿名學生";
+      const replies=Array.isArray(post.replies)?post.replies:[],expanded=questionWallTeacherExpandedPosts.has(String(post.id||""));
+      card.innerHTML=`<div class="question-wall-card-head"><strong>${escapeHtml(identity)} · #${index+1}</strong><small>${escapeHtml(formatTime(post.created_at))}</small></div><p>${escapeHtml(post.text||"")}</p><div class="question-wall-card-footer"><div class="question-wall-card-actions"><span class="question-wall-vote-btn" aria-label="認同數">＋1 <b>${Math.max(0,Number(post.vote_count)||0)}</b></span><button class="question-wall-reply-toggle" type="button" aria-expanded="${expanded}">💬 回應 <b>${replies.length}</b></button></div><button class="question-wall-delete-btn" type="button">刪除提問</button></div><div class="question-wall-replies teacher-replies ${expanded?"":"hidden"}"></div>`;
+      card.querySelector(".question-wall-reply-toggle")?.addEventListener("click",()=>{const id=String(post.id||"");if(questionWallTeacherExpandedPosts.has(id))questionWallTeacherExpandedPosts.delete(id);else questionWallTeacherExpandedPosts.add(id);renderQuestionWallControl(snapshot);});
+      const replyBox=card.querySelector(".question-wall-replies");
+      if(replyBox&&expanded){
+        if(!replies.length)replyBox.innerHTML='<div class="question-wall-reply-empty">目前還沒有同儕回應。</div>';
+        else replies.slice().sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0)).forEach((reply,replyIndex)=>{
+          const row=document.createElement("div");row.className="question-wall-reply teacher-question-wall-reply";
+          const replyIdentity=questionWallIdentityMode==="named"?(reply.student_code||"未命名學生"):"匿名同學";
+          row.innerHTML=`<div class="question-wall-reply-head"><strong>${escapeHtml(replyIdentity)} · #${replyIndex+1}</strong><small>${escapeHtml(formatTime(reply.updated_at||reply.created_at))}</small></div><p>${escapeHtml(reply.text||"")}</p><div class="question-wall-reply-tools"><button class="question-wall-delete-btn" type="button">刪除回應</button></div>`;
+          row.querySelector(".question-wall-delete-btn")?.addEventListener("click",async()=>{
+            if(!confirm("確定要移除這則同儕回應嗎？"))return;
+            try{await window.ClassroomSessionAPI.deleteQuestionWallReply(activeSession,reply.id);await refreshActiveSession();showSessionToast("回應已移除");}
+            catch(error){showSessionToast(error.message||"移除回應失敗");}
+          });
+          replyBox.appendChild(row);
+        });
+      }
+      card.querySelector(".question-wall-card-footer > .question-wall-delete-btn")?.addEventListener("click",async()=>{
+        if(!confirm("確定要從提問牆移除這則問題嗎？相關回應也會一起移除。"))return;
+        try{await window.ClassroomSessionAPI.deleteQuestionWallPost(activeSession,post.id);questionWallTeacherExpandedPosts.delete(String(post.id||""));await refreshActiveSession();showSessionToast("提問已移除");}
+        catch(error){showSessionToast(error.message||"移除提問失敗");}
+      });
+      list.appendChild(card);
+    });
+  }
+  function sessionResponsesForMode(snapshot,mode){return (snapshot?.responses||[]).filter(response=>response.mode===mode && (activeSession?.sessionKind!=="course" || !response.node_ref || response.node_ref===activeSession.currentNodeRef));}
+  function groupConsensusEntriesFromSnapshot(snapshot,kind="individual") {
+    const source=kind==="group"?(snapshot?.group_submissions||[]):sessionResponsesForMode(snapshot,"group-consensus").filter(row=>row.stage_key==="individual");
+    const grouped=new Map();
+    const configured=Array.isArray(activeSession?.moduleData?.options)?activeSession.moduleData.options:[];
+    configured.forEach((option,index)=>grouped.set(String(option.id),{id:String(option.id),label:String(option.label||`選項 ${index+1}`),count:0,order:index}));
+    source.forEach((row,index)=>{const id=String(row.selected_type||"");const label=String(row.payload?.selectedTypeName||id||"未命名選項");if(!grouped.has(id))grouped.set(id,{id,label,count:0,order:configured.length+index});grouped.get(id).count++;});
+    return [...grouped.values()].sort((a,b)=>a.order-b.order||a.label.localeCompare(b.label,"zh-Hant"));
+  }
+
+  async function assignGroupConsensusGroups(){
+    if(!activeSession||activeSession.activityMode!=="group-consensus")return;
+    const size=Math.max(2,Math.min(6,Math.round(Number($("groupConsensusTeacherGroupSize")?.value)||Number(activeSession?.moduleData?.groupSize)||4)));
+    const existing=latestTeacherSnapshot?.groups||[],submissions=latestTeacherSnapshot?.group_submissions||[];
+    if((existing.length||submissions.length)&&!confirm("重新分組會清除目前的小組共識結果。確定要重新分組嗎？"))return;
+    try{await window.ClassroomSessionAPI.assignSessionGroups(activeSession,size);showSessionToast("已完成自動分組");await refreshActiveSession();}catch(error){showSessionToast(error.message||"自動分組失敗");}
+  }
+
+  async function setGroupConsensusPhase(stage){
+    if(!activeSession||activeSession.activityMode!=="group-consensus")return;
+    try{
+      if(stage>=2 && !(latestTeacherSnapshot?.groups||[]).length){await window.ClassroomSessionAPI.assignSessionGroups(activeSession,Math.max(2,Math.min(6,Math.round(Number($("groupConsensusTeacherGroupSize")?.value)||Number(activeSession?.moduleData?.groupSize)||4))));}
+      await window.ClassroomSessionAPI.setStage(activeSession,stage>=2?2:1);await refreshActiveSession();
+    }catch(error){showSessionToast(error.message||"切換小組共識階段失敗");}
+  }
+
+  function renderGroupConsensusControl(snapshot){
+    const panel=$("groupConsensusSessionControl");if(!panel||activeSession?.activityMode!=="group-consensus"||activeSession.status==="closed"){panel?.classList.add("hidden");return;}panel.classList.remove("hidden");
+    const stage=Math.max(1,Number(snapshot?.current_stage)||1),total=Number(snapshot?.participant_count)||0,groups=Array.isArray(snapshot?.groups)?snapshot.groups:[],submissions=Array.isArray(snapshot?.group_submissions)?snapshot.group_submissions:[];
+    $("groupConsensusPhaseBadge").textContent=stage>=2?"小組討論":"個人作答";
+    $("groupConsensusIndividualBtn").disabled=stage<2;$("groupConsensusGroupBtn").disabled=stage>=2;
+    const sizeInput=$("groupConsensusTeacherGroupSize");if(sizeInput&&!sizeInput.dataset.initialized){sizeInput.value=String(Math.max(2,Math.min(6,Number(activeSession?.moduleData?.groupSize)||4)));sizeInput.dataset.initialized="1";}
+    const individual=sessionResponsesForMode(snapshot,"group-consensus").filter(row=>row.stage_key==="individual");
+    renderLiveBarStats($("groupConsensusIndividualDistribution"),groupConsensusEntriesFromSnapshot(snapshot,"individual"),{key:`gc-individual:${activeSession.id}`,totalParticipants:total,emptyText:"目前還沒有個人判斷。"});
+    renderLiveBarStats($("groupConsensusGroupDistribution"),groupConsensusEntriesFromSnapshot(snapshot,"group"),{key:`gc-group:${activeSession.id}`,totalParticipants:groups.length,emptyText:"目前還沒有小組共識。"});
+    const individualDone=new Set(individual.map(row=>row.participant_id)).size;
+    $("groupConsensusTeacherHint").textContent=stage>=2
+      ? `個人完成 ${individualDone} / ${total} · 小組共識 ${submissions.length} / ${groups.length || 0}${groups.length?"":"（尚未分組）"}`
+      : `個人完成 ${individualDone} / ${total} · 小組階段尚未開放`;
+    $("groupConsensusGroupMeta").textContent=groups.length?`${groups.length} 組 · ${submissions.length} 組已提交`:`尚未分組 · ${total} 位學生已加入`;
+    const list=$("groupConsensusGroupList");list.innerHTML="";
+    if(!groups.length){list.innerHTML='<div class="empty-v15">學生加入後，可按「自動分組」建立討論小組。</div>';return;}
+    const subByGroup=new Map(submissions.map(row=>[String(row.group_id),row]));
+    groups.slice().sort((a,b)=>(Number(a.group_index)||0)-(Number(b.group_index)||0)).forEach(group=>{const submission=subByGroup.get(String(group.id));const card=document.createElement("article");card.className="group-consensus-teacher-group";const members=(group.members||[]).map(member=>member.student_code).filter(Boolean);card.innerHTML=`<div class="group-consensus-teacher-group-head"><div><span class="summary-label">${escapeHtml(group.label||"小組")}</span><strong>${members.map(escapeHtml).join("、")||"尚無組員"}</strong></div><span class="stage-badge">${members.length} 人</span></div>${submission?`<div class="group-consensus-result"><b>${escapeHtml(submission.payload?.selectedTypeName||submission.selected_type||"—")}</b><p>${escapeHtml(submission.payload?.reason||"未填寫共識理由")}</p><small>最後更新：${escapeHtml(submission.submitted_by_code||"組員")} · ${escapeHtml(formatTime(submission.updated_at||submission.submitted_at))}</small></div>`:'<div class="group-consensus-result empty"><span>尚未提交小組共識</span></div>'}`;list.appendChild(card);});
+    const indList=$("groupConsensusIndividualDistribution");if(indList)indList._rerenderLiveStats=()=>renderGroupConsensusControl(snapshot);const grpList=$("groupConsensusGroupDistribution");if(grpList)grpList._rerenderLiveStats=()=>renderGroupConsensusControl(snapshot);
+  }
+
+  function renderGroupConsensusSessionSummary({snapshot,details,participants}){
+    const individuals=sessionResponsesForMode(snapshot,"group-consensus").filter(row=>row.stage_key==="individual"),groups=snapshot?.groups||[],submissions=snapshot?.group_submissions||[];
+    const individualCount=new Set(individuals.map(row=>row.participant_id)).size;$("summaryCompletionRate").textContent=participants?`${Math.round((individualCount/participants)*100)}%`:"—";
+    const changedGroups=submissions.filter(sub=>{const group=(groups||[]).find(g=>String(g.id)===String(sub.group_id));if(!group)return false;const memberIds=new Set((group.members||[]).map(m=>m.participant_id));const choices=individuals.filter(r=>memberIds.has(r.participant_id)).map(r=>r.selected_type);return choices.length&&choices.some(choice=>choice!==sub.selected_type);}).length;
+    const section=document.createElement("section");section.className="summary-section";section.innerHTML=`<div class="summary-section-head"><strong>小組共識摘要</strong><span>${submissions.length} / ${groups.length} 組已提交</span></div><div class="wave-metrics"><div><span>個人完成</span><strong>${individualCount} / ${participants}</strong></div><div><span>已形成共識</span><strong>${submissions.length} 組</strong></div><div><span>討論後出現不同共識</span><strong>${changedGroups} 組</strong></div></div><div class="summary-node-list"></div>`;
+    const list=section.querySelector(".summary-node-list");groups.forEach(group=>{const sub=submissions.find(row=>String(row.group_id)===String(group.id));const row=document.createElement("div");row.className="summary-node-row";row.innerHTML=`<div class="summary-node-main"><strong>${escapeHtml(group.label||"小組")}</strong><small>${escapeHtml((group.members||[]).map(m=>m.student_code).join("、"))}</small></div><b>${escapeHtml(sub?.payload?.selectedTypeName||sub?.selected_type||"未提交")}</b>`;list.appendChild(row);});if(!groups.length)list.innerHTML='<div class="empty-v15">這次 Session 尚未建立小組。</div>';details.appendChild(section);return true;
+  }
+
+  function renderPredictRevealControl(snapshot) {
+    const panel=$("predictRevealSessionControl");if(!panel||activeSession?.activityMode!=="predict-reveal"||activeSession.status==="closed"){panel?.classList.add("hidden");return;}panel.classList.remove("hidden");
+    const stage=Math.max(1,Number(activeSession.currentStage)||1),keyName=stage>=2?"final":"initial",responses=sessionResponsesForMode(snapshot,"predict-reveal"),current=responses.filter(r=>r.stage_key===keyName),total=Number(snapshot?.participant_count)||0;
+    $("predictPhaseBadge").textContent=stage>=2?"再次判斷":"預測階段";$("predictPhaseText").textContent=stage>=2?"已揭曉資訊，學生正在再次判斷":"學生正在進行初次預測";$("predictAnsweredText").textContent=`本階段已提交 ${new Set(current.map(r=>r.participant_id)).size} / ${total}`;
+    $("predictBackBtn").disabled=stage<=1;$("predictRevealBtn").disabled=stage>=2;$("predictRevealBtn").textContent=stage>=2?"已揭曉並開放再次判斷":"揭曉並開放再次判斷 →";
+    renderLiveBarStats($("predictLiveDistribution"),collectLiveClassificationEntries(current),{key:`predict:${activeSession?.id||""}:${keyName}`,totalParticipants:total,emptyText:"目前還沒有學生提交。"});
+    const finals=responses.filter(r=>r.stage_key==="final"),summary=$("predictChangeSummary");if(stage>=2&&finals.length){const changed=finals.filter(r=>Boolean(r.payload?.changed)).length;$("predictChangedCount").textContent=changed;$("predictUnchangedCount").textContent=finals.length-changed;summary.classList.remove("hidden");}else summary.classList.add("hidden");
+  }
+  async function changePredictPhase(delta){if(!activeSession||activeSession.activityMode!=="predict-reveal")return;const target=Math.max(1,Math.min((activeSession.currentStage||1)+delta,2));try{await window.ClassroomSessionAPI.setStage(activeSession,target);await refreshActiveSession();}catch(error){showSessionToast(error.message||"更新預測揭曉階段失敗");}}
+  function renderStanceMapControl(snapshot){
+    const panel=$("stanceMapSessionControl");if(!panel||activeSession?.activityMode!=="stance-map"||activeSession.status==="closed"){panel?.classList.add("hidden");return;}panel.classList.remove("hidden");const responses=moduleResponses(snapshot,"stance-map").filter(r=>Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y))),total=Number(snapshot?.participant_count)||0;$("stanceAnsweredBadge").textContent=`${new Set(responses.map(r=>r.participant_id)).size} / ${total}`;
+    const map=$("stanceTeacherMap");map.innerHTML='<i class="stance-cross stance-cross-x"></i><i class="stance-cross stance-cross-y"></i>';responses.forEach((r,index)=>{const point=document.createElement("span");point.className="stance-cloud-point";point.style.left=`${Math.max(0,Math.min(100,Number(r.payload.x)))}%`;point.style.bottom=`${Math.max(0,Math.min(100,Number(r.payload.y)))}%`;point.style.setProperty("--point-color",stableLiveStatColor(r.participant_id||index,index));point.title="匿名學生";map.appendChild(point);});
+    const avgX=responses.length?responses.reduce((sum,r)=>sum+Number(r.payload.x),0)/responses.length:0,avgY=responses.length?responses.reduce((sum,r)=>sum+Number(r.payload.y),0)/responses.length:0;$("stanceAverageX").textContent=responses.length?avgX.toFixed(1):"—";$("stanceAverageY").textContent=responses.length?avgY.toFixed(1):"—";const sample=responses[0]?.payload;$("stanceTeacherAxes").textContent=sample?`X：${sample.xLeft||"左"} → ${sample.xRight||"右"}｜Y：${sample.yBottom||"下"} → ${sample.yTop||"上"}`:"等待第一份作答後顯示座標設定";
+  }
+  function confidenceStageKeyForSession(stageOverride=null){const mode=activeSession?.activityMode,stage=Math.max(1,Number(stageOverride ?? activeSession?.currentStage)||1);if(mode==="progressive-reveal")return `clue-${stage}`;if(mode==="open-classification"||mode==="predict-reveal")return stage>=2?"final":"initial";if(mode==="layered-deliberation")return `layer-${stage}`;return "final";}
+  function buildPresentationConfidence(responses,currentStage){
+    const stageKey=confidenceStageKeyForSession(currentStage);
+    const rows=(responses||[]).filter(r=>r.stage_key===stageKey&&r.payload?.confidence);
+    if(!rows.length)return null;
+    const sample=rows[0].payload.confidence,count=Math.max(3,Math.min(7,Number(sample.pointCount)||5));
+    const distribution=Array.from({length:count},(_,index)=>({name:String(index+1),count:0}));
+    const values=[];
+    rows.forEach(r=>{const value=Number(r.payload?.confidence?.value);if(Number.isFinite(value)&&value>=1&&value<=count){distribution[value-1].count++;values.push(value);}});
+    const average=values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
+    return {answered:new Set(rows.map(r=>r.participant_id)).size,pointCount:count,average:values.length?average:null,lowLabel:sample.lowLabel||"不太確定",highLabel:sample.highLabel||"非常確定",distribution};
+  }
+  function renderConfidenceControl(snapshot){
+    const panel=$("confidenceSessionControl");if(!panel)return;const stageKey=confidenceStageKeyForSession();const rows=(snapshot?.responses||[]).filter(r=>r.stage_key===stageKey&&r.payload?.confidence&&(activeSession?.sessionKind!=="course"||!r.node_ref||r.node_ref===activeSession.currentNodeRef));if(!rows.length){panel.classList.add("hidden");return;}panel.classList.remove("hidden");const total=Number(snapshot?.participant_count)||0;$("confidenceAnsweredBadge").textContent=`${new Set(rows.map(r=>r.participant_id)).size} / ${total}`;const sample=rows[0].payload.confidence,count=Math.max(3,Math.min(7,Number(sample.pointCount)||5)),entries=Array.from({length:count},(_,i)=>({id:String(i+1),label:String(i+1),count:0,order:i})),values=[];rows.forEach(r=>{const value=Number(r.payload?.confidence?.value);if(Number.isFinite(value)&&value>=1&&value<=count){entries[value-1].count++;values.push(value);}});renderLiveBarStats($("confidenceDistribution"),entries,{key:`confidence:${activeSession?.id||""}:${activeSession?.currentNodeRef||"activity"}:${stageKey}`,totalParticipants:total,emptyText:"目前還沒有信心程度資料。"});const shown=liveStatsIsShown(`confidence:${activeSession?.id||""}:${activeSession?.currentNodeRef||"activity"}:${stageKey}`);const avg=values.length?values.reduce((a,b)=>a+b,0)/values.length:0;$("confidenceAverageValue").textContent=shown&&values.length?avg.toFixed(2).replace(/\.00$/,""):"—";$("confidenceLabels").textContent=`${sample.lowLabel||"不太確定"} ← 1 ～ ${count} → ${sample.highLabel||"非常確定"}`;const list=$("confidenceDistribution");if(list)list._rerenderLiveStats=()=>renderConfidenceControl(snapshot);
+  }
+
+  function renderPredictSessionSummary({snapshot,details,participants}) {
+    const rows=sessionResponsesForMode(snapshot,"predict-reveal"),initials=rows.filter(r=>r.stage_key==="initial"),finals=rows.filter(r=>r.stage_key==="final"),responders=new Set(finals.map(r=>r.participant_id)).size;$("summaryCompletionRate").textContent=participants?`${Math.round((responders/participants)*100)}%`:"—";const changed=finals.filter(r=>r.payload?.changed).length;const section=document.createElement("section");section.className="summary-section";section.innerHTML=`<div class="summary-section-head"><strong>預測與再次判斷</strong><span>${finals.length} 份最終回答</span></div><div class="wave-metrics"><div><span>改變答案</span><strong>${changed}</strong></div><div><span>維持答案</span><strong>${Math.max(0,finals.length-changed)}</strong></div><div><span>初次預測</span><strong>${initials.length}</strong></div></div>`;details.appendChild(section);return true;
+  }
+  function renderStanceSessionSummary({snapshot,details,participants}) {
+    const rows=moduleResponses(snapshot,"stance-map").filter(r=>Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y))),responders=new Set(rows.map(r=>r.participant_id)).size;$("summaryCompletionRate").textContent=participants?`${Math.round((responders/participants)*100)}%`:"—";const ax=rows.length?rows.reduce((s,r)=>s+Number(r.payload.x),0)/rows.length:0,ay=rows.length?rows.reduce((s,r)=>s+Number(r.payload.y),0)/rows.length:0;const section=document.createElement("section");section.className="summary-section";section.innerHTML=`<div class="summary-section-head"><strong>二維立場摘要</strong><span>${rows.length} 筆</span></div><div class="wave-metrics"><div><span>X 平均</span><strong>${rows.length?ax.toFixed(1):"—"}</strong></div><div><span>Y 平均</span><strong>${rows.length?ay.toFixed(1):"—"}</strong></div></div>`;details.appendChild(section);return true;
   }
 
   function renderScaleSessionSummary({snapshot,details,participants}) {
@@ -1915,6 +2429,21 @@
     $("summaryCompletionRate").textContent=participants ? `${Math.round((responders/participants)*100)}%` : "—";
     const section=document.createElement("section");section.className="summary-section";
     section.innerHTML=`<div class="summary-section-head"><strong>開放文字摘要</strong><span>${responses.length} 筆</span></div><p class="subtle">文字內容保留在「個別學生檢視」中；課後摘要預設不自動公開學生文字。</p>`;
+    details.appendChild(section);return true;
+  }
+
+  function renderQuestionWallSessionSummary({snapshot,details,participants}) {
+    const posts=Array.isArray(snapshot?.question_wall_posts)?snapshot.question_wall_posts:[];
+    const posters=new Set(posts.map(post=>post.participant_id)).size;
+    $("summaryCompletionRate").textContent=participants ? `${Math.round((posters/participants)*100)}%` : "—";
+    const votes=posts.reduce((sum,post)=>sum+Math.max(0,Number(post.vote_count)||0),0);
+    const replies=posts.reduce((sum,post)=>sum+(Array.isArray(post.replies)?post.replies.length:(Number(post.reply_count)||0)),0);
+    const hot=posts.slice().sort((a,b)=>(Number(b.vote_count)||0)-(Number(a.vote_count)||0) || new Date(b.created_at||0)-new Date(a.created_at||0)).slice(0,5);
+    const section=document.createElement("section");section.className="summary-section";
+    section.innerHTML=`<div class="summary-section-head"><strong>匿名提問牆摘要</strong><span>${posts.length} 則 · ${votes} 次 ＋1 · ${replies} 則回應</span></div><div class="summary-node-list"></div>`;
+    const list=section.querySelector(".summary-node-list");
+    hot.forEach((post,index)=>{const row=document.createElement("div");row.className="summary-node-row";row.innerHTML=`<div class="summary-node-main"><strong>${index+1}. ${escapeHtml(post.text||"")}</strong><small>熱門匿名提問 · ${Array.isArray(post.replies)?post.replies.length:(Number(post.reply_count)||0)} 則回應</small></div><b>＋${Math.max(0,Number(post.vote_count)||0)}</b>`;list.appendChild(row);});
+    if(!hot.length)list.innerHTML='<div class="empty-v15">這次 Session 沒有匿名提問。</div>';
     details.appendChild(section);return true;
   }
 
@@ -2343,14 +2872,117 @@
         responses:responses.filter(item=>item.mode==="open-text" && item.stage_key==="final" && String(item.payload?.text||"").trim()),
         label:"匿名文字牆"
       }),
-      presentationExtras:({responses}) => ({
-        textWall:responses
-          .filter(item=>item.mode==="open-text" && item.stage_key==="final" && String(item.payload?.text||"").trim())
-          .slice().sort((a,b)=>new Date(b.submitted_at||0)-new Date(a.submitted_at||0))
-          .slice(0,18).map(item=>({text:String(item.payload.text)}))
-      }),
+      presentationExtras:({responses}) => {
+        const rows=responses
+          .filter(item=>item.mode==="open-text" && item.stage_key==="final" && String(item.payload?.text||"").trim());
+        const counts=new Map();
+        rows.forEach(item=>tokenizeWordCloud(item.payload?.text).forEach(token=>counts.set(token,(counts.get(token)||0)+1)));
+        const wordCloud=[...counts.entries()]
+          .map(([text,count])=>({text,count}))
+          .sort((a,b)=>b.count-a.count || a.text.localeCompare(b.text,"zh-Hant"))
+          .slice(0,40);
+        return {
+          textWall:rows.slice().sort((a,b)=>new Date(b.submitted_at||0)-new Date(a.submitted_at||0))
+            .slice(0,18).map(item=>({text:String(item.payload.text)})),
+          wordCloud
+        };
+      },
       renderSummary:renderOpenTextSessionSummary,
       suppressGenericSummaryDistribution:() => true
+    });
+
+    register("question-wall", {
+      renderControl:renderQuestionWallControl,
+      participantHistory:(participantId,responses,snapshot)=>{
+        const count=(snapshot?.question_wall_posts||[]).filter(post=>post.participant_id===participantId).length;
+        return count?`<span class="judgement-chip">匿名提問 ${count} 則</span>`:"";
+      },
+      renderSummary:renderQuestionWallSessionSummary,
+      suppressGenericSummaryDistribution:()=>true
+    });
+
+    register("group-consensus", {
+      renderControl:renderGroupConsensusControl,
+      participantHistory:(participantId,responses,snapshot)=>{const own=responses.find(row=>row.participant_id===participantId&&row.mode==="group-consensus"&&row.stage_key==="individual");const group=(snapshot?.groups||[]).find(g=>(g.members||[]).some(m=>m.participant_id===participantId));const sub=group?(snapshot?.group_submissions||[]).find(row=>String(row.group_id)===String(group.id)):null;return `${own?`<span class="judgement-chip">個人：${escapeHtml(own.payload?.selectedTypeName||own.selected_type||"—")}</span>`:""}${group?`<span class="judgement-chip">${escapeHtml(group.label||"小組")}：${escapeHtml(sub?.payload?.selectedTypeName||sub?.selected_type||"等待共識")}</span>`:""}`;},
+      inspectorFields:response=>[{label:"個人判斷",value:response.payload?.selectedTypeName||response.selected_type||""}],
+      renderSummary:renderGroupConsensusSessionSummary,
+      suppressGenericSummaryDistribution:()=>true
+    });
+
+    register("predict-reveal", {
+      renderControl:renderPredictRevealControl,
+      participantHistory:(participantId,responses)=>{const initial=responses.find(r=>r.participant_id===participantId&&r.mode==="predict-reveal"&&r.stage_key==="initial"),final=responses.find(r=>r.participant_id===participantId&&r.mode==="predict-reveal"&&r.stage_key==="final");if(!initial)return "";const a=initial.payload?.selectedTypeName||initial.selected_type||"—",b=final?.payload?.selectedTypeName||final?.selected_type||"等待再次判斷";return `<span class="judgement-chip">預測 ${escapeHtml(a)} → ${escapeHtml(b)}</span>`;},
+      inspectorFields:response=>[{label:response.stage_key==="initial"?"初次預測":"再次判斷",value:response.payload?.selectedTypeName||response.selected_type||""},{label:"是否改變",value:response.stage_key==="final"?(response.payload?.changed?"有改變":"維持原判斷"):""}],
+      presentationPhase:({responses,currentStage})=>({responses:responses.filter(r=>r.mode==="predict-reveal"&&r.stage_key===(currentStage>=2?"final":"initial")),label:currentStage>=2?"再次判斷":"初次預測"}),
+      presentationExtras:({responses,currentStage})=>{if(currentStage<2)return{};const finals=responses.filter(r=>r.mode==="predict-reveal"&&r.stage_key==="final"),changed=finals.filter(r=>r.payload?.changed).length;return {changedCount:changed,unchangedCount:finals.length-changed};},
+      renderSummary:renderPredictSessionSummary
+    });
+    register("stance-map", {
+      renderControl:renderStanceMapControl,
+      participantHistory:(participantId,responses)=>{const r=responses.find(x=>x.participant_id===participantId&&x.mode==="stance-map"&&x.stage_key==="final");return r?`<span class="judgement-chip">X ${escapeHtml(r.payload?.x)} · Y ${escapeHtml(r.payload?.y)}</span>`:"";},
+      inspectorFields:response=>[{label:"二維位置",value:`X ${response.payload?.x ?? "—"} · Y ${response.payload?.y ?? "—"}`},{label:"X 軸",value:`${response.payload?.xLeft||"左"} ～ ${response.payload?.xRight||"右"}`},{label:"Y 軸",value:`${response.payload?.yBottom||"下"} ～ ${response.payload?.yTop||"上"}`}],
+      presentationPhase:({responses})=>({responses:responses.filter(r=>r.mode==="stance-map"&&r.stage_key==="final"&&Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y))),label:"二維立場"}),
+      presentationExtras:({responses})=>{
+        const rows=responses.filter(r=>r.mode==="stance-map"&&r.stage_key==="final"&&Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y)));
+        if(!rows.length)return{customMetrics:[],stanceMap:null,suppressDistribution:true};
+        const ax=rows.reduce((s,r)=>s+Number(r.payload.x),0)/rows.length,ay=rows.reduce((s,r)=>s+Number(r.payload.y),0)/rows.length;
+        const sample=rows[0]?.payload||{};
+        return{
+          suppressDistribution:true,
+          customMetrics:[{label:"X 平均",value:ax.toFixed(1),note:"二維立場中心"},{label:"Y 平均",value:ay.toFixed(1),note:`${rows.length} 份回答`}],
+          stanceMap:{
+            points:rows.slice(0,120).map(r=>({x:Number(r.payload.x),y:Number(r.payload.y)})),
+            average:{x:ax,y:ay},
+            labels:{xLeft:sample.xLeft||"左",xRight:sample.xRight||"右",yBottom:sample.yBottom||"下",yTop:sample.yTop||"上"}
+          }
+        };
+      },
+      renderSummary:renderStanceSessionSummary,
+      suppressGenericSummaryDistribution:()=>true
+    });
+
+    register("live-stance", {
+      renderControl:renderLiveStanceControl,
+      participantHistory:(participantId,responses)=>{
+        const response=responses.find(item=>item.participant_id===participantId && item.mode==="live-stance" && item.stage_key==="final");
+        if(!response)return "";
+        const label=response.payload?.selectedTypeName || response.selected_type || "—";
+        return `<span class="judgement-chip">目前立場：${escapeHtml(label)}</span>`;
+      },
+      inspectorFields:(response,snapshot)=>{
+        const events=(snapshot?.live_stance_events || []).filter(event=>event.participant_id===response.participant_id).sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+        const sequence=events.map(event=>liveStanceSideLabel(event.side,event.payload||{}));
+        const changes=events.filter(event=>event.previous_side && event.previous_side!==event.side).length;
+        return [
+          {label:"目前立場",value:response.payload?.selectedTypeName || response.selected_type || ""},
+          {label:"已改變立場",value:`${changes || Math.max(0,Number(response.payload?.changeCount)||0)} 次`},
+          {label:"立場歷程",value:sequence.length ? sequence.join(" → ") : (response.payload?.selectedTypeName || response.selected_type || "")},
+          {label:"首次表態",value:events.length ? formatTime(events[0].created_at) : "—"},
+          {label:"最近變動",value:events.length ? formatTime(events.at(-1).created_at) : "—"}
+        ];
+      },
+      presentationPhase:({responses})=>({
+        responses:responses.filter(item=>item.mode==="live-stance" && item.stage_key==="final"),
+        label:"即時立場拉鋸"
+      }),
+      presentationExtras:({responses,snapshot})=>{
+        const rows=responses.filter(item=>item.mode==="live-stance" && item.stage_key==="final");
+        const summary=liveStanceSummaryFromRows(rows,Number(snapshot?.participant_count)||0);
+        return {
+          suppressDistribution:true,
+          liveStance:{
+            left:summary.counts.left,
+            right:summary.counts.right,
+            undecided:summary.counts.undecided,
+            leftLabel:summary.leftLabel,
+            rightLabel:summary.rightLabel,
+            undecidedLabel:summary.undecidedLabel,
+            allowUndecided:summary.allowUndecided,
+            answered:summary.answered,
+            total:Number(snapshot?.participant_count)||0
+          }
+        };
+      }
     });
 
     register("layered-deliberation", {
@@ -2375,11 +3007,29 @@
     if (activeSession) refreshActiveSession();
   }
 
-  $("openSessionSetupBtn")?.addEventListener("click",()=>document.querySelector(".session-config-card")?.scrollIntoView({behavior:"smooth",block:"start"}));
+  $("openSessionSetupBtn")?.addEventListener("click",()=>openSessionSetup());
+  $("toggleTeachHomeFocusBtn")?.addEventListener("click",toggleTeachHomeFocusMode);
   $("goCoursePrepBtn")?.addEventListener("click",()=>window.TeacherWorkflow?.switchView?.("courses"));
   $("goActivityPrepBtn")?.addEventListener("click",()=>window.TeacherWorkflow?.switchView?.("activities"));
 
   $("openTextIdentityMode")?.addEventListener("change",event=>{openTextIdentityMode=event.target.value==="named"?"named":"anonymous";if(latestTeacherSnapshot)renderOpenTextControl(latestTeacherSnapshot);});
+  $("openTextViewMode")?.addEventListener("change",event=>{openTextViewMode=event.target.value==="cloud"?"cloud":"wall";if(latestTeacherSnapshot)renderOpenTextControl(latestTeacherSnapshot);});
+  $("questionWallIdentityMode")?.addEventListener("change",event=>{questionWallIdentityMode=event.target.value==="named"?"named":"anonymous";if(latestTeacherSnapshot)renderQuestionWallControl(latestTeacherSnapshot);});
+  $("questionWallSortMode")?.addEventListener("change",event=>{questionWallSortMode=event.target.value==="new"?"new":"hot";if(latestTeacherSnapshot)renderQuestionWallControl(latestTeacherSnapshot);});
+  $("liveStanceOpenBtn")?.addEventListener("click",()=>changeLiveStanceState("open"));
+  $("liveStanceLockBtn")?.addEventListener("click",()=>changeLiveStanceState("locked"));
+  $("liveStanceProjectionBtn")?.addEventListener("click",openLiveStanceProjection);
+  $("liveStanceCheckpointBtn")?.addEventListener("click",createLiveStanceCheckpointFromUi);
+  $("liveStanceCheckpointLabel")?.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();createLiveStanceCheckpointFromUi();}});
+  $("liveStanceProjectionCloseBtn")?.addEventListener("click",closeLiveStanceProjection);
+  $("liveStanceProjectionOverlay")?.addEventListener("click",event=>{if(event.target===event.currentTarget)closeLiveStanceProjection();});
+  document.addEventListener("fullscreenchange",()=>{
+    const overlay=$("liveStanceProjectionOverlay");
+    if(overlay && !document.fullscreenElement && !overlay.classList.contains("hidden")) overlay.classList.add("hidden");
+  });
+
+  $("predictBackBtn")?.addEventListener("click",()=>changePredictPhase(-1));
+  $("predictRevealBtn")?.addEventListener("click",()=>changePredictPhase(1));
   document.querySelectorAll('input[name="sessionKind"]').forEach(input=>input.addEventListener("change",applySessionKindUI));
   $("sessionActivitySelect")?.addEventListener("change",renderActivityPreview);
   $("sessionCourseSelect")?.addEventListener("change",renderCoursePreview);
@@ -2391,6 +3041,9 @@
   $("exportTeacherHandoffBtn")?.addEventListener("click",exportTeacherHandoff);
   $("exportDeliberationResultsBtn")?.addEventListener("click",exportDeliberationResults);
   $("createSessionBtn")?.addEventListener("click",createSession);
+  $("groupConsensusAssignBtn")?.addEventListener("click",assignGroupConsensusGroups);
+  $("groupConsensusIndividualBtn")?.addEventListener("click",()=>setGroupConsensusPhase(1));
+  $("groupConsensusGroupBtn")?.addEventListener("click",()=>setGroupConsensusPhase(2));
   $("refreshSessionBtn")?.addEventListener("click",()=>refreshActiveSession());
   $("copySessionUrlBtn")?.addEventListener("click",copyJoinUrl);
   $("closeSessionBtn")?.addEventListener("click",closeActiveSession);

@@ -1,4 +1,4 @@
-/* Classroom Interactive V2.19.0 - Activity Module Registry
+/* Classroom Interactive V2.26.1 - Activity Module Registry
  * Centralizes activity metadata and context hooks so new activity types can be
  * registered without adding mode switch/if chains throughout the core files.
  */
@@ -21,7 +21,7 @@
       id,
       label: definition.label || id,
       shortLabel: definition.shortLabel || definition.label || id,
-      templateKicker: definition.templateKicker || "模板",
+      templateKicker: definition.templateKicker || "活動模組",
       templateTitle: definition.templateTitle || definition.label || id,
       editorKind: definition.editorKind || "standard",
       editorClass: definition.editorClass || "",
@@ -137,7 +137,7 @@
     id:"drag-reveal",
     label:"選擇與揭示",
     shortLabel:"選擇與揭示",
-    templateKicker:"模板 01",
+    templateKicker:"選擇與分類",
     templateTitle:"選擇與揭示",
     editorKind:"standard",
     dataKey:"cases",
@@ -148,7 +148,7 @@
     id:"open-tags",
     label:"特徵選擇",
     shortLabel:"特徵選擇",
-    templateKicker:"模板 02",
+    templateKicker:"選擇與分類",
     templateTitle:"特徵選擇",
     editorKind:"standard",
     dataKey:"cases",
@@ -159,7 +159,7 @@
     id:"element-type",
     label:"依據與分類｜基礎分類",
     shortLabel:"依據與分類",
-    templateKicker:"模板 03",
+    templateKicker:"選擇與分類",
     templateTitle:"依據與分類｜基礎分類",
     editorKind:"element-type",
     editorClass:"element-type-mode",
@@ -175,7 +175,7 @@
     id:"progressive-reveal",
     label:"逐步揭露",
     shortLabel:"逐步揭露",
-    templateKicker:"模板 04",
+    templateKicker:"推理與修正",
     templateTitle:"逐步揭露",
     editorKind:"progressive-reveal",
     editorClass:"progressive-reveal-mode",
@@ -197,7 +197,7 @@
     id:"open-classification",
     label:"依據與分類｜討論後再判斷",
     shortLabel:"討論後再判斷",
-    templateKicker:"模板 03",
+    templateKicker:"選擇與分類",
     templateTitle:"依據與分類｜討論後再判斷",
     editorKind:"open-classification",
     editorClass:"open-classification-mode",
@@ -215,11 +215,80 @@
     completeText:"你完成了討論後再判斷。比較初次與最終判斷：答案可以改，也可以不改，重點是能用依據說明自己的選擇。"
   });
 
+
+
+  define({
+    id:"predict-reveal",
+    label:"預測 → 揭曉 → 再判斷",
+    shortLabel:"預測揭曉",
+    templateKicker:"推理與修正",
+    templateTitle:"預測 → 揭曉 → 再判斷",
+    editorKind:"predict-reveal",
+    editorClass:"predict-reveal-mode",
+    editorSectionId:"predictRevealEditorSection",
+    dataKey:"predictReveal",
+    collection:false,
+    realtimeStudent:true,
+    teacherControlId:"predictRevealSessionControl",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    stageCount:() => 2,
+    currentStudentTask:activity => activity?.predictReveal,
+    hasStudentContent:activity => Boolean(activity?.predictReveal?.question && activity?.predictReveal?.options?.length >= 2),
+    previewSummary:() => "預測＋揭曉＋再判斷",
+    completeText:"你已完成預測與再次判斷。比較前後答案，想想真正讓你維持或改變判斷的是哪項新資訊。"
+  });
+
+  define({
+    id:"stance-map",
+    label:"二維立場圖",
+    shortLabel:"二維立場圖",
+    templateKicker:"立場與即時互動",
+    templateTitle:"二維立場圖",
+    editorKind:"stance-map",
+    editorClass:"stance-map-mode",
+    editorSectionId:"stanceMapEditorSection",
+    dataKey:"stanceMap",
+    collection:false,
+    teacherControlId:"stanceMapSessionControl",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.stanceMap,
+    hasStudentContent:activity => Boolean(activity?.stanceMap?.question),
+    previewSummary:() => "1 題二維定位",
+    completeText:"你已完成二維立場定位。全班分布能幫助我們看見：相同結論背後，也可能存在不同的判斷維度。"
+  });
+
+
+  define({
+    id:"live-stance",
+    label:"即時立場拉鋸",
+    shortLabel:"立場拉鋸",
+    templateKicker:"立場與即時互動",
+    templateTitle:"即時立場拉鋸",
+    editorKind:"live-stance",
+    editorClass:"live-stance-mode",
+    editorSectionId:"liveStanceEditorSection",
+    dataKey:"liveStance",
+    collection:false,
+    allowInCourse:false,
+    realtimeStudent:true,
+    teacherControlId:"liveStanceSessionControl",
+    responseMode:"live-stance",
+    initialRoundState:"open",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.liveStance,
+    hasStudentContent:activity => Boolean(activity?.liveStance?.question && activity?.liveStance?.leftLabel && activity?.liveStance?.rightLabel),
+    previewSummary:() => "1 題即時立場拉鋸",
+    completeText:"這是一個即時活動；老師說明過程中，你可以隨時改變目前立場。"
+  });
+
   define({
     id:"layered-deliberation",
     label:"逐層思辨",
     shortLabel:"逐層思辨",
-    templateKicker:"模板 05",
+    templateKicker:"推理與修正",
     templateTitle:"逐層思辨",
     editorKind:"layered-deliberation",
     editorClass:"layered-deliberation-mode",
@@ -245,7 +314,7 @@
     id:"scale-spectrum",
     label:"量表／立場光譜",
     shortLabel:"量表／立場光譜",
-    templateKicker:"模板 06",
+    templateKicker:"快速蒐集",
     templateTitle:"量表／立場光譜",
     editorKind:"scale-spectrum",
     editorClass:"scale-spectrum-mode",
@@ -265,7 +334,7 @@
     id:"ranking",
     label:"排序／優先順序",
     shortLabel:"排序",
-    templateKicker:"模板 07",
+    templateKicker:"快速蒐集",
     templateTitle:"排序／優先順序",
     editorKind:"ranking",
     editorClass:"ranking-mode",
@@ -285,7 +354,7 @@
     id:"open-text",
     label:"開放文字／文字牆",
     shortLabel:"開放文字",
-    templateKicker:"模板 08",
+    templateKicker:"快速蒐集",
     templateTitle:"開放文字／文字牆",
     editorKind:"open-text",
     editorClass:"open-text-mode",
@@ -299,6 +368,52 @@
     hasStudentContent:activity => Boolean(activity?.openText?.question),
     previewSummary:() => "1 題開放文字",
     completeText:"你已提交想法。等待全班文字牆彙整後，可以看看有哪些相同、不同或值得追問的觀點。"
+  });
+
+
+  define({
+    id:"question-wall",
+    label:"匿名提問牆＋認同＋回應",
+    shortLabel:"匿名提問牆",
+    templateKicker:"同儕互動",
+    templateTitle:"匿名提問牆＋認同＋回應",
+    editorKind:"question-wall",
+    editorClass:"question-wall-mode",
+    editorSectionId:"questionWallEditorSection",
+    dataKey:"questionWall",
+    collection:false,
+    allowInCourse:false,
+    realtimeStudent:true,
+    teacherControlId:"questionWallSessionControl",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.questionWall,
+    hasStudentContent:activity => Boolean(activity?.questionWall?.question),
+    previewSummary:() => "匿名發問＋同儕認同＋回應",
+    completeText:"你可以持續查看同學的匿名問題，對自己也想知道的問題按「＋1」，也能留下匿名同儕回應。"
+  });
+
+  define({
+    id:"group-consensus",
+    label:"小組共識",
+    shortLabel:"小組共識",
+    templateKicker:"同儕互動",
+    templateTitle:"小組共識｜個人 → 小組",
+    editorKind:"group-consensus",
+    editorClass:"group-consensus-mode",
+    editorSectionId:"groupConsensusEditorSection",
+    dataKey:"groupConsensus",
+    collection:false,
+    allowInCourse:false,
+    realtimeStudent:true,
+    teacherControlId:"groupConsensusSessionControl",
+    stageCount:() => 2,
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.groupConsensus,
+    hasStudentContent:activity => Boolean(activity?.groupConsensus?.question && activity?.groupConsensus?.options?.length >= 2),
+    previewSummary:() => "個人判斷 → 小組共同提交",
+    completeText:"你已完成個人判斷與小組共識。可以比較：小組討論後，哪些答案被保留、改變或重新形成？"
   });
 
   global.ClassroomActivityModules = Object.freeze({

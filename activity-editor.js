@@ -1,4 +1,4 @@
-/* V2.19.0 | Activity Editor + layered deliberation + custom choices */
+/* V2.26.1 | Activity Editor + layered deliberation + accordion module picker */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -59,6 +59,47 @@ const openTextEditorSection = el("openTextEditorSection");
 const openTextQuestion = el("openTextQuestion");
 const openTextPlaceholder = el("openTextPlaceholder");
 const openTextMaxLength = el("openTextMaxLength");
+const questionWallEditorSection = el("questionWallEditorSection");
+const questionWallQuestion = el("questionWallQuestion");
+const questionWallPlaceholder = el("questionWallPlaceholder");
+const questionWallMaxLength = el("questionWallMaxLength");
+const questionWallMaxPosts = el("questionWallMaxPosts");
+const questionWallAllowReplies = el("questionWallAllowReplies");
+const questionWallReplyMaxLength = el("questionWallReplyMaxLength");
+const groupConsensusEditorSection = el("groupConsensusEditorSection");
+const groupConsensusQuestion = el("groupConsensusQuestion");
+const groupConsensusOptionsEditor = el("groupConsensusOptionsEditor");
+const addGroupConsensusOptionBtn = el("addGroupConsensusOptionBtn");
+const groupConsensusGroupSize = el("groupConsensusGroupSize");
+const groupConsensusReasonPrompt = el("groupConsensusReasonPrompt");
+const groupConsensusReasonMaxLength = el("groupConsensusReasonMaxLength");
+const groupConsensusReasonRequired = el("groupConsensusReasonRequired");
+const confidenceEditorCard = el("confidenceEditorCard");
+const confidenceEnabled = el("confidenceEnabled");
+const confidenceSettings = el("confidenceSettings");
+const confidencePointCount = el("confidencePointCount");
+const confidenceLowLabel = el("confidenceLowLabel");
+const confidenceHighLabel = el("confidenceHighLabel");
+const predictRevealEditorSection = el("predictRevealEditorSection");
+const predictQuestion = el("predictQuestion");
+const predictOptionsEditor = el("predictOptionsEditor");
+const addPredictOptionBtn = el("addPredictOptionBtn");
+const predictRevealTitle = el("predictRevealTitle");
+const predictRevealContent = el("predictRevealContent");
+const predictRejudgePrompt = el("predictRejudgePrompt");
+const stanceMapEditorSection = el("stanceMapEditorSection");
+const stanceQuestion = el("stanceQuestion");
+const stanceXLeft = el("stanceXLeft");
+const stanceXRight = el("stanceXRight");
+const stanceYBottom = el("stanceYBottom");
+const stanceYTop = el("stanceYTop");
+const liveStanceEditorSection = el("liveStanceEditorSection");
+const liveStanceQuestion = el("liveStanceQuestion");
+const liveStanceLeftLabel = el("liveStanceLeftLabel");
+const liveStanceRightLabel = el("liveStanceRightLabel");
+const liveStanceAllowUndecided = el("liveStanceAllowUndecided");
+const liveStanceUndecidedLabelField = el("liveStanceUndecidedLabelField");
+const liveStanceUndecidedLabel = el("liveStanceUndecidedLabel");
 const standardTaskToolbar = el("standardTaskToolbar");
 const shareDialog = el("shareDialog");
 const shareUrlInput = el("shareUrl");
@@ -68,6 +109,10 @@ const modeInputs = [...document.querySelectorAll('input[name="activityMode"]')];
 const editorPanel = document.querySelector(".editor-panel");
 const templateKicker = el("templateKicker");
 const templateTitle = el("templateTitle");
+const activityModulePicker = el("activityModulePicker");
+const activityModulePickerCurrent = el("activityModulePickerCurrent");
+const activityMoreToggleBtn = el("activityMoreToggleBtn");
+const activityStickyActions = document.querySelector(".workspace-view[data-workspace-view=\"activities\"] .sticky-actions");
 const QR_SAFE_MAX_LENGTH = 1100;
 
 function createId() {
@@ -209,6 +254,84 @@ function newOpenTextActivityData() {
   return {question:"",placeholder:"請用一兩句話寫下你的想法",maxLength:240};
 }
 
+function newQuestionWallActivityData() {
+  return {question:"",placeholder:"寫下你還想知道的問題",maxLength:180,maxPosts:3,allowReplies:true,replyMaxLength:140};
+}
+
+function newGroupConsensusActivityData() {
+  return {
+    question:"",
+    options:[
+      {id:createId(),label:"選項一"},
+      {id:createId(),label:"選項二"},
+      {id:createId(),label:"選項三"}
+    ],
+    groupSize:4,
+    reasonPrompt:"請寫下你們形成這個共識的主要理由",
+    reasonMaxLength:220,
+    reasonRequired:true
+  };
+}
+
+function normalizeGroupConsensusData(data) {
+  const base=newGroupConsensusActivityData();
+  const source=Array.isArray(data?.options)?data.options:base.options;
+  let options=source.map((item,index)=>({id:String(item?.id||createId()),label:String(item?.label||"").trim()||`選項 ${index+1}`})).slice(0,8);
+  if(options.length<2) options=base.options;
+  return {
+    question:String(data?.question||""),
+    options,
+    groupSize:Math.max(2,Math.min(6,Math.round(Number(data?.groupSize)||base.groupSize))),
+    reasonPrompt:String(data?.reasonPrompt||base.reasonPrompt),
+    reasonMaxLength:Math.max(30,Math.min(500,Math.round(Number(data?.reasonMaxLength)||base.reasonMaxLength))),
+    reasonRequired:data?.reasonRequired!==false
+  };
+}
+
+function newConfidenceData() {
+  return {enabled:false,pointCount:5,lowLabel:"不太確定",highLabel:"非常確定"};
+}
+function normalizeConfidenceData(data) {
+  const base=newConfidenceData();
+  return {
+    enabled:Boolean(data?.enabled),
+    pointCount:Math.max(3,Math.min(7,Math.round(Number(data?.pointCount)||base.pointCount))),
+    lowLabel:String(data?.lowLabel || base.lowLabel),
+    highLabel:String(data?.highLabel || base.highLabel)
+  };
+}
+function newPredictRevealActivityData() {
+  return {question:"",options:[{id:createId(),label:"選項一"},{id:createId(),label:"選項二"},{id:createId(),label:"選項三"}],revealTitle:"結果揭曉",revealContent:"",rejudgePrompt:"看完揭曉後，你現在怎麼判斷？"};
+}
+function normalizePredictRevealData(data) {
+  const base=newPredictRevealActivityData();
+  const source=Array.isArray(data?.options)?data.options:base.options;
+  const options=source.map((item,index)=>({id:String(item?.id||createId()),label:String(item?.label||"").trim()||`選項 ${index+1}`})).slice(0,10);
+  return {question:String(data?.question||""),options:options.length>=2?options:base.options,revealTitle:String(data?.revealTitle||base.revealTitle),revealContent:String(data?.revealContent||""),rejudgePrompt:String(data?.rejudgePrompt||base.rejudgePrompt)};
+}
+function newStanceMapActivityData() {
+  return {question:"",xLeft:"不合理",xRight:"合理",yBottom:"影響小",yTop:"影響大"};
+}
+function normalizeStanceMapData(data) {
+  const base=newStanceMapActivityData();
+  return {question:String(data?.question||""),xLeft:String(data?.xLeft||base.xLeft),xRight:String(data?.xRight||base.xRight),yBottom:String(data?.yBottom||base.yBottom),yTop:String(data?.yTop||base.yTop)};
+}
+
+function newLiveStanceActivityData() {
+  return {question:"",leftLabel:"支持",rightLabel:"反對",allowUndecided:true,undecidedLabel:"還不確定"};
+}
+function normalizeLiveStanceData(data) {
+  const base=newLiveStanceActivityData();
+  const allowUndecided=data?.allowUndecided !== false;
+  return {
+    question:String(data?.question || ""),
+    leftLabel:String(data?.leftLabel || base.leftLabel),
+    rightLabel:String(data?.rightLabel || base.rightLabel),
+    allowUndecided,
+    undecidedLabel:String(data?.undecidedLabel || base.undecidedLabel)
+  };
+}
+
 function normalizeScaleData(data) {
   const base=newScaleActivityData();
   const pointCount=Math.max(3,Math.min(10,Math.round(Number(data?.pointCount)||base.pointCount)));
@@ -235,6 +358,18 @@ function normalizeOpenTextData(data) {
     question:String(data?.question || ""),
     placeholder:String(data?.placeholder || base.placeholder),
     maxLength:Math.max(30,Math.min(1000,Math.round(Number(data?.maxLength)||base.maxLength)))
+  };
+}
+
+function normalizeQuestionWallData(data) {
+  const base=newQuestionWallActivityData();
+  return {
+    question:String(data?.question || ""),
+    placeholder:String(data?.placeholder || base.placeholder),
+    maxLength:Math.max(30,Math.min(500,Math.round(Number(data?.maxLength)||base.maxLength))),
+    maxPosts:Math.max(1,Math.min(5,Math.round(Number(data?.maxPosts)||base.maxPosts))),
+    allowReplies:Object.prototype.hasOwnProperty.call(data || {}, "allowReplies") ? data.allowReplies !== false : false,
+    replyMaxLength:Math.max(30,Math.min(300,Math.round(Number(data?.replyMaxLength)||base.replyMaxLength)))
   };
 }
 
@@ -446,7 +581,10 @@ const defaultActivity = {
   tasks: [],
   progressive: null,
   openClassification: null,
-  deliberation: null
+  deliberation: null,
+  liveStance: null,
+  questionWall: null,
+  groupConsensus: null
 };
 
 function showToast(message) {
@@ -487,7 +625,13 @@ function loadActivities() {
       deliberation: null,
       scale: null,
       ranking: null,
-      openText: null
+      openText: null,
+      questionWall: null,
+      groupConsensus: null,
+      predictReveal: null,
+      stanceMap: null,
+      liveStance: null,
+      confidence: normalizeConfidenceData(activity.confidence)
     };
 
     if (definition?.dataKey === "cases") {
@@ -504,6 +648,16 @@ function loadActivities() {
       normalized.ranking = normalizeRankingData(activity.ranking);
     } else if (definition?.dataKey === "openText") {
       normalized.openText = normalizeOpenTextData(activity.openText);
+    } else if (definition?.dataKey === "questionWall") {
+      normalized.questionWall = normalizeQuestionWallData(activity.questionWall);
+    } else if (definition?.dataKey === "groupConsensus") {
+      normalized.groupConsensus = normalizeGroupConsensusData(activity.groupConsensus);
+    } else if (definition?.dataKey === "predictReveal") {
+      normalized.predictReveal = normalizePredictRevealData(activity.predictReveal);
+    } else if (definition?.dataKey === "stanceMap") {
+      normalized.stanceMap = normalizeStanceMapData(activity.stanceMap);
+    } else if (definition?.dataKey === "liveStance") {
+      normalized.liveStance = normalizeLiveStanceData(activity.liveStance);
     } else if (definition?.dataKey === "deliberation") {
       normalized.deliberation = {
         ...newDeliberationActivityData(),
@@ -547,7 +701,13 @@ function newBlankActivity() {
     deliberation: null,
     scale: null,
     ranking: null,
-    openText: null
+    openText: null,
+    questionWall: null,
+    groupConsensus: null,
+    predictReveal: null,
+    stanceMap: null,
+    liveStance: null,
+    confidence: newConfidenceData()
   };
 }
 
@@ -1321,9 +1481,159 @@ function readOpenTextEditor() {
   return normalizeOpenTextData({question:openTextQuestion.value.trim(),placeholder:openTextPlaceholder.value.trim(),maxLength:openTextMaxLength.value});
 }
 
+function loadQuestionWallEditor(data) {
+  const value=normalizeQuestionWallData(data);
+  questionWallQuestion.value=value.question;
+  questionWallPlaceholder.value=value.placeholder;
+  questionWallMaxLength.value=String(value.maxLength);
+  questionWallMaxPosts.value=String(value.maxPosts);
+  if (questionWallAllowReplies) questionWallAllowReplies.checked=value.allowReplies;
+  if (questionWallReplyMaxLength) questionWallReplyMaxLength.value=String(value.replyMaxLength);
+}
+function readQuestionWallEditor() {
+  return normalizeQuestionWallData({
+    question:questionWallQuestion.value.trim(),
+    placeholder:questionWallPlaceholder.value.trim(),
+    maxLength:questionWallMaxLength.value,
+    maxPosts:questionWallMaxPosts.value,
+    allowReplies:questionWallAllowReplies?.checked !== false,
+    replyMaxLength:questionWallReplyMaxLength?.value
+  });
+}
+
+function refreshGroupConsensusOptionRows() {
+  const rows=[...(groupConsensusOptionsEditor?.querySelectorAll(".group-consensus-option-row")||[])];
+  rows.forEach((row,index)=>{
+    row.querySelector(".ranking-editor-order").textContent=String(index+1);
+    row.querySelector(".group-consensus-option-remove").disabled=rows.length<=2;
+  });
+  if(addGroupConsensusOptionBtn)addGroupConsensusOptionBtn.disabled=rows.length>=8;
+}
+function addGroupConsensusOption(item=null) {
+  if(!groupConsensusOptionsEditor)return;
+  const count=groupConsensusOptionsEditor.querySelectorAll(".group-consensus-option-row").length;
+  if(count>=8){showToast("小組共識最多 8 個選項");return;}
+  const row=document.createElement("div");row.className="ranking-editor-row group-consensus-option-row";row.dataset.optionId=String(item?.id||createId());
+  row.innerHTML=`<span class="ranking-editor-order">${count+1}</span><input class="group-consensus-option-label" type="text" maxlength="100" placeholder="輸入共識選項" value="${escapeHtml(String(item?.label||""))}"><button class="btn btn-danger-soft group-consensus-option-remove" type="button">移除</button>`;
+  row.querySelector(".group-consensus-option-remove").addEventListener("click",()=>{if(groupConsensusOptionsEditor.querySelectorAll(".group-consensus-option-row").length<=2){showToast("小組共識至少需要 2 個選項");return;}row.remove();refreshGroupConsensusOptionRows();});
+  groupConsensusOptionsEditor.appendChild(row);refreshGroupConsensusOptionRows();
+}
+function loadGroupConsensusEditor(data) {
+  const d=normalizeGroupConsensusData(data);
+  groupConsensusQuestion.value=d.question;
+  groupConsensusOptionsEditor.innerHTML="";d.options.forEach(addGroupConsensusOption);
+  groupConsensusGroupSize.value=String(d.groupSize);
+  groupConsensusReasonPrompt.value=d.reasonPrompt;
+  groupConsensusReasonMaxLength.value=String(d.reasonMaxLength);
+  groupConsensusReasonRequired.checked=d.reasonRequired;
+}
+function readGroupConsensusEditor() {
+  return normalizeGroupConsensusData({
+    question:groupConsensusQuestion.value.trim(),
+    options:[...groupConsensusOptionsEditor.querySelectorAll(".group-consensus-option-row")].map(row=>({id:row.dataset.optionId,label:row.querySelector(".group-consensus-option-label").value.trim()})),
+    groupSize:groupConsensusGroupSize.value,reasonPrompt:groupConsensusReasonPrompt.value.trim(),reasonMaxLength:groupConsensusReasonMaxLength.value,reasonRequired:groupConsensusReasonRequired.checked
+  });
+}
+
+function loadConfidenceEditor(data) {
+  const value=normalizeConfidenceData(data);
+  confidenceEnabled.checked=value.enabled;
+  confidencePointCount.value=String(value.pointCount);
+  confidenceLowLabel.value=value.lowLabel;
+  confidenceHighLabel.value=value.highLabel;
+  confidenceSettings.classList.toggle("hidden",!value.enabled);
+}
+function readConfidenceEditor() {
+  return normalizeConfidenceData({enabled:confidenceEnabled.checked,pointCount:confidencePointCount.value,lowLabel:confidenceLowLabel.value.trim(),highLabel:confidenceHighLabel.value.trim()});
+}
+function refreshPredictOptionRows() {
+  const rows=[...(predictOptionsEditor?.querySelectorAll(".predict-option-row")||[])];
+  rows.forEach((row,index)=>{row.querySelector(".ranking-editor-order").textContent=String(index+1);row.querySelector(".predict-option-remove").disabled=rows.length<=2;});
+  if(addPredictOptionBtn)addPredictOptionBtn.disabled=rows.length>=10;
+}
+function addPredictOption(item=null) {
+  if(!predictOptionsEditor)return;
+  const count=predictOptionsEditor.querySelectorAll(".predict-option-row").length;
+  if(count>=10){showToast("預測題最多 10 個選項");return;}
+  const row=document.createElement("div");row.className="ranking-editor-row predict-option-row";row.dataset.optionId=String(item?.id||createId());
+  row.innerHTML=`<span class="ranking-editor-order">${count+1}</span><input class="predict-option-label" type="text" maxlength="100" placeholder="輸入判斷選項" value="${escapeHtml(String(item?.label||""))}"><button class="btn btn-danger-soft predict-option-remove" type="button">移除</button>`;
+  row.querySelector(".predict-option-remove").addEventListener("click",()=>{if(predictOptionsEditor.querySelectorAll(".predict-option-row").length<=2){showToast("至少需要 2 個選項");return;}row.remove();refreshPredictOptionRows();});
+  predictOptionsEditor.appendChild(row);refreshPredictOptionRows();
+}
+function loadPredictRevealEditor(data) {
+  const value=normalizePredictRevealData(data);predictQuestion.value=value.question;predictRevealTitle.value=value.revealTitle;predictRevealContent.value=value.revealContent;predictRejudgePrompt.value=value.rejudgePrompt;predictOptionsEditor.innerHTML="";value.options.forEach(addPredictOption);
+}
+function readPredictRevealEditor() {
+  return normalizePredictRevealData({question:predictQuestion.value.trim(),options:[...predictOptionsEditor.querySelectorAll(".predict-option-row")].map(row=>({id:row.dataset.optionId,label:row.querySelector(".predict-option-label").value.trim()})),revealTitle:predictRevealTitle.value.trim(),revealContent:predictRevealContent.value.trim(),rejudgePrompt:predictRejudgePrompt.value.trim()});
+}
+function loadStanceMapEditor(data) {
+  const value=normalizeStanceMapData(data);stanceQuestion.value=value.question;stanceXLeft.value=value.xLeft;stanceXRight.value=value.xRight;stanceYBottom.value=value.yBottom;stanceYTop.value=value.yTop;
+}
+function readStanceMapEditor() {
+  return normalizeStanceMapData({question:stanceQuestion.value.trim(),xLeft:stanceXLeft.value.trim(),xRight:stanceXRight.value.trim(),yBottom:stanceYBottom.value.trim(),yTop:stanceYTop.value.trim()});
+}
+
+function loadLiveStanceEditor(data) {
+  const value=normalizeLiveStanceData(data);
+  liveStanceQuestion.value=value.question;
+  liveStanceLeftLabel.value=value.leftLabel;
+  liveStanceRightLabel.value=value.rightLabel;
+  liveStanceAllowUndecided.checked=value.allowUndecided;
+  liveStanceUndecidedLabel.value=value.undecidedLabel;
+  updateLiveStanceUndecidedUi();
+}
+function readLiveStanceEditor() {
+  return normalizeLiveStanceData({
+    question:liveStanceQuestion.value.trim(),
+    leftLabel:liveStanceLeftLabel.value.trim(),
+    rightLabel:liveStanceRightLabel.value.trim(),
+    allowUndecided:liveStanceAllowUndecided.checked,
+    undecidedLabel:liveStanceUndecidedLabel.value.trim()
+  });
+}
+function updateLiveStanceUndecidedUi() {
+  liveStanceUndecidedLabelField?.classList.toggle("hidden",!liveStanceAllowUndecided?.checked);
+}
+
 // ---------- 模式切換 ----------
 function getSelectedMode() {
   return modeInputs.find(input => input.checked)?.value || "drag-reveal";
+}
+
+function setModeFamilyExpanded(card, expanded) {
+  if (!card) return;
+  card.classList.toggle("collapsed",!expanded);
+  const head=card.querySelector(".mode-family-head");
+  head?.setAttribute("aria-expanded",String(expanded));
+}
+
+function syncModeFamilyAccordion(mode=getSelectedMode()) {
+  const selectedInput=modeInputs.find(input=>input.value===mode) || modeInputs.find(input=>input.checked);
+  const selectedCard=selectedInput?.closest(".mode-family-card") || document.querySelector(".mode-family-card");
+  document.querySelectorAll(".mode-family-card").forEach(card=>setModeFamilyExpanded(card,card===selectedCard));
+}
+
+function initModeFamilyAccordion() {
+  document.querySelectorAll(".mode-family-card").forEach(card=>{
+    const head=card.querySelector(".mode-family-head");
+    if (!head) return;
+    head.setAttribute("role","button");
+    head.setAttribute("tabindex","0");
+    const toggle=()=>{
+      const willOpen=card.classList.contains("collapsed");
+      if (willOpen) document.querySelectorAll(".mode-family-card").forEach(other=>setModeFamilyExpanded(other,other===card));
+      else setModeFamilyExpanded(card,false);
+    };
+    head.addEventListener("click",toggle);
+    head.addEventListener("keydown",event=>{
+      if (!["Enter"," "].includes(event.key)) return;
+      event.preventDefault(); toggle();
+    });
+  });
+  activityModulePicker?.addEventListener("toggle",()=>{
+    if (activityModulePicker.open) syncModeFamilyAccordion();
+  });
+  syncModeFamilyAccordion();
 }
 
 function setSelectedMode(mode) {
@@ -1333,6 +1643,7 @@ function setSelectedMode(mode) {
   });
   applyModeUI(normalized);
   ensureEditorForMode(normalized);
+  syncModeFamilyAccordion(normalized);
 }
 
 function applyModeUI(mode) {
@@ -1345,8 +1656,9 @@ function applyModeUI(mode) {
     if (item.editorClass) editorPanel?.classList.toggle(item.editorClass, item.id === mode);
   });
 
-  if (templateKicker) templateKicker.textContent = definition?.templateKicker || "模板 01";
+  if (templateKicker) templateKicker.textContent = definition?.templateKicker || "活動模組";
   if (templateTitle) templateTitle.textContent = definition?.templateTitle || definition?.label || "選擇與揭示";
+  if (activityModulePickerCurrent) activityModulePickerCurrent.textContent = definition?.templateTitle || definition?.label || "選擇與揭示";
 
   standardTaskToolbar?.classList.toggle("hidden", isSpecial);
   caseEditor?.classList.toggle("hidden", isSpecial);
@@ -1357,6 +1669,12 @@ function applyModeUI(mode) {
   scaleEditorSection?.classList.toggle("hidden", editorKind !== "scale-spectrum");
   rankingEditorSection?.classList.toggle("hidden", editorKind !== "ranking");
   openTextEditorSection?.classList.toggle("hidden", editorKind !== "open-text");
+  questionWallEditorSection?.classList.toggle("hidden", editorKind !== "question-wall");
+  groupConsensusEditorSection?.classList.toggle("hidden", editorKind !== "group-consensus");
+  confidenceEditorCard?.classList.toggle("hidden", editorKind === "question-wall" || editorKind === "group-consensus");
+  predictRevealEditorSection?.classList.toggle("hidden", editorKind !== "predict-reveal");
+  stanceMapEditorSection?.classList.toggle("hidden", editorKind !== "stance-map");
+  liveStanceEditorSection?.classList.toggle("hidden", editorKind !== "live-stance");
 
   document.querySelectorAll(".card-builder-label").forEach(label => {
     label.textContent = isOpen ? "標籤設定" : "字卡設定";
@@ -1395,6 +1713,12 @@ function loadIntoEditor(activity) {
   if (rankingItemsEditor) rankingItemsEditor.innerHTML = "";
   if (scaleQuestion) loadScaleEditor(newScaleActivityData());
   if (openTextQuestion) loadOpenTextEditor(newOpenTextActivityData());
+  if (questionWallQuestion) loadQuestionWallEditor(newQuestionWallActivityData());
+  if (groupConsensusQuestion) loadGroupConsensusEditor(newGroupConsensusActivityData());
+  if (predictOptionsEditor) predictOptionsEditor.innerHTML="";
+  if (stanceQuestion) loadStanceMapEditor(newStanceMapActivityData());
+  if (liveStanceQuestion) loadLiveStanceEditor(newLiveStanceActivityData());
+  loadConfidenceEditor(activity.confidence || newConfidenceData());
 
   const template = ActivityModules?.normalizeMode?.(activity.template) || "drag-reveal";
   const handled = ActivityModules?.invoke?.("editor", template, "load", activity);
@@ -1420,7 +1744,13 @@ function readEditor() {
     deliberation: null,
     scale: null,
     ranking: null,
-    openText: null
+    openText: null,
+    questionWall: null,
+    groupConsensus: null,
+    predictReveal: null,
+    stanceMap: null,
+    liveStance: null,
+    confidence: readConfidenceEditor()
   };
   const patch = ActivityModules?.invoke?.("editor", template, "read") || {};
   return {...base, ...patch, template};
@@ -1448,6 +1778,50 @@ function validateRankingActivity(activity) {
 function validateOpenTextActivity(activity) {
   const data=normalizeOpenTextData(activity.openText);
   if (!data.question.trim()) return "開放文字尚未填寫提問";
+  return "";
+}
+function validateQuestionWallActivity(activity) {
+  const data=normalizeQuestionWallData(activity.questionWall);
+  if (!data.question.trim()) return "匿名提問牆尚未填寫提問提示";
+  if (data.maxPosts < 1 || data.maxPosts > 5) return "每人最多提問數需介於 1～5";
+  if (data.replyMaxLength < 30 || data.replyMaxLength > 300) return "同儕回應字數上限需介於 30～300";
+  return "";
+}
+function validateGroupConsensusActivity(activity) {
+  const data=normalizeGroupConsensusData(activity.groupConsensus);
+  if(!data.question.trim())return "小組共識尚未填寫核心提問";
+  if(data.options.length<2)return "小組共識至少需要 2 個選項";
+  if(data.options.some(item=>!item.label.trim()))return "每個共識選項都需要填寫內容";
+  if(new Set(data.options.map(item=>item.label)).size!==data.options.length)return "小組共識選項不可重複";
+  if(data.groupSize<2||data.groupSize>6)return "建議每組人數需介於 2～6";
+  return "";
+}
+function validatePredictRevealActivity(activity) {
+  const data=normalizePredictRevealData(activity.predictReveal);
+  if(!data.question.trim()) return "預測揭曉尚未填寫預測題目";
+  if(data.options.length<2) return "預測揭曉至少需要 2 個選項";
+  if(data.options.some(item=>!item.label.trim())) return "每個預測選項都需要填寫內容";
+  if(!data.revealContent.trim()) return "預測揭曉尚未填寫揭曉內容";
+  return "";
+}
+function validateStanceMapActivity(activity) {
+  const data=normalizeStanceMapData(activity.stanceMap);
+  if(!data.question.trim()) return "二維立場圖尚未填寫題目";
+  if(!data.xLeft.trim()||!data.xRight.trim()||!data.yBottom.trim()||!data.yTop.trim()) return "二維立場圖四個軸端標籤都需要填寫";
+  return "";
+}
+function validateLiveStanceActivity(activity) {
+  const data=normalizeLiveStanceData(activity.liveStance);
+  if(!data.question.trim()) return "即時立場拉鋸尚未填寫核心提問";
+  if(!data.leftLabel.trim() || !data.rightLabel.trim()) return "即時立場拉鋸左右兩側立場都需要填寫";
+  if(data.leftLabel.trim()===data.rightLabel.trim()) return "左右兩側立場文字不可相同";
+  if(data.allowUndecided && !data.undecidedLabel.trim()) return "已開啟未決定選項，請填寫未決定文字";
+  return "";
+}
+function validateConfidenceActivity(activity) {
+  const data=normalizeConfidenceData(activity.confidence);
+  if(!data.enabled)return "";
+  if(!data.lowLabel.trim()||!data.highLabel.trim())return "信心程度兩端標籤都需要填寫";
   return "";
 }
 
@@ -1547,7 +1921,8 @@ function validateStandardActivity(activity) {
 }
 
 function validateActivity(activity) {
-  return ActivityModules?.invoke?.("editor", activity.template, "validate", activity) ?? validateStandardActivity(activity);
+  const moduleError=ActivityModules?.invoke?.("editor", activity.template, "validate", activity) ?? validateStandardActivity(activity);
+  return moduleError || validateConfidenceActivity(activity);
 }
 
 function saveCurrent(showMessage = true) {
@@ -1657,6 +2032,27 @@ function buildOpenTextSnapshot(activity) {
   const d=normalizeOpenTextData(activity.openText);
   return {q:d.question,p:d.placeholder,m:d.maxLength};
 }
+function buildQuestionWallSnapshot(activity) {
+  const d=normalizeQuestionWallData(activity.questionWall);
+  return {q:d.question,p:d.placeholder,m:d.maxLength,mp:d.maxPosts,ar:d.allowReplies,rm:d.replyMaxLength};
+}
+function buildGroupConsensusSnapshot(activity) {
+  const d=normalizeGroupConsensusData(activity.groupConsensus);
+  return {q:d.question,o:d.options.map(item=>({i:item.id,l:item.label})),gs:d.groupSize,rp:d.reasonPrompt,rm:d.reasonMaxLength,rr:d.reasonRequired};
+}
+function buildPredictRevealSnapshot(activity) {
+  const d=normalizePredictRevealData(activity.predictReveal);return {q:d.question,o:d.options.map(item=>({i:item.id,l:item.label})),rt:d.revealTitle,rc:d.revealContent,rp:d.rejudgePrompt};
+}
+function buildStanceMapSnapshot(activity) {
+  const d=normalizeStanceMapData(activity.stanceMap);return {q:d.question,xl:d.xLeft,xr:d.xRight,yb:d.yBottom,yt:d.yTop};
+}
+function buildLiveStanceSnapshot(activity) {
+  const d=normalizeLiveStanceData(activity.liveStance);
+  return {q:d.question,l:d.leftLabel,r:d.rightLabel,u:d.allowUndecided,ul:d.undecidedLabel};
+}
+function buildConfidenceSnapshot(activity) {
+  const d=normalizeConfidenceData(activity.confidence);return d.enabled?{e:true,n:d.pointCount,l:d.lowLabel,r:d.highLabel}:null;
+}
 
 function buildDeliberationSnapshot(activity,{includeLayers=true,includeTeacherNotes=false}={}) {
   const d=activity.deliberation || newDeliberationActivityData();
@@ -1693,7 +2089,9 @@ async function encodeCompactActivity(compact) {
 }
 
 async function buildDeliberationShellEncoded(activity) {
-  return encodeCompactActivity({t:activity.title,s:activity.subtitle,m:"layered-deliberation",d:buildDeliberationSnapshot(activity,{includeLayers:false})});
+  const compact={t:activity.title,s:activity.subtitle,m:"layered-deliberation",d:buildDeliberationSnapshot(activity,{includeLayers:false})};
+  const confidence=buildConfidenceSnapshot(activity);if(confidence)compact.cf=confidence;
+  return encodeCompactActivity(compact);
 }
 
 async function encodeActivity(activity) {
@@ -1716,6 +2114,8 @@ async function encodeActivity(activity) {
       };
     })
   };
+  const confidence=["question-wall","group-consensus"].includes(activity.template) ? null : buildConfidenceSnapshot(activity);
+  if(confidence) compact.cf=confidence;
   return encodeCompactActivity(compact);
 }
 
@@ -1847,6 +2247,8 @@ function createNewActivity() {
   persist();
   renderLibrary();
   loadIntoEditor(activity);
+  if (activityModulePicker) activityModulePicker.open = true;
+  activityModulePicker?.scrollIntoView({behavior:"smooth",block:"start"});
   showToast("已建立新活動");
 }
 
@@ -1878,7 +2280,8 @@ async function buildSessionActivitySnapshot(activityId) {
     stageCount: ActivityModules?.stageCount?.(activity) || 1,
     encoded: await encodeActivity(activity),
     shellEncoded: await (ActivityModules?.invoke?.("editor", activity.template, "buildShellEncoded", activity) || ""),
-    deliberationData: ActivityModules?.invoke?.("editor", activity.template, "teacherData", activity) || null
+    deliberationData: ActivityModules?.invoke?.("editor", activity.template, "teacherData", activity) || null,
+    moduleData: ActivityModules?.invoke?.("editor", activity.template, "sessionData", activity) || null
   };
 }
 
@@ -1967,6 +2370,46 @@ function registerActivityEditorModules() {
     encode:activity => ({t:activity.title,s:activity.subtitle,m:"open-text",tx:buildOpenTextSnapshot(activity)})
   });
 
+  register("question-wall", {
+    ensure:() => { loadQuestionWallEditor(readQuestionWallEditor?.() || newQuestionWallActivityData()); return true; },
+    load:activity => { loadQuestionWallEditor(activity.questionWall || newQuestionWallActivityData()); return true; },
+    read:() => ({questionWall:readQuestionWallEditor()}),
+    validate:validateQuestionWallActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"question-wall",qw:buildQuestionWallSnapshot(activity)})
+  });
+
+  register("group-consensus", {
+    ensure:() => { loadGroupConsensusEditor(readGroupConsensusEditor?.() || newGroupConsensusActivityData()); return true; },
+    load:activity => { loadGroupConsensusEditor(activity.groupConsensus || newGroupConsensusActivityData()); return true; },
+    read:() => ({groupConsensus:readGroupConsensusEditor()}),
+    validate:validateGroupConsensusActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"group-consensus",gc:buildGroupConsensusSnapshot(activity)}),
+    sessionData:activity => normalizeGroupConsensusData(activity.groupConsensus)
+  });
+
+  register("predict-reveal", {
+    ensure:() => { if(!predictOptionsEditor.children.length)loadPredictRevealEditor(newPredictRevealActivityData()); return true; },
+    load:activity => { loadPredictRevealEditor(activity.predictReveal || newPredictRevealActivityData()); return true; },
+    read:() => ({predictReveal:readPredictRevealEditor()}),
+    validate:validatePredictRevealActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"predict-reveal",pr:buildPredictRevealSnapshot(activity)})
+  });
+  register("stance-map", {
+    ensure:() => { loadStanceMapEditor(readStanceMapEditor?.() || newStanceMapActivityData()); return true; },
+    load:activity => { loadStanceMapEditor(activity.stanceMap || newStanceMapActivityData()); return true; },
+    read:() => ({stanceMap:readStanceMapEditor()}),
+    validate:validateStanceMapActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"stance-map",sm:buildStanceMapSnapshot(activity)})
+  });
+
+  register("live-stance", {
+    ensure:() => { loadLiveStanceEditor(readLiveStanceEditor?.() || newLiveStanceActivityData()); return true; },
+    load:activity => { loadLiveStanceEditor(activity.liveStance || newLiveStanceActivityData()); return true; },
+    read:() => ({liveStance:readLiveStanceEditor()}),
+    validate:validateLiveStanceActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"live-stance",ls:buildLiveStanceSnapshot(activity)})
+  });
+
   register("layered-deliberation", {
     ensure:() => {
       if (!deliberationLayersEditor.children.length) loadDeliberationEditor(newDeliberationActivityData());
@@ -1983,6 +2426,11 @@ function registerActivityEditorModules() {
     teacherData:activity => buildDeliberationSnapshot(activity,{includeLayers:true,includeTeacherNotes:true})
   });
 }
+
+
+confidenceEnabled?.addEventListener("change",()=>confidenceSettings?.classList.toggle("hidden",!confidenceEnabled.checked));
+liveStanceAllowUndecided?.addEventListener("change",updateLiveStanceUndecidedUi);
+addPredictOptionBtn?.addEventListener("click",()=>addPredictOption());
 
 registerActivityEditorModules();
 
@@ -2020,6 +2468,7 @@ addDeliberationOptionBtn?.addEventListener("click", () => addDeliberationOption(
 addDeliberationReasonChoiceBtn?.addEventListener("click", () => addDeliberationReasonChoice());
 deliberationReasonMode?.addEventListener("change", () => updateDeliberationReasonModeUi({ensureChoice:true}));
 addRankingItemBtn?.addEventListener("click",()=>addRankingEditorItem());
+addGroupConsensusOptionBtn?.addEventListener("click",()=>addGroupConsensusOption());
 el("saveBtn").addEventListener("click", () => saveCurrent(true));
 
 el("duplicateBtn").addEventListener("click", () => {
@@ -2065,8 +2514,25 @@ modeInputs.forEach(input => {
     if (!input.checked) return;
     applyModeUI(input.value);
     ensureEditorForMode(input.value);
+    syncModeFamilyAccordion(input.value);
+    if (activityModulePicker) activityModulePicker.open = false;
   });
 });
+
+activityMoreToggleBtn?.addEventListener("click",()=>{
+  const expanded=!activityStickyActions?.classList.contains("mobile-more-open");
+  activityStickyActions?.classList.toggle("mobile-more-open",expanded);
+  activityMoreToggleBtn.setAttribute("aria-expanded",String(expanded));
+  activityMoreToggleBtn.textContent=expanded ? "收合更多" : "⋯ 更多";
+});
+
+document.querySelectorAll(".activity-secondary-action").forEach(button=>button.addEventListener("click",()=>{
+  activityStickyActions?.classList.remove("mobile-more-open");
+  if (activityMoreToggleBtn) {
+    activityMoreToggleBtn.setAttribute("aria-expanded","false");
+    activityMoreToggleBtn.textContent="⋯ 更多";
+  }
+}));
 
 el("copyUrlBtn").addEventListener("click", async () => {
   try {
@@ -2129,7 +2595,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.19.0",
+    appVersion:"2.26.1",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),
@@ -2211,5 +2677,6 @@ document.getElementById("backupFileInput")?.addEventListener("change", event => 
   importTeachingBackup(event.target.files?.[0]);
 });
 
+initModeFamilyAccordion();
 loadActivities();
 

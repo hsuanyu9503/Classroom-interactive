@@ -443,17 +443,26 @@
     }
 
     const sessions = loadLocalSessions();
-    const id = crypto?.randomUUID?.() || `local-${Date.now()}`;
+    const id = crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
     const session = {
       id, code, title, teacherToken, mode:"local", sessionKind:"activity",
       activityMode: activityMode || "",
       activityEncoded,
       stageCount: totalStages,
       currentStage: 1,
+      roundState: ActivityModules?.get?.(activityMode)?.initialRoundState || "",
       status:"active",
       createdAt:new Date().toISOString(),
       participants:[],
-      responses:[]
+      responses:[],
+      liveStanceEvents:[],
+      liveStanceCheckpoints:[],
+      questionWallPosts:[],
+      questionWallVotes:[],
+      questionWallReplies:[],
+      sessionGroups:[],
+      sessionGroupMembers:[],
+      groupConsensusSubmissions:[]
     };
     sessions.unshift(session);
     saveLocalSessions(sessions);
@@ -495,6 +504,7 @@
         activityMode:activityMode || "",
         stageCount:Math.max(1,Number(stageCount)||1),
         currentStage:1,
+        roundState:ActivityModules?.get?.(activityMode)?.initialRoundState || "",
         createdAt:new Date().toISOString()
       };
       rememberTeacherSession(session);
@@ -502,7 +512,7 @@
     }
 
     const sessions = loadLocalSessions();
-    const id = crypto?.randomUUID?.() || `local-course-${Date.now()}`;
+    const id = crypto?.randomUUID?.() || `local-course-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
     const session = {
       id,code,title,teacherToken,mode:"local",sessionKind:"course",
       courseId:courseId || "",
@@ -512,11 +522,20 @@
       activityMode:activityMode || "",
       stageCount:Math.max(1,Number(stageCount)||1),
       currentStage:1,
+      roundState:ActivityModules?.get?.(activityMode)?.initialRoundState || "",
       status:"active",
       createdAt:new Date().toISOString(),
       participants:[],
       responses:[],
-      progress:[]
+      progress:[],
+      liveStanceEvents:[],
+      liveStanceCheckpoints:[],
+      questionWallPosts:[],
+      questionWallVotes:[],
+      questionWallReplies:[],
+      sessionGroups:[],
+      sessionGroupMembers:[],
+      groupConsensusSubmissions:[]
     };
     sessions.unshift(session);
     saveLocalSessions(sessions);
@@ -574,7 +593,7 @@
     let participant = session.participants.find(item => item.studentCode === cleanStudent);
     if (!participant) {
       participant = {
-        id:crypto?.randomUUID?.() || `p-${Date.now()}`,
+        id:crypto?.randomUUID?.() || `p-${Date.now()}-${Math.random().toString(36).slice(2,10)}`,
         studentCode:cleanStudent,
         participantToken,
         joinedAt:new Date().toISOString()
@@ -643,6 +662,13 @@
     const session = sessions.find(item => item.id === context.sessionId);
     if (!session) throw new Error("本機 Session 已不存在");
     if (session.status !== "active") throw new Error("Session 已結束");
+    if (mode === "group-consensus" && session.activityMode === "group-consensus") {
+      if (stageKey !== "individual") throw new Error("小組共識的個人階段資料格式不正確");
+      if (Number(session.currentStage || 1) !== 1) throw new Error("個人判斷階段已結束");
+    }
+    if (mode === "live-stance" && session.activityMode === "live-stance" && (session.roundState || "open") !== "open") {
+      throw new Error("老師目前已鎖定表態");
+    }
     const participant = session.participants.find(item => item.id === context.participantId && item.participantToken === context.participantToken);
     if (!participant) throw new Error("學生加入憑證已失效");
 
@@ -661,10 +687,172 @@
       submittedAt:new Date().toISOString()
     };
     const index = session.responses.findIndex(item => item.key === key);
+    if (mode === "live-stance" && stageKey === "final") {
+      const previous = index >= 0 ? String(session.responses[index]?.selectedType || "") : "";
+      const next = String(selectedType || "");
+      if (next && next !== previous) {
+        session.liveStanceEvents = Array.isArray(session.liveStanceEvents) ? session.liveStanceEvents : [];
+        session.liveStanceEvents.push({
+          id:crypto?.randomUUID?.() || `lse-${Date.now()}-${session.liveStanceEvents.length+1}`,
+          participantId:context.participantId,
+          studentCode:context.studentCode,
+          side:next,
+          previousSide:previous || "",
+          payload:{...(payload || {})},
+          createdAt:new Date().toISOString()
+        });
+      }
+    }
     if (index >= 0) session.responses[index] = record;
     else session.responses.push(record);
     saveLocalSessions(sessions);
     return {ok:true};
+  }
+
+  async function submitQuestionWallPost(text, maxPosts = 3) {
+    const context=getParticipantContext();
+    if(!context) throw new Error("尚未加入課堂 Session");
+    const clean=String(text||"").trim();
+    if(!clean) throw new Error("問題內容不能空白");
+    if(clean.length>500) throw new Error("單則問題最多 500 字");
+    const limit=Math.max(1,Math.min(5,Math.round(Number(maxPosts)||3)));
+    if(context.mode==="cloud") {
+      const result=await rpc("submit_question_wall_post",{
+        p_session_id:context.sessionId,
+        p_participant_token:context.participantToken,
+        p_text:clean,
+        p_node_ref:context.currentNodeRef || null,
+        p_max_posts:limit
+      },context.cloudConfig);
+      publishRealtime(context.sessionId,"question-wall",context.cloudConfig);
+      return typeof result==="string"?{id:result}:result;
+    }
+    const sessions=loadLocalSessions();
+    const session=sessions.find(item=>item.id===context.sessionId);
+    if(!session||session.status!=="active") throw new Error("Session 已結束或不存在");
+    const participant=session.participants.find(item=>item.id===context.participantId&&item.participantToken===context.participantToken);
+    if(!participant) throw new Error("學生加入憑證已失效");
+    session.questionWallPosts=Array.isArray(session.questionWallPosts)?session.questionWallPosts:[];
+    session.questionWallVotes=Array.isArray(session.questionWallVotes)?session.questionWallVotes:[];
+    session.questionWallReplies=Array.isArray(session.questionWallReplies)?session.questionWallReplies:[];
+    const nodeRef=context.currentNodeRef||"";
+    const ownCount=session.questionWallPosts.filter(post=>post.participantId===participant.id&&(post.nodeRef||"")===nodeRef).length;
+    if(ownCount>=limit) throw new Error(`每人最多提出 ${limit} 個問題`);
+    const post={id:crypto?.randomUUID?.()||`qwp-${Date.now()}-${Math.random().toString(36).slice(2,10)}`,participantId:participant.id,studentCode:participant.studentCode,nodeRef,text:clean,createdAt:new Date().toISOString()};
+    session.questionWallPosts.push(post);saveLocalSessions(sessions);return {id:post.id};
+  }
+
+  async function toggleQuestionWallVote(postId) {
+    const context=getParticipantContext();
+    if(!context) throw new Error("尚未加入課堂 Session");
+    const cleanId=String(postId||"").trim();if(!cleanId)throw new Error("找不到這則提問");
+    if(context.mode==="cloud") {
+      const result=await rpc("toggle_question_wall_vote",{p_session_id:context.sessionId,p_participant_token:context.participantToken,p_post_id:cleanId},context.cloudConfig);
+      publishRealtime(context.sessionId,"question-wall-vote",context.cloudConfig);
+      return result;
+    }
+    const sessions=loadLocalSessions();const session=sessions.find(item=>item.id===context.sessionId);
+    if(!session||session.status!=="active")throw new Error("Session 已結束或不存在");
+    const participant=session.participants.find(item=>item.id===context.participantId&&item.participantToken===context.participantToken);
+    if(!participant)throw new Error("學生加入憑證已失效");
+    session.questionWallPosts=Array.isArray(session.questionWallPosts)?session.questionWallPosts:[];session.questionWallVotes=Array.isArray(session.questionWallVotes)?session.questionWallVotes:[];
+    const post=session.questionWallPosts.find(item=>item.id===cleanId);if(!post)throw new Error("找不到這則提問");
+    if(post.participantId===participant.id)throw new Error("不能對自己的提問按 ＋1");
+    const index=session.questionWallVotes.findIndex(v=>v.postId===cleanId&&v.participantId===participant.id);
+    let voted=true;if(index>=0){session.questionWallVotes.splice(index,1);voted=false;}else session.questionWallVotes.push({postId:cleanId,participantId:participant.id,createdAt:new Date().toISOString()});
+    saveLocalSessions(sessions);return {voted};
+  }
+
+  async function submitQuestionWallReply(postId, text, maxLength = 140) {
+    const context=getParticipantContext();
+    if(!context) throw new Error("尚未加入課堂 Session");
+    const cleanId=String(postId||"").trim();
+    const clean=String(text||"").trim();
+    const limit=Math.max(30,Math.min(300,Math.round(Number(maxLength)||140)));
+    if(!cleanId) throw new Error("找不到這則提問");
+    if(!clean) throw new Error("回應內容不能空白");
+    if(clean.length>limit) throw new Error(`回應最多 ${limit} 字`);
+    if(context.mode==="cloud") {
+      const result=await rpc("submit_question_wall_reply",{p_session_id:context.sessionId,p_participant_token:context.participantToken,p_post_id:cleanId,p_text:clean,p_max_length:limit},context.cloudConfig);
+      publishRealtime(context.sessionId,"question-wall-reply",context.cloudConfig);
+      return result;
+    }
+    const sessions=loadLocalSessions();const session=sessions.find(item=>item.id===context.sessionId);
+    if(!session||session.status!=="active") throw new Error("Session 已結束或不存在");
+    const participant=session.participants.find(item=>item.id===context.participantId&&item.participantToken===context.participantToken);
+    if(!participant) throw new Error("學生加入憑證已失效");
+    session.questionWallPosts=Array.isArray(session.questionWallPosts)?session.questionWallPosts:[];
+    session.questionWallReplies=Array.isArray(session.questionWallReplies)?session.questionWallReplies:[];
+    const post=session.questionWallPosts.find(item=>item.id===cleanId);if(!post) throw new Error("找不到這則提問");
+    if(post.participantId===participant.id) throw new Error("不能回應自己的提問");
+    let reply=session.questionWallReplies.find(item=>item.postId===cleanId&&item.participantId===participant.id);
+    if(reply){reply.text=clean;reply.updatedAt=new Date().toISOString();}
+    else {reply={id:crypto?.randomUUID?.()||`qwr-${Date.now()}-${Math.random().toString(36).slice(2,10)}`,postId:cleanId,participantId:participant.id,studentCode:participant.studentCode,text:clean,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};session.questionWallReplies.push(reply);}
+    saveLocalSessions(sessions);return {id:reply.id,updated_at:reply.updatedAt};
+  }
+
+  async function deleteQuestionWallReply(sessionMeta, replyId) {
+    if(!sessionMeta?.id||!sessionMeta?.teacherToken)throw new Error("Session 資料不完整");
+    const cleanId=String(replyId||"").trim();if(!cleanId)throw new Error("找不到這則回應");
+    if(sessionMeta.mode==="cloud") {
+      await rpc("delete_question_wall_reply",{p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken,p_reply_id:cleanId});
+      publishRealtime(sessionMeta.id,"question-wall-reply-delete");return true;
+    }
+    const sessions=loadLocalSessions();const session=sessions.find(item=>item.id===sessionMeta.id&&item.teacherToken===sessionMeta.teacherToken);
+    if(!session)throw new Error("找不到本機 Session");
+    session.questionWallReplies=Array.isArray(session.questionWallReplies)?session.questionWallReplies:[];
+    const before=session.questionWallReplies.length;session.questionWallReplies=session.questionWallReplies.filter(reply=>reply.id!==cleanId);
+    if(session.questionWallReplies.length===before)throw new Error("找不到這則回應");
+    saveLocalSessions(sessions);return true;
+  }
+
+  async function deleteQuestionWallPost(sessionMeta, postId) {
+    if(!sessionMeta?.id||!sessionMeta?.teacherToken)throw new Error("Session 資料不完整");
+    const cleanId=String(postId||"").trim();if(!cleanId)throw new Error("找不到這則提問");
+    if(sessionMeta.mode==="cloud") {
+      await rpc("delete_question_wall_post",{p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken,p_post_id:cleanId});
+      publishRealtime(sessionMeta.id,"question-wall-delete");return true;
+    }
+    const sessions=loadLocalSessions();const session=sessions.find(item=>item.id===sessionMeta.id&&item.teacherToken===sessionMeta.teacherToken);
+    if(!session)throw new Error("找不到本機 Session");
+    session.questionWallPosts=Array.isArray(session.questionWallPosts)?session.questionWallPosts:[];session.questionWallVotes=Array.isArray(session.questionWallVotes)?session.questionWallVotes:[];session.questionWallReplies=Array.isArray(session.questionWallReplies)?session.questionWallReplies:[];
+    session.questionWallPosts=session.questionWallPosts.filter(post=>post.id!==cleanId);session.questionWallVotes=session.questionWallVotes.filter(v=>v.postId!==cleanId);session.questionWallReplies=session.questionWallReplies.filter(r=>r.postId!==cleanId);
+    saveLocalSessions(sessions);return true;
+  }
+
+  async function assignSessionGroups(sessionMeta, groupSize = 4) {
+    if(!sessionMeta?.id||!sessionMeta?.teacherToken)throw new Error("Session 資料不完整");
+    const size=Math.max(2,Math.min(6,Math.round(Number(groupSize)||4)));
+    if(sessionMeta.mode==="cloud") {
+      const result=await rpc("assign_session_groups",{p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken,p_group_size:size});
+      publishRealtime(sessionMeta.id,"group-assignment");return result;
+    }
+    const sessions=loadLocalSessions();const session=sessions.find(item=>item.id===sessionMeta.id&&item.teacherToken===sessionMeta.teacherToken);
+    if(!session||session.status!=="active")throw new Error("找不到進行中的本機 Session");
+    const participants=[...(session.participants||[])];if(participants.length<2)throw new Error("至少需要 2 位學生才能分組");
+    for(let i=participants.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[participants[i],participants[j]]=[participants[j],participants[i]];}
+    // 「每組約 N 人」而不是硬性上限：若照 ceil 分組會產生單人組，寧可讓部分小組多 1 人。
+    const groupCount=Math.max(1,Math.min(Math.ceil(participants.length/size),Math.floor(participants.length/2)));
+    session.sessionGroups=Array.from({length:groupCount},(_,index)=>({id:crypto?.randomUUID?.()||`grp-${Date.now()}-${index}-${Math.random().toString(36).slice(2,8)}`,groupIndex:index+1,label:`第 ${index+1} 組`,createdAt:new Date().toISOString()}));
+    session.sessionGroupMembers=[];participants.forEach((participant,index)=>{const group=session.sessionGroups[index%groupCount];session.sessionGroupMembers.push({groupId:group.id,participantId:participant.id,createdAt:new Date().toISOString()});});
+    session.groupConsensusSubmissions=[];saveLocalSessions(sessions);return {group_count:groupCount,participant_count:participants.length};
+  }
+
+  async function submitGroupConsensus({selectedType="",payload={},nodeRef=""}={}) {
+    const context=getParticipantContext();if(!context)throw new Error("尚未加入課堂 Session");const choice=String(selectedType||"").trim();if(!choice)throw new Error("請先選擇小組共識答案");
+    if(context.mode==="cloud") {
+      const result=await rpc("submit_group_consensus",{p_session_id:context.sessionId,p_participant_token:context.participantToken,p_selected_type:choice,p_payload:payload||{},p_node_ref:nodeRef||context.currentNodeRef||null},context.cloudConfig);
+      publishRealtime(context.sessionId,"group-consensus",context.cloudConfig);return result;
+    }
+    const sessions=loadLocalSessions();const session=sessions.find(item=>item.id===context.sessionId);if(!session||session.status!=="active")throw new Error("Session 已結束或不存在");
+    if(session.activityMode!=="group-consensus"||Number(session.currentStage||1)<2)throw new Error("小組共識尚未開放");
+    const participant=session.participants.find(item=>item.id===context.participantId&&item.participantToken===context.participantToken);if(!participant)throw new Error("學生加入憑證已失效");
+    const member=(session.sessionGroupMembers||[]).find(item=>item.participantId===participant.id);if(!member)throw new Error("你目前尚未被分組");
+    session.groupConsensusSubmissions=Array.isArray(session.groupConsensusSubmissions)?session.groupConsensusSubmissions:[];const ref=context.sessionKind==="course"?(nodeRef||context.currentNodeRef||""):"";
+    let row=session.groupConsensusSubmissions.find(item=>item.groupId===member.groupId&&(item.nodeRef||"")===ref);
+    if(row){row.selectedType=choice;row.payload={...(payload||{})};row.submittedBy=participant.id;row.updatedAt=new Date().toISOString();}
+    else{row={id:crypto?.randomUUID?.()||`gcs-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,groupId:member.groupId,nodeRef:ref,selectedType:choice,payload:{...(payload||{})},submittedBy:participant.id,submittedAt:new Date().toISOString(),updatedAt:new Date().toISOString()};session.groupConsensusSubmissions.push(row);}
+    saveLocalSessions(sessions);return {id:row.id,updated_at:row.updatedAt};
   }
 
   function validateTeacherHandoffPackage(payload) {
@@ -705,7 +893,7 @@
     const config = getConfig();
     if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
     return {
-      schema:"classroom-teacher-handoff", version:1, appVersion:"2.19.0", exportedAt:new Date().toISOString(),
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.26.1", exportedAt:new Date().toISOString(),
       warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
       cloud:{url:config.url,key:config.key},
       session:{
@@ -759,7 +947,23 @@
         p_session_id: sessionMeta.id,
         p_teacher_token: sessionMeta.teacherToken
       });
-      return typeof result === "string" ? JSON.parse(result) : result;
+      const snapshot = typeof result === "string" ? JSON.parse(result) : (result || {});
+      if ((snapshot?.activity_mode || sessionMeta.activityMode) === "live-stance") {
+        try {
+          const historyResult = await rpc("get_live_stance_history", {
+            p_session_id:sessionMeta.id,
+            p_teacher_token:sessionMeta.teacherToken
+          });
+          const history = typeof historyResult === "string" ? JSON.parse(historyResult) : (historyResult || {});
+          snapshot.live_stance_events = Array.isArray(history.live_stance_events) ? history.live_stance_events : [];
+          snapshot.live_stance_checkpoints = Array.isArray(history.live_stance_checkpoints) ? history.live_stance_checkpoints : [];
+        } catch (error) {
+          console.warn("無法取得即時立場歷程",error);
+          snapshot.live_stance_events = [];
+          snapshot.live_stance_checkpoints = [];
+        }
+      }
+      return snapshot;
     }
 
     const session = loadLocalSessions().find(item => item.id === sessionMeta.id && item.teacherToken === sessionMeta.teacherToken);
@@ -779,12 +983,32 @@
       stage_count:session.stageCount || 1,
       round_state:session.roundState || "",
       participant_count:session.participants.length,
-      response_count:session.responses.length,
+      response_count:session.activityMode === "question-wall" ? (session.questionWallPosts || []).length + (session.questionWallReplies || []).length : session.activityMode === "group-consensus" ? session.responses.length + (session.groupConsensusSubmissions || []).length : session.responses.length,
       responses:session.responses.map(r => ({
         participant_id:r.participantId, student_code:r.studentCode, node_ref:r.nodeRef || "", task_index:r.taskIndex,
         stage_key:r.stageKey, mode:r.mode, selected_type:r.selectedType, selected_elements:r.selectedElements,
         payload:r.payload, submitted_at:r.submittedAt
       })),
+      live_stance_events:(session.liveStanceEvents || []).map(event => ({
+        id:event.id, participant_id:event.participantId, student_code:event.studentCode, side:event.side,
+        previous_side:event.previousSide || "", payload:event.payload || {}, created_at:event.createdAt
+      })),
+      live_stance_checkpoints:(session.liveStanceCheckpoints || []).map(item => ({
+        id:item.id, label:item.label, snapshot:item.snapshot || {}, created_at:item.createdAt
+      })),
+      question_wall_posts:(session.questionWallPosts || [])
+        .filter(post => (session.sessionKind !== "course" || (post.nodeRef || "") === (session.currentNodeRef || "")))
+        .map(post => ({
+          id:post.id, participant_id:post.participantId, student_code:post.studentCode, node_ref:post.nodeRef || "",
+          text:post.text, vote_count:(session.questionWallVotes || []).filter(v=>v.postId===post.id).length,
+          replies:(session.questionWallReplies || []).filter(r=>r.postId===post.id).map(r=>({id:r.id,participant_id:r.participantId,student_code:r.studentCode,text:r.text,created_at:r.createdAt,updated_at:r.updatedAt||r.createdAt})),
+          reply_count:(session.questionWallReplies || []).filter(r=>r.postId===post.id).length, created_at:post.createdAt
+        })),
+      groups:(session.sessionGroups || []).map(group=>({
+        id:group.id,group_index:group.groupIndex,label:group.label,
+        members:(session.sessionGroupMembers || []).filter(member=>member.groupId===group.id).map(member=>{const p=session.participants.find(item=>item.id===member.participantId);return {participant_id:member.participantId,student_code:p?.studentCode||""};})
+      })),
+      group_submissions:(session.groupConsensusSubmissions || []).map(row=>{const submitter=session.participants.find(item=>item.id===row.submittedBy);return {id:row.id,group_id:row.groupId,node_ref:row.nodeRef||"",selected_type:row.selectedType,payload:row.payload||{},submitted_by:row.submittedBy,submitted_by_code:submitter?.studentCode||"",submitted_at:row.submittedAt,updated_at:row.updatedAt||row.submittedAt};}),
       progress:(session.progress || []).map(item => ({
         participant_id:item.participantId,
         student_code:item.studentCode,
@@ -797,12 +1021,12 @@
         id:p.id,
         student_code:p.studentCode,
         joined_at:p.joinedAt,
-        response_count:session.responses.filter(r => r.participantId === p.id).length,
-        last_submitted_at:session.responses
-          .filter(r => r.participantId === p.id)
-          .map(r => r.submittedAt)
-          .sort()
-          .at(-1) || null
+        response_count:session.activityMode === "question-wall"
+          ? (session.questionWallPosts || []).filter(post => post.participantId === p.id).length + (session.questionWallReplies || []).filter(reply => reply.participantId === p.id).length
+          : session.responses.filter(r => r.participantId === p.id).length,
+        last_submitted_at:session.activityMode === "question-wall"
+          ? [...(session.questionWallPosts || []).filter(post=>post.participantId===p.id).map(post=>post.createdAt),...(session.questionWallReplies || []).filter(reply=>reply.participantId===p.id).map(reply=>reply.updatedAt||reply.createdAt)].sort().at(-1) || null
+          : session.responses.filter(r => r.participantId === p.id).map(r => r.submittedAt).sort().at(-1) || null
       }))
     };
   }
@@ -864,6 +1088,92 @@
     return data;
   }
 
+  async function setLiveStanceState(sessionMeta, roundState = "open") {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if (sessionMeta.activityMode !== "live-stance") throw new Error("目前不是即時立場拉鋸 Session");
+    const target = roundState === "locked" ? "locked" : "open";
+
+    if (sessionMeta.mode === "cloud") {
+      const result = await rpc("set_live_stance_state", {
+        p_session_id:sessionMeta.id,
+        p_teacher_token:sessionMeta.teacherToken,
+        p_round_state:target
+      });
+      const data=typeof result === "string" ? JSON.parse(result) : (result || {});
+      sessionMeta.roundState=data.round_state || target;
+      rememberTeacherSession(sessionMeta,data);
+      publishRealtime(sessionMeta.id,"live-stance-state");
+      return data;
+    }
+
+    const sessions=loadLocalSessions();
+    const session=sessions.find(item=>item.id===sessionMeta.id && item.teacherToken===sessionMeta.teacherToken);
+    if(!session) throw new Error("找不到本機 Session");
+    if(session.status!=="active") throw new Error("Session 已結束");
+    if(session.activityMode!=="live-stance") throw new Error("目前不是即時立場拉鋸 Session");
+    session.roundState=target;
+    sessionMeta.roundState=target;
+    saveLocalSessions(sessions);
+    rememberTeacherSession(sessionMeta);
+    return {round_state:target};
+  }
+
+  async function createLiveStanceCheckpoint(sessionMeta,label="") {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if (sessionMeta.activityMode !== "live-stance") throw new Error("目前不是即時立場拉鋸 Session");
+    const cleanLabel=String(label || "").trim().slice(0,120);
+
+    if (sessionMeta.mode === "cloud") {
+      const result=await rpc("create_live_stance_checkpoint",{
+        p_session_id:sessionMeta.id,
+        p_teacher_token:sessionMeta.teacherToken,
+        p_label:cleanLabel || null
+      });
+      publishRealtime(sessionMeta.id,"live-stance-checkpoint");
+      return typeof result === "string" ? JSON.parse(result) : result;
+    }
+
+    const sessions=loadLocalSessions();
+    const session=sessions.find(item=>item.id===sessionMeta.id && item.teacherToken===sessionMeta.teacherToken);
+    if(!session) throw new Error("找不到本機 Session");
+    if(session.status!=="active") throw new Error("Session 已結束");
+    const rows=(session.responses || []).filter(item=>item.mode==="live-stance" && item.stageKey==="final");
+    const counts={left:0,right:0,undecided:0};
+    rows.forEach(row=>{const side=String(row.selectedType || "");if(side in counts)counts[side]++;});
+    session.liveStanceCheckpoints=Array.isArray(session.liveStanceCheckpoints)?session.liveStanceCheckpoints:[];
+    const checkpoint={
+      id:crypto?.randomUUID?.() || `lsc-${Date.now()}-${session.liveStanceCheckpoints.length+1}`,
+      label:cleanLabel || `節點 ${session.liveStanceCheckpoints.length+1}`,
+      snapshot:{...counts,answered:counts.left+counts.right+counts.undecided,total:(session.participants || []).length,round_state:session.roundState || "open"},
+      createdAt:new Date().toISOString()
+    };
+    session.liveStanceCheckpoints.push(checkpoint);
+    saveLocalSessions(sessions);
+    return {id:checkpoint.id,label:checkpoint.label,snapshot:checkpoint.snapshot,created_at:checkpoint.createdAt};
+  }
+
+  async function deleteLiveStanceCheckpoint(sessionMeta,checkpointId) {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
+    if (sessionMeta.activityMode !== "live-stance") throw new Error("目前不是即時立場拉鋸 Session");
+    const cleanId=String(checkpointId || "").trim();
+    if(!cleanId) throw new Error("找不到節點紀錄");
+    if(sessionMeta.mode==="cloud") {
+      const result=await rpc("delete_live_stance_checkpoint",{
+        p_session_id:sessionMeta.id,
+        p_teacher_token:sessionMeta.teacherToken,
+        p_checkpoint_id:cleanId
+      });
+      publishRealtime(sessionMeta.id,"live-stance-checkpoint");
+      return result;
+    }
+    const sessions=loadLocalSessions();
+    const session=sessions.find(item=>item.id===sessionMeta.id && item.teacherToken===sessionMeta.teacherToken);
+    if(!session) throw new Error("找不到本機 Session");
+    session.liveStanceCheckpoints=(session.liveStanceCheckpoints || []).filter(item=>item.id!==cleanId);
+    saveLocalSessions(sessions);
+    return true;
+  }
+
   function updateParticipantContext(patch = {}) {
     const context = getParticipantContext();
     if (!context) return null;
@@ -906,11 +1216,13 @@
     session.currentStage = 1;
     session.stageCount = totalStages;
     session.activityMode = activityMode || "";
+    session.roundState = ActivityModules?.get?.(activityMode)?.initialRoundState || "";
     sessionMeta.currentNodeRef = nodeRef;
     sessionMeta.revision = session.revision;
     sessionMeta.currentStage = 1;
     sessionMeta.stageCount = totalStages;
     sessionMeta.activityMode = activityMode || "";
+    sessionMeta.roundState = session.roundState;
     saveLocalSessions(sessions);
     rememberTeacherSession(sessionMeta);
     return {
@@ -1073,8 +1385,24 @@
       current_stage:session.currentStage || 1,
       stage_count:session.stageCount || 1,
       status:session.status,
+      round_state:session.roundState || "",
       progress:ownProgress,
       responses:ownResponses,
+      question_wall_posts:(session.questionWallPosts || [])
+        .filter(post => session.sessionKind !== "course" || (post.nodeRef || "") === (session.currentNodeRef || ""))
+        .map(post => ({
+          id:post.id,
+          text:post.text,
+          vote_count:(session.questionWallVotes || []).filter(v=>v.postId===post.id).length,
+          voted_by_me:(session.questionWallVotes || []).some(v=>v.postId===post.id && v.participantId===participant.id),
+          is_own:post.participantId===participant.id,
+          replies:(session.questionWallReplies || []).filter(r=>r.postId===post.id).map(r=>({id:r.id,text:r.text,is_own:r.participantId===participant.id,created_at:r.createdAt,updated_at:r.updatedAt||r.createdAt})),
+          reply_count:(session.questionWallReplies || []).filter(r=>r.postId===post.id).length,
+          created_at:post.createdAt
+        })),
+      group_consensus:session.activityMode==="group-consensus" ? (()=>{
+        const member=(session.sessionGroupMembers||[]).find(item=>item.participantId===participant.id);if(!member)return {group:null,submission:null};const group=(session.sessionGroups||[]).find(item=>item.id===member.groupId);const members=(session.sessionGroupMembers||[]).filter(item=>item.groupId===member.groupId).map(item=>{const p=session.participants.find(x=>x.id===item.participantId);return {participant_id:item.participantId,student_code:p?.studentCode||""};});const submission=(session.groupConsensusSubmissions||[]).find(item=>item.groupId===member.groupId&&(session.sessionKind!=="course"||(item.nodeRef||"")===(session.currentNodeRef||"")));return {group:group?{id:group.id,label:group.label,group_index:group.groupIndex,members,member_count:members.length}:null,submission:submission?{id:submission.id,selected_type:submission.selectedType,payload:submission.payload||{},updated_at:submission.updatedAt||submission.submittedAt}:null};
+      })() : null,
       open_stats:{
         initial:distribution("initial"),
         final:distribution("final"),
@@ -1122,7 +1450,7 @@
 
   window.ClassroomSessionAPI = {
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
-    createSession, createCourseSession, joinSession, submitResponse, teacherSnapshot, setStage, setDeliberationState, setDeliberationReasonVisibility,
+    createSession, createCourseSession, joinSession, submitResponse, submitQuestionWallPost, toggleQuestionWallVote, submitQuestionWallReply, deleteQuestionWallReply, deleteQuestionWallPost, assignSessionGroups, submitGroupConsensus, teacherSnapshot, setStage, setDeliberationState, setLiveStanceState, createLiveStanceCheckpoint, deleteLiveStanceCheckpoint, setDeliberationReasonVisibility,
     setCourseNode, submitCourseProgress, closeSession, deleteSession, studentState, buildJoinUrl,
     createTeacherHandoff, claimTeacherHandoff, validateTeacherHandoffPackage,
     loadTeacherHistory, updateTeacherHistory, removeTeacherHistory,

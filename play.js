@@ -30,6 +30,28 @@ let openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_c
 let scaleSelectedValue = 0;
 let rankingOrder = [];
 let openTextValue = "";
+let questionWallState = {posts:[]};
+let questionWallPollTimer = null;
+let questionWallSortMode = "hot";
+let questionWallPreviewPosts = [];
+let questionWallBusy = false;
+const questionWallExpandedPosts = new Set();
+let groupConsensusChoice = "";
+let groupConsensusReason = "";
+let groupConsensusState = {current_stage:1,group_consensus:null,responses:[]};
+let groupConsensusPollTimer = null;
+let groupConsensusBusy = false;
+let predictInitialChoice = "";
+let predictFinalChoice = "";
+let predictPhase = 1;
+let predictPollTimer = null;
+let stancePoint = null;
+let confidenceSelectedValue = 0;
+let liveStanceChoice = "";
+let liveStanceChangeCount = 0;
+let liveStanceState = {round_state:"open",status:"active",responses:[]};
+let liveStancePollTimer = null;
+let liveStanceBusy = false;
 
 // V2.15.2：依據與分類的判斷依據在學生進入頁面時隨機排列。
 // 同一頁面生命週期內以快取固定順序，避免同步重繪或第二次判斷時選項位置跳動。
@@ -230,6 +252,60 @@ function decodeOpenText(raw) {
   };
 }
 
+function decodeQuestionWall(raw) {
+  if (!raw?.qw) return null;
+  return {
+    title:raw.t||"",subtitle:raw.s||"",template:"question-wall",
+    questionWall:{
+      question:String(raw.qw.q||""),
+      placeholder:String(raw.qw.p||"寫下你還想知道的問題"),
+      maxLength:Math.max(30,Math.min(500,Math.round(Number(raw.qw.m)||180))),
+      maxPosts:Math.max(1,Math.min(5,Math.round(Number(raw.qw.mp)||3))),
+      allowReplies:raw.qw.ar === true,
+      replyMaxLength:Math.max(30,Math.min(300,Math.round(Number(raw.qw.rm)||140)))
+    }
+  };
+}
+
+function decodeGroupConsensus(raw) {
+  if(!raw?.gc)return null;
+  return {title:raw.t||"",subtitle:raw.s||"",template:"group-consensus",groupConsensus:{
+    question:String(raw.gc.q||""),
+    options:(Array.isArray(raw.gc.o)?raw.gc.o:[]).map((item,index)=>({id:String(item?.i||`option-${index+1}`),label:String(item?.l||`選項 ${index+1}`)})),
+    groupSize:Math.max(2,Math.min(6,Math.round(Number(raw.gc.gs)||4))),
+    reasonPrompt:String(raw.gc.rp||"請寫下你們形成這個共識的主要理由"),
+    reasonMaxLength:Math.max(30,Math.min(500,Math.round(Number(raw.gc.rm)||220))),
+    reasonRequired:raw.gc.rr!==false
+  }};
+}
+function decodePredictReveal(raw) {
+  if(!raw?.pr)return null;
+  return {title:raw.t||"",subtitle:raw.s||"",template:"predict-reveal",predictReveal:{question:String(raw.pr.q||""),options:(Array.isArray(raw.pr.o)?raw.pr.o:[]).map((item,index)=>({id:String(item?.i||`option-${index+1}`),label:String(item?.l||`選項 ${index+1}`)})),revealTitle:String(raw.pr.rt||"結果揭曉"),revealContent:String(raw.pr.rc||""),rejudgePrompt:String(raw.pr.rp||"看完揭曉後，你現在怎麼判斷？")}};
+}
+function decodeStanceMap(raw) {
+  if(!raw?.sm)return null;
+  return {title:raw.t||"",subtitle:raw.s||"",template:"stance-map",stanceMap:{question:String(raw.sm.q||""),xLeft:String(raw.sm.xl||"不合理"),xRight:String(raw.sm.xr||"合理"),yBottom:String(raw.sm.yb||"影響小"),yTop:String(raw.sm.yt||"影響大")}};
+}
+function decodeLiveStance(raw) {
+  if(!raw?.ls)return null;
+  return {
+    title:raw.t||"",
+    subtitle:raw.s||"",
+    template:"live-stance",
+    liveStance:{
+      question:String(raw.ls.q||""),
+      leftLabel:String(raw.ls.l||"支持"),
+      rightLabel:String(raw.ls.r||"反對"),
+      allowUndecided:raw.ls.u!==false,
+      undecidedLabel:String(raw.ls.ul||"還不確定")
+    }
+  };
+}
+function decodeConfidence(raw) {
+  if(!raw?.cf?.e)return {enabled:false,pointCount:5,lowLabel:"不太確定",highLabel:"非常確定"};
+  return {enabled:true,pointCount:Math.max(3,Math.min(7,Math.round(Number(raw.cf.n)||5))),lowLabel:String(raw.cf.l||"不太確定"),highLabel:String(raw.cf.r||"非常確定")};
+}
+
 async function decodeActivity(encoded) {
   let bytes;
   if (encoded.startsWith("z.")) {
@@ -243,10 +319,11 @@ async function decodeActivity(encoded) {
 
   const raw = JSON.parse(new TextDecoder().decode(bytes));
   const mode = ActivityModules?.normalizeMode?.(raw?.m) || "drag-reveal";
-  const decoded = ActivityModules?.invoke?.("codec", mode, "decode", raw);
-  if (decoded) return decoded;
-  if (Array.isArray(raw?.c)) return decodeStandardActivity(raw, mode);
-  return raw;
+  let decoded = ActivityModules?.invoke?.("codec", mode, "decode", raw);
+  if (!decoded && Array.isArray(raw?.c)) decoded=decodeStandardActivity(raw, mode);
+  if (!decoded) decoded=raw;
+  if(decoded && typeof decoded==="object") decoded.confidence=decodeConfidence(raw);
+  return decoded;
 }
 
 function isSessionPlay() {
@@ -312,6 +389,10 @@ function startStudentRealtimeSync() {
         clearInterval(progressivePollTimer);
         clearInterval(openPollTimer);
         clearInterval(deliberationPollTimer);
+  clearInterval(predictPollTimer);
+  clearInterval(liveStancePollTimer);
+  clearInterval(questionWallPollTimer);
+        clearInterval(groupConsensusPollTimer);
         return;
       }
       if (activity?.template) {
@@ -339,7 +420,7 @@ async function recordSessionResponse(mode, {
   payload = {},
   stageKey = "final"
 } = {}) {
-  if (!isSessionPlay()) return;
+  if (!isSessionPlay()) return true;
   try {
     await window.ClassroomSessionAPI?.submitResponse?.({
       taskIndex: currentCaseIndex,
@@ -349,9 +430,11 @@ async function recordSessionResponse(mode, {
       selectedType,
       payload
     });
+    return true;
   } catch (error) {
     console.error("Session 作答紀錄失敗", error);
     showToast("作答已完成，但暫時無法回傳老師端");
+    return false;
   }
 }
 
@@ -398,6 +481,12 @@ function resetPanels() {
   el("scaleInteraction")?.classList.add("hidden");
   el("rankingInteraction")?.classList.add("hidden");
   el("openTextInteraction")?.classList.add("hidden");
+  el("questionWallInteraction")?.classList.add("hidden");
+  el("groupConsensusInteraction")?.classList.add("hidden");
+  el("predictRevealInteraction")?.classList.add("hidden");
+  el("stanceMapInteraction")?.classList.add("hidden");
+  el("liveStanceInteraction")?.classList.add("hidden");
+  el("confidencePanel")?.classList.add("hidden");
   el("openClassificationWaitingPanel").classList.add("hidden");
   el("openClassificationResultPanel").classList.add("hidden");
   el("feedbackPanel").classList.add("hidden");
@@ -420,6 +509,7 @@ function renderCase() {
 
   const rendered = ActivityModules?.invoke?.("student", activity.template, "render");
   if (rendered === undefined) renderStandardCase();
+  renderConfidencePanel();
 }
 
 function updateProgress(value) {
@@ -452,6 +542,38 @@ function renderSimpleModuleHeader(kind,question) {
   el("lockBadge").textContent="作答中";
 }
 
+function renderConfidencePanel() {
+  const panel=el("confidencePanel");
+  const config=activity?.confidence || {};
+  if(!panel || !config.enabled){panel?.classList.add("hidden");return;}
+  panel.classList.remove("hidden");
+  const count=Math.max(3,Math.min(7,Math.round(Number(config.pointCount)||5)));
+  el("confidenceLowLabel").textContent=config.lowLabel || "不太確定";
+  el("confidenceHighLabel").textContent=config.highLabel || "非常確定";
+  const grid=el("confidenceChoiceGrid");grid.innerHTML="";
+  for(let value=1;value<=count;value++){
+    const button=document.createElement("button");button.type="button";button.className="confidence-choice";button.textContent=String(value);button.dataset.value=String(value);button.classList.toggle("selected",confidenceSelectedValue===value);
+    button.addEventListener("click",()=>{confidenceSelectedValue=value;grid.querySelectorAll(".confidence-choice").forEach(node=>node.classList.toggle("selected",Number(node.dataset.value)===value));el("confidenceStatus").textContent=`已選 ${value} / ${count}`;});grid.appendChild(button);
+  }
+  el("confidenceStatus").textContent=confidenceSelectedValue?`已選 ${confidenceSelectedValue} / ${count}`:"尚未選擇";
+}
+function ensureConfidenceSelection() {
+  const config=activity?.confidence || {};
+  if(config.enabled && !confidenceSelectedValue){showToast("請再標記你對這次答案的信心程度");return false;}
+  return true;
+}
+function confidencePayload(payload={}) {
+  const config=activity?.confidence || {};
+  if(!config.enabled)return {...payload};
+  if(!confidenceSelectedValue){showToast("請再標記你對這次答案的信心程度");return null;}
+  return {...payload,confidence:{value:confidenceSelectedValue,pointCount:Math.max(3,Math.min(7,Math.round(Number(config.pointCount)||5))),lowLabel:config.lowLabel||"不太確定",highLabel:config.highLabel||"非常確定"}};
+}
+function completeConfidenceStep({next=false}={}) {
+  confidenceSelectedValue=0;
+  el("confidencePanel")?.classList.add("hidden");
+  if(next)renderConfidencePanel();
+}
+
 function renderScaleTask() {
   const task=activity.scale || {};
   renderSimpleModuleHeader("量表",task.question);
@@ -480,11 +602,10 @@ async function submitScaleResponse() {
   const task=activity.scale || {};
   const count=Math.max(3,Math.min(10,Math.round(Number(task.pointCount)||5)));
   if (!scaleSelectedValue) { showToast("請先選擇一個刻度"); return; }
-  await recordSessionResponse("scale-spectrum",{
-    selectedType:String(scaleSelectedValue),
-    payload:{value:scaleSelectedValue,pointCount:count,leftLabel:task.leftLabel||"",rightLabel:task.rightLabel||"",selectedTypeName:String(scaleSelectedValue)}
-  });
-  markCurrentTaskComplete();showComplete();
+  if(!ensureConfidenceSelection())return;
+  const payload=confidencePayload({value:scaleSelectedValue,pointCount:count,leftLabel:task.leftLabel||"",rightLabel:task.rightLabel||"",selectedTypeName:String(scaleSelectedValue)});
+  await recordSessionResponse("scale-spectrum",{selectedType:String(scaleSelectedValue),payload});
+  completeConfidenceStep();markCurrentTaskComplete();showComplete();
 }
 
 function renderRankingTask() {
@@ -535,12 +656,10 @@ async function submitRankingResponse() {
   const byId=new Map((task.items || []).map(item=>[item.id,item]));
   if (rankingOrder.length<2) { showToast("排序資料不完整"); return; }
   const labels=rankingOrder.map(id=>byId.get(id)?.label || id);
-  await recordSessionResponse("ranking",{
-    selectedElements:labels,
-    selectedType:rankingOrder[0] || "",
-    payload:{orderIds:[...rankingOrder],orderLabels:labels,selectedTypeName:labels[0] || ""}
-  });
-  markCurrentTaskComplete();showComplete();
+  if(!ensureConfidenceSelection())return;
+  const payload=confidencePayload({orderIds:[...rankingOrder],orderLabels:labels,selectedTypeName:labels[0] || ""});
+  await recordSessionResponse("ranking",{selectedElements:labels,selectedType:rankingOrder[0] || "",payload});
+  completeConfidenceStep();markCurrentTaskComplete();showComplete();
 }
 
 function updateOpenTextCounter() {
@@ -566,9 +685,375 @@ async function submitOpenTextResponse() {
   const input=el("openTextStudentInput");
   const text=input.value.trim();
   if (!text) { showToast("請先寫下你的想法"); return; }
-  openTextValue=text;
-  await recordSessionResponse("open-text",{payload:{text}});
-  markCurrentTaskComplete();showComplete();
+  if(!ensureConfidenceSelection())return;
+  openTextValue=text;const payload=confidencePayload({text});
+  await recordSessionResponse("open-text",{payload});completeConfidenceStep();markCurrentTaskComplete();showComplete();
+}
+
+function questionWallTask() { return activity?.questionWall || {}; }
+function updateQuestionWallCounter() {
+  const input=el("questionWallStudentInput");
+  if(!input)return;
+  const max=Math.max(30,Math.min(500,Math.round(Number(questionWallTask().maxLength)||180)));
+  el("questionWallCharCount").textContent=`${input.value.length} / ${max}`;
+}
+function questionWallPosts() {
+  const source=isSessionPlay() ? (questionWallState?.question_wall_posts || questionWallState?.posts || []) : questionWallPreviewPosts;
+  const rows=[...(Array.isArray(source)?source:[])];
+  rows.sort(questionWallSortMode==="new"
+    ? ((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))
+    : ((a,b)=>(Number(b.vote_count)||0)-(Number(a.vote_count)||0) || new Date(b.created_at||0)-new Date(a.created_at||0)));
+  return rows;
+}
+function renderQuestionWallList() {
+  const list=el("questionWallStudentList");if(!list)return;
+  const posts=questionWallPosts(),task=questionWallTask();list.innerHTML="";
+  if(!posts.length){list.innerHTML='<div class="empty-v15">目前還沒有匿名提問。你可以成為第一個提出問題的人。</div>';return;}
+  posts.forEach((post,index)=>{
+    const card=document.createElement("article");card.className="question-wall-card";
+    const own=Boolean(post.is_own || post.own),voted=Boolean(post.voted_by_me),count=Math.max(0,Number(post.vote_count)||0);
+    const replies=Array.isArray(post.replies)?post.replies:[],replyCount=Math.max(replies.length,Number(post.reply_count)||0),expanded=questionWallExpandedPosts.has(String(post.id||post.post_id||""));
+    const time=post.created_at ? new Date(post.created_at).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"}) : "";
+    const postId=String(post.id||post.post_id||"");
+    card.innerHTML=`<div class="question-wall-card-head"><strong>${own?"我的匿名提問":"匿名提問"} #${index+1}</strong><small>${escapeHtml(time)}</small></div><p>${escapeHtml(post.text || post.text_value || "")}</p><div class="question-wall-card-footer"><div class="question-wall-card-actions">${own?'<span class="question-wall-own-badge">你的提問</span>':''}${task.allowReplies!==false||replyCount?`<button class="question-wall-reply-toggle" type="button" aria-expanded="${expanded}">💬 回應 <b>${replyCount}</b></button>`:''}</div><button class="question-wall-vote-btn ${voted?"voted":""}" type="button" ${own||questionWallBusy?"disabled":""}>${voted?"✓ 已 ＋1":"＋1 我也想知道"}<b>${count}</b></button></div><div class="question-wall-replies ${expanded?"":"hidden"}"></div>`;
+    const vote=card.querySelector(".question-wall-vote-btn");if(vote&&!own)vote.addEventListener("click",()=>toggleQuestionWallVote(postId));
+    const toggle=card.querySelector(".question-wall-reply-toggle");toggle?.addEventListener("click",()=>{if(questionWallExpandedPosts.has(postId))questionWallExpandedPosts.delete(postId);else questionWallExpandedPosts.add(postId);renderQuestionWallList();});
+    const replyBox=card.querySelector(".question-wall-replies");
+    if(replyBox&&expanded){
+      const rows=[...replies].sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+      const listHtml=rows.length?rows.map((reply,replyIndex)=>`<div class="question-wall-reply ${reply.is_own?"own":""}"><div class="question-wall-reply-head"><strong>${reply.is_own?"我的匿名回應":"匿名同學"} · #${replyIndex+1}</strong><small>${reply.created_at?new Date(reply.created_at).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"}):""}</small></div><p>${escapeHtml(reply.text||"")}</p></div>`).join(""):'<div class="question-wall-reply-empty">目前還沒有回應。</div>';
+      const ownReply=rows.find(reply=>reply.is_own);
+      const canReply=task.allowReplies!==false&&!own;
+      replyBox.innerHTML=`<div class="question-wall-reply-list">${listHtml}</div>${canReply?`<div class="question-wall-reply-composer"><label class="field"><textarea rows="3" maxlength="${task.replyMaxLength||140}" placeholder="匿名回應這個問題">${escapeHtml(ownReply?.text||"")}</textarea><small>${ownReply?"再次送出會更新你的回應":"每位同學對這則問題最多 1 則回應"}</small></label><button class="btn btn-secondary question-wall-reply-submit" type="button">${ownReply?"更新回應":"送出匿名回應"}</button></div>`:(own?'<div class="question-wall-reply-empty">不能回應自己的提問。</div>':'')}`;
+      const submit=replyBox.querySelector(".question-wall-reply-submit"),textarea=replyBox.querySelector("textarea");
+      submit?.addEventListener("click",()=>submitQuestionWallReply(postId,textarea?.value||""));
+    }
+    list.appendChild(card);
+  });
+}
+function renderQuestionWallTask() {
+  const task=questionWallTask();
+  renderSimpleModuleHeader("匿名提問",task.question);
+  el("questionWallInteraction")?.classList.remove("hidden");
+  el("questionWallStudentQuestion").textContent=task.question || "你最想追問什麼？";
+  const browseHelp=el("questionWallBrowseHelp");if(browseHelp)browseHelp.textContent=task.allowReplies===false ? "按「＋1 我也想知道」表示你也關心這個問題。" : "按「＋1 我也想知道」表示共同關注；展開回應可匿名補充想法。";
+  const input=el("questionWallStudentInput");
+  input.maxLength=Math.max(30,Math.min(500,Math.round(Number(task.maxLength)||180)));
+  input.placeholder=task.placeholder || "寫下你還想知道的問題";
+  updateQuestionWallCounter();
+  renderQuestionWallList();
+  if(isSessionPlay()) syncQuestionWallState(true);
+}
+async function submitQuestionWallPost() {
+  if(questionWallBusy)return;
+  const input=el("questionWallStudentInput"),text=input?.value.trim()||"";
+  if(!text){showToast("請先寫下想提出的問題");return;}
+  const task=questionWallTask();
+  const maxPosts=Math.max(1,Math.min(5,Math.round(Number(task.maxPosts)||3)));
+  const ownCount=questionWallPosts().filter(post=>Boolean(post.is_own || post.own)).length;
+  if(ownCount>=maxPosts){showToast(`每人最多提出 ${maxPosts} 個問題`);return;}
+  questionWallBusy=true;
+  try {
+    if(isSessionPlay()) await window.ClassroomSessionAPI.submitQuestionWallPost(text,maxPosts);
+    else questionWallPreviewPosts.unshift({id:`preview-${Date.now()}-${Math.random().toString(36).slice(2,10)}`,text,vote_count:0,voted_by_me:false,own:true,created_at:new Date().toISOString()});
+    input.value="";updateQuestionWallCounter();
+    el("questionWallSubmitStatus").textContent=`已提出 ${Math.min(maxPosts,ownCount+1)} / ${maxPosts} 個問題`;
+    showToast("問題已匿名送出");
+    if(isSessionPlay()) await syncQuestionWallState(false); else renderQuestionWallList();
+  } catch(error){showToast(error.message || "匿名提問送出失敗");}
+  finally{questionWallBusy=false;}
+}
+async function toggleQuestionWallVote(postId) {
+  if(questionWallBusy||!postId)return;questionWallBusy=true;renderQuestionWallList();
+  try {
+    if(isSessionPlay()) await window.ClassroomSessionAPI.toggleQuestionWallVote(postId);
+    else {const post=questionWallPreviewPosts.find(item=>item.id===postId);if(post&&!post.own){post.voted_by_me=!post.voted_by_me;post.vote_count=Math.max(0,(Number(post.vote_count)||0)+(post.voted_by_me?1:-1));}}
+    if(isSessionPlay()) await syncQuestionWallState(false); else renderQuestionWallList();
+  } catch(error){showToast(error.message || "認同狀態更新失敗");}
+  finally{questionWallBusy=false;renderQuestionWallList();}
+}
+async function submitQuestionWallReply(postId,text) {
+  if(questionWallBusy||!postId)return;
+  const clean=String(text||"").trim();if(!clean){showToast("請先寫下回應");return;}
+  const task=questionWallTask(),limit=Math.max(30,Math.min(300,Math.round(Number(task.replyMaxLength)||140)));
+  if(clean.length>limit){showToast(`回應最多 ${limit} 字`);return;}
+  questionWallBusy=true;renderQuestionWallList();
+  try {
+    if(isSessionPlay()) await window.ClassroomSessionAPI.submitQuestionWallReply(postId,clean,limit);
+    else {
+      const post=questionWallPreviewPosts.find(item=>item.id===postId);if(!post||post.own)throw new Error("不能回應自己的提問");
+      post.replies=Array.isArray(post.replies)?post.replies:[];let reply=post.replies.find(item=>item.is_own);
+      if(reply){reply.text=clean;reply.updated_at=new Date().toISOString();}else post.replies.push({id:`preview-reply-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,text:clean,is_own:true,created_at:new Date().toISOString()});
+      post.reply_count=post.replies.length;
+    }
+    showToast("匿名回應已送出");if(isSessionPlay())await syncQuestionWallState(false);else renderQuestionWallList();
+  } catch(error){showToast(error.message||"匿名回應送出失敗");}
+  finally{questionWallBusy=false;renderQuestionWallList();}
+}
+
+async function syncQuestionWallState(initial=false) {
+  if(!isSessionPlay())return;
+  try {
+    const state=await window.ClassroomSessionAPI.studentState();questionWallState=state||questionWallState;
+    const posts=Array.isArray(state?.question_wall_posts)?state.question_wall_posts:[];
+    const own=posts.filter(post=>Boolean(post.is_own));
+    const maxPosts=Math.max(1,Math.min(5,Math.round(Number(questionWallTask().maxPosts)||3)));
+    el("questionWallSubmitStatus").textContent=`已提出 ${own.length} / ${maxPosts} 個問題`;
+    const submit=el("submitQuestionWallBtn");if(submit)submit.disabled=(state?.status==="closed" || own.length>=maxPosts || questionWallBusy);
+    renderQuestionWallList();
+    if(state?.status==="closed"){clearInterval(questionWallPollTimer);setStudentRealtimeStatus("closed");}
+    if(initial)startQuestionWallPolling();
+  } catch(error){console.warn("匿名提問牆同步失敗",error);}
+}
+function startQuestionWallPolling(interval=1800){clearInterval(questionWallPollTimer);if(!isSessionPlay())return;questionWallPollTimer=setInterval(()=>syncQuestionWallState(false),Math.max(1500,Number(interval)||1800));}
+
+function predictMemoryKey() {
+  try {
+    const context=window.ClassroomSessionAPI?.getParticipantContext?.();
+    if (!context?.sessionId || !context?.participantToken) return "";
+    return `classroom-predict-initial:${context.sessionId}:${context.participantToken}`;
+  } catch (_) { return ""; }
+}
+function loadPredictInitialMemory() {
+  if (predictInitialChoice) return predictInitialChoice;
+  const key=predictMemoryKey(); if(!key)return "";
+  try { const value=localStorage.getItem(key)||""; if(predictOptions().some(option=>option.id===value)) predictInitialChoice=value; } catch (_) {}
+  return predictInitialChoice;
+}
+function savePredictInitialMemory(value) {
+  const key=predictMemoryKey(); if(!key)return;
+  try { if(value)localStorage.setItem(key,String(value)); else localStorage.removeItem(key); } catch (_) {}
+}
+function predictOptions() { return activity?.predictReveal?.options || []; }
+function renderPredictOptions(containerId,selected,setter) {
+  const grid=el(containerId);grid.innerHTML="";predictOptions().forEach(option=>{const button=document.createElement("button");button.type="button";button.className="deliberation-choice";button.dataset.id=option.id;button.innerHTML=`<strong>${escapeHtml(option.label)}</strong>`;button.classList.toggle("selected",selected===option.id);button.addEventListener("click",()=>{setter(option.id);grid.querySelectorAll(".deliberation-choice").forEach(node=>node.classList.toggle("selected",node.dataset.id===option.id));});grid.appendChild(button);});
+}
+function groupConsensusOptionName(id){const item=(activity?.groupConsensus?.options||[]).find(option=>option.id===id);return item?.label||id||"—";}
+function renderGroupConsensusTask(){
+  const task=activity.groupConsensus||{};
+  renderSimpleModuleHeader("小組共識",task.question);
+  el("groupConsensusInteraction")?.classList.remove("hidden");
+  if(isSessionPlay()){syncGroupConsensusState(true);return;}
+  groupConsensusState={current_stage:1,responses:[],group_consensus:null};renderGroupConsensusState();
+}
+function renderGroupConsensusState(){
+  const task=activity.groupConsensus||{};const stage=Math.max(1,Number(groupConsensusState?.current_stage)||1);const isGroup=stage>=2;
+  const interaction=el("groupConsensusInteraction"),waiting=el("groupConsensusWaitingPanel");interaction?.classList.remove("hidden");waiting?.classList.add("hidden");
+  el("groupConsensusStudentPhase").textContent=isGroup?"小組":"個人";
+  el("groupConsensusStudentQuestion").textContent=task.question||"請選擇目前最合理的答案";
+  el("groupConsensusStudentHelp").textContent=isGroup?"和組員討論後，共同送出一個答案與理由；同組任何成員都可以更新。":"先獨立選擇，不需要先和同學討論。";
+  el("groupConsensusStudentSyncBadge").textContent=isSessionPlay()?(isGroup?"小組同步":"個人作答"):"預覽模式";
+  const own=(groupConsensusState?.responses||[]).find(r=>r.mode==="group-consensus"&&r.stage_key==="individual");
+  const ownSummary=el("groupConsensusOwnSummary");
+  if(own){ownSummary.classList.remove("hidden");ownSummary.innerHTML=`<span class="summary-label">我的個人判斷</span><strong>${escapeHtml(own.payload?.selectedTypeName||groupConsensusOptionName(own.selected_type))}</strong>`;}else ownSummary.classList.add("hidden");
+  const gc=groupConsensusState?.group_consensus||null,group=gc?.group||null,submission=gc?.submission||null;
+  const groupCard=el("groupConsensusGroupCard");
+  if(isGroup){
+    if(!group){groupCard.classList.add("hidden");el("groupConsensusStudentOptions").innerHTML='<div class="empty-v15">老師尚未完成分組，請稍候。</div>';el("groupConsensusReasonField").classList.add("hidden");el("submitGroupConsensusBtn").disabled=true;el("groupConsensusStudentStatus").textContent="等待老師分組";return;}
+    groupCard.classList.remove("hidden");groupCard.innerHTML=`<div><span class="summary-label">${escapeHtml(group.label||"我的小組")}</span><strong>${(group.members||[]).map(m=>escapeHtml(m.student_code||"")).join("、")}</strong></div><small>共 ${Number(group.member_count)||((group.members||[]).length)} 人</small>`;
+    if(submission){groupConsensusChoice=submission.selected_type||"";groupConsensusReason=submission.payload?.reason||"";}
+  }else{groupCard.classList.add("hidden");}
+  const options=el("groupConsensusStudentOptions");options.innerHTML="";(task.options||[]).forEach(option=>{const label=document.createElement("label");label.className=`deliberation-choice ${groupConsensusChoice===option.id?"selected":""}`;label.innerHTML=`<input type="radio" name="groupConsensusChoice" value="${escapeHtml(option.id)}" ${groupConsensusChoice===option.id?"checked":""}><span>${escapeHtml(option.label)}</span>`;label.querySelector("input").addEventListener("change",()=>{groupConsensusChoice=option.id;options.querySelectorAll(".deliberation-choice").forEach(node=>node.classList.toggle("selected",node.querySelector("input")?.checked));el("groupConsensusStudentStatus").textContent=`已選：${option.label}`;});options.appendChild(label);});
+  const reasonField=el("groupConsensusReasonField"),reasonInput=el("groupConsensusReasonInput");reasonField.classList.toggle("hidden",!isGroup);
+  if(isGroup){el("groupConsensusReasonLabel").textContent=task.reasonPrompt||"共識理由";reasonInput.maxLength=task.reasonMaxLength||220;reasonInput.value=groupConsensusReason||"";updateGroupConsensusReasonCounter();}
+  const btn=el("submitGroupConsensusBtn");btn.disabled=groupConsensusBusy;btn.textContent=isGroup?(submission?"更新本組共識":"提交本組共識"):"提交個人判斷";
+  if(isGroup&&submission)el("groupConsensusStudentStatus").textContent=`本組目前：${groupConsensusOptionName(submission.selected_type)}`;else if(!groupConsensusChoice)el("groupConsensusStudentStatus").textContent="尚未選擇";
+}
+function updateGroupConsensusReasonCounter(){const task=activity.groupConsensus||{},limit=task.reasonMaxLength||220,value=el("groupConsensusReasonInput")?.value||"";groupConsensusReason=value;el("groupConsensusReasonCounter").textContent=`${value.length} / ${limit}`;}
+async function submitGroupConsensusAction(){
+  const task=activity.groupConsensus||{};if(groupConsensusBusy)return;if(!groupConsensusChoice){showToast("請先選擇一個答案");return;}
+  const stage=Math.max(1,Number(groupConsensusState?.current_stage)||1);groupConsensusBusy=true;el("submitGroupConsensusBtn").disabled=true;
+  try{
+    const name=groupConsensusOptionName(groupConsensusChoice);
+    if(stage<2){await recordSessionResponse("group-consensus",{stageKey:"individual",selectedType:groupConsensusChoice,payload:{selectedTypeName:name}});if(!isSessionPlay()){groupConsensusState.responses=[{mode:"group-consensus",stage_key:"individual",selected_type:groupConsensusChoice,payload:{selectedTypeName:name}}];renderGroupConsensusState();showToast("預覽模式已記錄個人判斷");}else await syncGroupConsensusState(false);}
+    else{
+      if(!groupConsensusState?.group_consensus?.group){showToast("老師尚未完成分組");return;}
+      const reason=(el("groupConsensusReasonInput")?.value||"").trim();if(task.reasonRequired!==false&&!reason){showToast("請先填寫小組共識理由");return;}
+      if(reason.length>(task.reasonMaxLength||220)){showToast(`共識理由最多 ${task.reasonMaxLength||220} 字`);return;}
+      if(!isSessionPlay()){showToast("小組共同提交需從課堂 Session 加入");return;}
+      await window.ClassroomSessionAPI.submitGroupConsensus({selectedType:groupConsensusChoice,payload:{selectedTypeName:name,reason},nodeRef:""});showToast("本組共識已更新");await syncGroupConsensusState(false);
+    }
+  }catch(error){console.error(error);showToast(error.message||"提交失敗");}finally{groupConsensusBusy=false;el("submitGroupConsensusBtn").disabled=false;}
+}
+async function syncGroupConsensusState(initial=false){if(!isSessionPlay()){renderGroupConsensusState();return;}try{const state=await window.ClassroomSessionAPI.studentState();groupConsensusState=state||groupConsensusState;const own=(state?.responses||[]).find(r=>r.mode==="group-consensus"&&r.stage_key==="individual");if(own&&Math.max(1,Number(state.current_stage)||1)<2)groupConsensusChoice=own.selected_type||"";if(Math.max(1,Number(state.current_stage)||1)>=2&&state?.group_consensus?.submission){groupConsensusChoice=state.group_consensus.submission.selected_type||"";groupConsensusReason=state.group_consensus.submission.payload?.reason||"";}renderGroupConsensusState();}catch(error){if(initial)showToast(error.message||"無法同步小組狀態");}}
+function startGroupConsensusPolling(interval=1800){clearInterval(groupConsensusPollTimer);if(!isSessionPlay())return;groupConsensusPollTimer=setInterval(()=>syncGroupConsensusState(false),Math.max(1500,Number(interval)||1800));}
+
+function renderPredictRevealTask() {
+  const task=activity.predictReveal||{};loadPredictInitialMemory();renderSimpleModuleHeader("預測",task.question);el("predictRevealInteraction").classList.remove("hidden");el("predictStudentQuestion").textContent=task.question||"先做你的預測";
+  if(predictPhase>=2){showPredictFinalPanel();return;}
+  el("predictInitialPanel").classList.remove("hidden");el("predictWaitingPanel").classList.add("hidden");el("predictFinalPanel").classList.add("hidden");
+  renderPredictOptions("predictInitialOptions",predictInitialChoice,id=>{predictInitialChoice=id;el("predictInitialStatus").textContent=`已選：${predictOptions().find(x=>x.id===id)?.label||""}`;});
+  if(isSessionPlay())syncPredictRevealState(true);
+}
+async function submitPredictInitial() {
+  if(!predictInitialChoice){showToast("請先選擇你的預測");return;}
+  const option=predictOptions().find(x=>x.id===predictInitialChoice);const payload=confidencePayload({selectedTypeName:option?.label||predictInitialChoice});if(!payload)return;
+  await recordSessionResponse("predict-reveal",{selectedType:predictInitialChoice,stageKey:"initial",payload});savePredictInitialMemory(predictInitialChoice);completeConfidenceStep();
+  el("predictInitialPanel").classList.add("hidden");el("predictWaitingPanel").classList.remove("hidden");
+  if(!isSessionPlay()){el("predictLocalRevealBtn").classList.remove("hidden");} else {startPredictPolling();}
+}
+function showPredictFinalPanel() {
+  const task=activity.predictReveal||{};predictPhase=2;el("predictInitialPanel").classList.add("hidden");el("predictWaitingPanel").classList.add("hidden");el("predictFinalPanel").classList.remove("hidden");el("predictRevealTitleText").textContent=task.revealTitle||"結果揭曉";el("predictRevealContentText").textContent=task.revealContent||"";el("predictRejudgePromptText").textContent=task.rejudgePrompt||"看完揭曉後，你現在怎麼判斷？";renderPredictOptions("predictFinalOptions",predictFinalChoice,id=>{predictFinalChoice=id;el("predictFinalStatus").textContent=`已選：${predictOptions().find(x=>x.id===id)?.label||""}`;});renderConfidencePanel();
+}
+async function submitPredictFinal() {
+  if(!predictFinalChoice){showToast("請先選擇再次判斷的答案");return;}
+  const option=predictOptions().find(x=>x.id===predictFinalChoice);const payload=confidencePayload({selectedTypeName:option?.label||predictFinalChoice,initialType:predictInitialChoice,initialTypeName:predictOptions().find(x=>x.id===predictInitialChoice)?.label||predictInitialChoice,changed:Boolean(predictInitialChoice&&predictInitialChoice!==predictFinalChoice)});if(!payload)return;
+  await recordSessionResponse("predict-reveal",{selectedType:predictFinalChoice,stageKey:"final",payload});savePredictInitialMemory("");completeConfidenceStep();markCurrentTaskComplete();showComplete();
+}
+async function syncPredictRevealState(refresh=false) {
+  if(!isSessionPlay())return;
+  try{
+    const state=await window.ClassroomSessionAPI.studentState();
+    const own=Array.isArray(state?.responses)?state.responses:[];
+    const initial=own.find(item=>item.mode==="predict-reveal"&&item.stage_key==="initial");
+    const final=own.find(item=>item.mode==="predict-reveal"&&item.stage_key==="final");
+    if(initial?.selected_type && predictOptions().some(option=>option.id===initial.selected_type)){
+      predictInitialChoice=initial.selected_type;
+      savePredictInitialMemory(predictInitialChoice);
+    }
+    if(final?.selected_type && predictOptions().some(option=>option.id===final.selected_type)) predictFinalChoice=final.selected_type;
+    const stage=Math.max(1,Number(state?.current_stage)||1);
+    if(stage>=2&&predictPhase<2)showPredictFinalPanel();
+  }catch(error){console.warn("預測揭曉同步失敗",error);}
+}
+function startPredictPolling(interval=1800){clearInterval(predictPollTimer);if(!isSessionPlay())return;predictPollTimer=setInterval(()=>syncPredictRevealState(false),interval);}
+function renderStanceMapTask() {
+  const task=activity.stanceMap||{};renderSimpleModuleHeader("二維立場",task.question);el("stanceMapInteraction").classList.remove("hidden");el("stanceStudentQuestion").textContent=task.question||"請在圖上標出你的立場";el("stanceXLeftLabel").textContent=task.xLeft||"左";el("stanceXRightLabel").textContent=task.xRight||"右";el("stanceYBottomLabel").textContent=task.yBottom||"低";el("stanceYTopLabel").textContent=task.yTop||"高";renderStancePoint();
+}
+function setStanceFromEvent(event){const map=el("stanceStudentMap");const rect=map.getBoundingClientRect();const x=Math.max(0,Math.min(100,((event.clientX-rect.left)/rect.width)*100));const y=Math.max(0,Math.min(100,(1-(event.clientY-rect.top)/rect.height)*100));stancePoint={x:Math.round(x),y:Math.round(y)};renderStancePoint();}
+function renderStancePoint(){const point=el("stancePoint");if(!stancePoint){point.classList.add("hidden");el("stanceStudentStatus").textContent="尚未定位";return;}point.classList.remove("hidden");point.style.left=`${stancePoint.x}%`;point.style.bottom=`${stancePoint.y}%`;el("stanceStudentStatus").textContent=`X ${stancePoint.x} · Y ${stancePoint.y}`;}
+async function submitStanceResponse(){if(!stancePoint){showToast("請先在圖上標出你的立場");return;}const task=activity.stanceMap||{};const payload=confidencePayload({x:stancePoint.x,y:stancePoint.y,xLeft:task.xLeft||"",xRight:task.xRight||"",yBottom:task.yBottom||"",yTop:task.yTop||""});if(!payload)return;await recordSessionResponse("stance-map",{selectedType:`${stancePoint.x},${stancePoint.y}`,payload});completeConfidenceStep();markCurrentTaskComplete();showComplete();}
+
+function liveStanceLabel(side) {
+  const task=activity?.liveStance || {};
+  if(side==="left") return task.leftLabel || "支持";
+  if(side==="right") return task.rightLabel || "反對";
+  if(side==="undecided") return task.undecidedLabel || "還不確定";
+  return "";
+}
+
+function liveStanceIsOpen() {
+  return (liveStanceState?.status || "active") === "active" && (liveStanceState?.round_state || "open") === "open";
+}
+
+function renderLiveStanceChoices() {
+  const task=activity?.liveStance || {};
+  const grid=el("liveStanceStudentChoices");
+  if(!grid)return;
+  const options=[
+    {id:"left",label:task.leftLabel || "支持",side:"left"},
+    ...(task.allowUndecided === false ? [] : [{id:"undecided",label:task.undecidedLabel || "還不確定",side:"undecided"}]),
+    {id:"right",label:task.rightLabel || "反對",side:"right"}
+  ];
+  const open=liveStanceIsOpen();
+  grid.innerHTML="";
+  options.forEach(option=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.className=`live-stance-choice ${option.side}`;
+    button.dataset.side=option.side;
+    button.innerHTML=`<span class="live-stance-choice-icon">${option.side==="left"?"◀":option.side==="right"?"▶":"◆"}</span><strong>${escapeHtml(option.label)}</strong>`;
+    button.classList.toggle("selected",liveStanceChoice===option.side);
+    button.disabled=!open || liveStanceBusy;
+    button.addEventListener("click",()=>chooseLiveStance(option.side));
+    grid.appendChild(button);
+  });
+  const badge=el("liveStanceStudentStateBadge");
+  if(badge){
+    badge.textContent=open ? "⚡ 開放表態" : "🔒 已鎖定";
+    badge.classList.toggle("locked",!open);
+  }
+  const current=el("liveStanceStudentCurrent");
+  if(current) current.textContent=liveStanceChoice ? `目前立場：${liveStanceLabel(liveStanceChoice)}` : "尚未表態";
+  const hint=el("liveStanceStudentHint");
+  if(hint) hint.textContent=open
+    ? (liveStanceChoice ? "老師說明過程中，你仍可隨時改變立場。" : "點選一側後會立即同步給老師。")
+    : "老師目前已鎖定表態，暫時不能換邊。";
+}
+
+function renderLiveStanceTask() {
+  const task=activity.liveStance || {};
+  renderSimpleModuleHeader("即時立場",task.question);
+  el("liveStanceInteraction").classList.remove("hidden");
+  el("liveStanceStudentQuestion").textContent=task.question || "你目前站在哪一邊？";
+  liveStanceState={...liveStanceState,status:"active",round_state:liveStanceState?.round_state || "open"};
+  renderLiveStanceChoices();
+  if(isSessionPlay()) syncLiveStanceState(true);
+}
+
+async function chooseLiveStance(side) {
+  if(liveStanceBusy)return;
+  const task=activity?.liveStance || {};
+  if(side==="undecided" && task.allowUndecided===false)return;
+  if(!liveStanceIsOpen()){showToast("老師目前已鎖定表態");return;}
+  if(side===liveStanceChoice){showToast(`目前已選擇「${liveStanceLabel(side)}」`);return;}
+  if(!ensureConfidenceSelection())return;
+
+  const previous=liveStanceChoice;
+  const nextChangeCount=liveStanceChangeCount + (previous && previous!==side ? 1 : 0);
+  const payload=confidencePayload({
+    selectedTypeName:liveStanceLabel(side),
+    side,
+    question:task.question || "",
+    leftLabel:task.leftLabel || "支持",
+    rightLabel:task.rightLabel || "反對",
+    allowUndecided:task.allowUndecided!==false,
+    undecidedLabel:task.undecidedLabel || "還不確定",
+    changed:Boolean(previous && previous!==side),
+    previousSide:previous || "",
+    changeCount:nextChangeCount
+  });
+  if(!payload)return;
+
+  liveStanceBusy=true;
+  renderLiveStanceChoices();
+  try {
+    if(isSessionPlay()) {
+      await window.ClassroomSessionAPI.submitResponse({
+        taskIndex:0,
+        stageKey:"final",
+        mode:"live-stance",
+        selectedType:side,
+        payload
+      });
+    }
+    liveStanceChoice=side;
+    liveStanceChangeCount=nextChangeCount;
+    showToast(`目前立場：${liveStanceLabel(side)}`);
+  } catch(error) {
+    showToast(error.message || "立場同步失敗");
+    await syncLiveStanceState(false);
+  } finally {
+    liveStanceBusy=false;
+    renderLiveStanceChoices();
+  }
+}
+
+async function syncLiveStanceState(initial=false) {
+  if(!isSessionPlay())return;
+  try {
+    const state=await window.ClassroomSessionAPI.studentState();
+    liveStanceState=state || liveStanceState;
+    const own=(state?.responses || []).find(item=>item.mode==="live-stance" && item.stage_key==="final");
+    if(own?.selected_type){
+      liveStanceChoice=own.selected_type;
+      liveStanceChangeCount=Math.max(0,Number(own.payload?.changeCount)||0);
+    }
+    if(state?.status==="closed"){
+      clearInterval(liveStancePollTimer);
+      setStudentRealtimeStatus("closed");
+    }
+    renderLiveStanceChoices();
+    if(initial) startLiveStancePolling(1800);
+  } catch(error) {
+    console.warn("即時立場拉鋸同步失敗",error);
+  }
+}
+
+function startLiveStancePolling(interval=1800) {
+  clearInterval(liveStancePollTimer);
+  if(!isSessionPlay())return;
+  liveStancePollTimer=setInterval(()=>syncLiveStanceState(false),Math.max(1500,Number(interval)||1800));
 }
 
 const DELIBERATION_LABELS = {
@@ -991,14 +1476,15 @@ async function submitDeliberationAnswer() {
   }
 
   if (activity?.deliberation?.needToKnowRequired && !needToKnow) { showToast("請填寫你還需要知道什麼"); return; }
+  if(!ensureConfidenceSelection())return;
 
-  const payload={
+  const payload=confidencePayload({
     reason,
     needToKnow,
     reasonMode:reasonData.mode,
     reasonSelections:reasonData.reasonSelections,
     reasonOther:reasonData.reasonOther
-  };
+  });
 
   if (isSessionPlay()) {
     try {
@@ -1007,6 +1493,7 @@ async function submitDeliberationAnswer() {
         selectedType:choice, payload
       });
       await syncDeliberationState(false);
+      completeConfidenceStep();
       showToast("本層判斷已提交");
     } catch (error) {
       showToast(error.message || "提交失敗");
@@ -1020,6 +1507,7 @@ async function submitDeliberationAnswer() {
     payload,submitted_at:new Date().toISOString()
   });
   deliberationState.responses=deliberationLocalResponses;
+  completeConfidenceStep();
   deliberationState.round_state="published";
   deliberationState.deliberation.distribution=[{id:choice,count:1}];
   deliberationState.deliberation.anonymous_reasons=[{reason,needToKnow}];
@@ -1203,6 +1691,7 @@ function renderProgressiveStage() {
       : "這是你的第一次判斷。";
   el("progressiveJudgementPanel").classList.remove("hidden");
   el("progressiveWaitingPanel").classList.add("hidden");
+  renderConfidencePanel();
 }
 
 async function submitProgressiveJudgement() {
@@ -1211,6 +1700,7 @@ async function submitProgressiveJudgement() {
     showToast("請先選擇目前最合理的分類或答案");
     return;
   }
+  if(!ensureConfidenceSelection())return;
   const type = task.types.find(item => item.i === progressiveSelectedType);
   const entry = {
     stage:progressiveStageIndex + 1,
@@ -1225,8 +1715,9 @@ async function submitProgressiveJudgement() {
   await recordSessionResponse("progressive-reveal", {
     selectedType:progressiveSelectedType,
     stageKey:`clue-${entry.stage}`,
-    payload:{selectedTypeName:entry.typeName, clueIndex:progressiveStageIndex, clueText:entry.clueText}
+    payload:confidencePayload({selectedTypeName:entry.typeName, clueIndex:progressiveStageIndex, clueText:entry.clueText})
   });
+  completeConfidenceStep();
   el("progressiveJudgementPanel").classList.add("hidden");
   el("progressiveWaitingPanel").classList.remove("hidden");
   const isFinal = progressiveStageIndex >= task.clues.length - 1;
@@ -1400,6 +1891,7 @@ function renderOpenClassificationForm() {
     original.classList.add("hidden");
     reasonBlock.classList.add("hidden");
   }
+  renderConfidencePanel();
 }
 
 function renderOpenEvidenceChoices() {
@@ -1490,6 +1982,8 @@ async function submitOpenClassification() {
     }
   }
 
+  if(!ensureConfidenceSelection())return;
+
   const response = {
     selectedType:openSelectedType,
     selectedTypeName:type?.n || "未命名分類",
@@ -1503,13 +1997,14 @@ async function submitOpenClassification() {
     selectedElements,
     selectedType:openSelectedType,
     stageKey:isRejudge ? "final" : "initial",
-    payload:{
+    payload:confidencePayload({
       selectedTypeName:response.selectedTypeName,
       elementNames,
       changeReason,
       changed
-    }
+    })
   });
+  completeConfidenceStep();
 
   if (isRejudge) openFinalResponse = response;
   else openInitialResponse = response;
@@ -1803,6 +2298,7 @@ function submitElementType() {
     showToast("請先選擇一個你認為最合理的分類");
     return;
   }
+  if(!ensureConfidenceSelection())return;
 
   el("elementTypeInteraction").classList.add("hidden");
   el("progressiveInteraction").classList.add("hidden");
@@ -1840,15 +2336,16 @@ function submitElementType() {
   recordSessionResponse("element-type", {
     selectedElements: studentElements,
     selectedType: modeASelectedType,
-    payload: {
+    payload: confidencePayload({
       elementNames,
       selectedTypeName,
       exactElements,
       exactType,
       referenceElementIds: task.correctElementIds,
       referenceTypeId: task.correctTypeId
-    }
+    })
   });
+  completeConfidenceStep();
 
   el("elementTypeNextBtn").textContent =
     currentCaseIndex === totalTasks() - 1 ? "完成活動" : "下一關";
@@ -2016,12 +2513,14 @@ function submitCase() {
       : "先選幾張你認為最重要的字卡");
     return;
   }
+  if(!ensureConfidenceSelection())return;
 
   if (activity.template === "open-tags") {
     recordSessionResponse("open-tags", {
       selectedElements: chosen,
-      payload: {selectedLabels: chosen}
+      payload: confidencePayload({selectedLabels: chosen})
     });
+    completeConfidenceStep();
     showOpenDiscussion(c, chosen);
     return;
   }
@@ -2037,13 +2536,14 @@ function submitCase() {
 
   recordSessionResponse("drag-reveal", {
     selectedElements: chosen,
-    payload: {
+    payload: confidencePayload({
       exact,
       correctChosen,
       missed,
       referenceCards: correct
-    }
+    })
   });
+  completeConfidenceStep();
 
   if (exact) {
     el("feedbackIcon").textContent = "🎯";
@@ -2124,6 +2624,7 @@ function restart() {
   scaleSelectedValue=0;
   rankingOrder=[];
   openTextValue="";
+  predictInitialChoice="";predictFinalChoice="";predictPhase=1;clearInterval(predictPollTimer);stancePoint=null;confidenceSelectedValue=0;
   clearInterval(openPollTimer);
   clearInterval(deliberationPollTimer);
   deliberationSelectedChoice="";
@@ -2169,6 +2670,22 @@ el("openClassificationFinishBtn").addEventListener("click", showComplete);
 el("submitScaleBtn")?.addEventListener("click",submitScaleResponse);
 el("submitRankingBtn")?.addEventListener("click",submitRankingResponse);
 el("submitOpenTextBtn")?.addEventListener("click",submitOpenTextResponse);
+el("questionWallStudentInput")?.addEventListener("input",updateQuestionWallCounter);
+el("submitQuestionWallBtn")?.addEventListener("click",submitQuestionWallPost);
+el("groupConsensusReasonInput")?.addEventListener("input",updateGroupConsensusReasonCounter);
+el("submitGroupConsensusBtn")?.addEventListener("click",submitGroupConsensusAction);
+el("questionWallHotBtn")?.addEventListener("click",()=>{questionWallSortMode="hot";el("questionWallHotBtn")?.classList.add("active");el("questionWallNewBtn")?.classList.remove("active");renderQuestionWallList();});
+el("questionWallNewBtn")?.addEventListener("click",()=>{questionWallSortMode="new";el("questionWallNewBtn")?.classList.add("active");el("questionWallHotBtn")?.classList.remove("active");renderQuestionWallList();});
+el("submitPredictInitialBtn")?.addEventListener("click",submitPredictInitial);
+el("predictLocalRevealBtn")?.addEventListener("click",showPredictFinalPanel);
+el("submitPredictFinalBtn")?.addEventListener("click",submitPredictFinal);
+el("stanceStudentMap")?.addEventListener("click",setStanceFromEvent);
+let stanceDragging=false;
+el("stanceStudentMap")?.addEventListener("pointerdown",event=>{stanceDragging=true;event.currentTarget.setPointerCapture?.(event.pointerId);setStanceFromEvent(event);});
+el("stanceStudentMap")?.addEventListener("pointermove",event=>{if(stanceDragging)setStanceFromEvent(event);});
+el("stanceStudentMap")?.addEventListener("pointerup",()=>{stanceDragging=false;});
+el("stanceStudentMap")?.addEventListener("pointercancel",()=>{stanceDragging=false;});
+el("submitStanceBtn")?.addEventListener("click",submitStanceResponse);
 el("openTextStudentInput")?.addEventListener("input",event=>{openTextValue=event.target.value;updateOpenTextCounter();});
 el("submitDeliberationBtn")?.addEventListener("click",submitDeliberationAnswer);
 el("submitDeliberationPostNoteBtn")?.addEventListener("click",submitDeliberationPostNote);
@@ -2198,6 +2715,9 @@ window.addEventListener("beforeunload",()=>{
   clearInterval(progressivePollTimer);
   clearInterval(openPollTimer);
   clearInterval(deliberationPollTimer);
+  clearInterval(predictPollTimer);
+  clearInterval(liveStancePollTimer);
+  clearInterval(groupConsensusPollTimer);
   stopStudentRealtime();
 });
 
@@ -2214,6 +2734,11 @@ function registerStudentActivityModules() {
   registerCodec("scale-spectrum", decodeScaleSpectrum);
   registerCodec("ranking", decodeRanking);
   registerCodec("open-text", decodeOpenText);
+  registerCodec("question-wall", decodeQuestionWall);
+  registerCodec("group-consensus", decodeGroupConsensus);
+  registerCodec("predict-reveal", decodePredictReveal);
+  registerCodec("stance-map", decodeStanceMap);
+  registerCodec("live-stance", decodeLiveStance);
   registerCodec("layered-deliberation", decodeLayeredDeliberation);
 
   ["drag-reveal","open-tags"].forEach(mode => registerStudent(mode, {
@@ -2239,6 +2764,15 @@ function registerStudentActivityModules() {
   registerStudent("scale-spectrum", {render:() => { renderScaleTask(); return true; }});
   registerStudent("ranking", {render:() => { renderRankingTask(); return true; }});
   registerStudent("open-text", {render:() => { renderOpenTextTask(); return true; }});
+  registerStudent("question-wall", {render:() => { renderQuestionWallTask(); return true; },syncRealtime:refresh=>syncQuestionWallState(refresh),startPolling:startQuestionWallPolling});
+  registerStudent("group-consensus", {render:() => { renderGroupConsensusTask(); return true; },syncRealtime:refresh=>syncGroupConsensusState(refresh),startPolling:startGroupConsensusPolling});
+  registerStudent("predict-reveal", {render:() => { renderPredictRevealTask(); return true; },syncRealtime:refresh=>syncPredictRevealState(refresh),startPolling:startPredictPolling});
+  registerStudent("stance-map", {render:() => { renderStanceMapTask(); return true; }});
+  registerStudent("live-stance", {
+    render:() => { renderLiveStanceTask(); return true; },
+    syncRealtime:refresh => syncLiveStanceState(refresh),
+    startPolling:startLiveStancePolling
+  });
 
   registerStudent("layered-deliberation", {
     render:() => { renderDeliberationTask(); return true; },
