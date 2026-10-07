@@ -33,6 +33,7 @@ let openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_c
 const evidenceOrderCache = new Map();
 
 const el = (id) => document.getElementById(id);
+const ActivityModules = window.ClassroomActivityModules;
 
 function randomUnit() {
   if (globalThis.crypto?.getRandomValues) {
@@ -86,6 +87,110 @@ async function gunzipBytes(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
+function decodeLayeredDeliberation(raw) {
+  if (!raw?.d) return null;
+  return {
+    title:raw.t||"",
+    subtitle:raw.s||"",
+    template:"layered-deliberation",
+    deliberation:{
+      sourceNote:raw.d.src||"",
+      fixedQuestion:raw.d.q||"",
+      chartType:raw.d.chart === "pie" ? "pie" : "bar",
+      reasonMode:(raw.d.req?.rm === "choices" || raw.d.req?.reasonMode === "choices") ? "choices" : "text",
+      reasonChoices:Array.isArray(raw.d.req?.rc)
+        ? raw.d.req.rc
+        : Array.isArray(raw.d.req?.reasonChoices) ? raw.d.req.reasonChoices : [],
+      reasonRequired:raw.d.req?.reason !== false,
+      needToKnowRequired:Boolean(raw.d.req?.need),
+      options:Array.isArray(raw.d.o)?raw.d.o:[],
+      layers:Array.isArray(raw.d.l)?raw.d.l:[],
+      reflection:raw.d.r||{}
+    }
+  };
+}
+
+function decodeOpenClassification(raw) {
+  if (!raw?.o) return null;
+  return {
+    title:raw.t||"",
+    subtitle:raw.s||"",
+    template:"open-classification",
+    openClassification:{
+      work:{name:raw.o.w?.n||"未命名材料",showName:raw.o.w?.sh!==false,intro:raw.o.w?.i||"",image:raw.o.w?.img||""},
+      prompt:raw.o.p||"",
+      elements:Array.isArray(raw.o.e)?raw.o.e:[],
+      types:Array.isArray(raw.o.y)?raw.o.y:[],
+      minEvidence:Math.max(1,Number(raw.o.min)||2),
+      discussionPrompt:raw.o.q||"",
+      allowRejudge:raw.o.r!==false
+    }
+  };
+}
+
+function decodeProgressiveReveal(raw) {
+  if (!raw?.g) return null;
+  return {
+    title:raw.t||"", subtitle:raw.s||"", template:"progressive-reveal",
+    progressive:{
+      work:{name:raw.g.w?.n||"未命名材料",showName:raw.g.w?.sh!==false,intro:raw.g.w?.i||"",image:raw.g.w?.img||""},
+      prompt:raw.g.p||"",
+      clues:Array.isArray(raw.g.l)?raw.g.l:[],
+      types:Array.isArray(raw.g.y)?raw.g.y:[],
+      referenceTypeId:Number.isInteger(raw.g.ry)&&raw.g.ry>=0?raw.g.y?.[raw.g.ry]?.i||"":""
+    }
+  };
+}
+
+function decodeElementType(raw) {
+  if (!Array.isArray(raw?.x)) return null;
+  return {
+    title: raw.t || "",
+    subtitle: raw.s || "",
+    template: "element-type",
+    tasks: raw.x.map(task => ({
+      work: {
+        name: task.w?.n || "未命名材料",
+        showName: task.w?.sh !== false,
+        intro: task.w?.i || "",
+        image: task.w?.img || ""
+      },
+      prompt: task.p || "",
+      elements: Array.isArray(task.e) ? task.e : [],
+      correctElementIds: Array.isArray(task.ce)
+        ? task.ce.map(index => task.e?.[index]?.i).filter(Boolean)
+        : [],
+      types: Array.isArray(task.y) ? task.y : [],
+      correctTypeId: Number.isInteger(task.cy) && task.cy >= 0
+        ? task.y?.[task.cy]?.i || ""
+        : "",
+      minElements: Math.max(1, Number(task.min) || 1)
+    }))
+  };
+}
+
+function decodeStandardActivity(raw, mode = "drag-reveal") {
+  if (!Array.isArray(raw?.c)) return null;
+  return {
+    title: raw.t || "",
+    subtitle: raw.s || "",
+    template: mode === "open-tags" ? "open-tags" : "drag-reveal",
+    cases: raw.c.map(c => ({
+      title: c.t || "",
+      intro: c.i || "",
+      prompt: c.p || "",
+      cards: Array.isArray(c.a) ? c.a : [],
+      correctCards: Array.isArray(c.o)
+        ? c.o.map(index => c.a?.[index]).filter(Boolean)
+        : [],
+      revealTitle: c.r || "",
+      keywords: Array.isArray(c.k) ? c.k : [],
+      revealDescription: c.d || "",
+      discussionPrompt: c.q || ""
+    }))
+  };
+}
+
 async function decodeActivity(encoded) {
   let bytes;
   if (encoded.startsWith("z.")) {
@@ -98,106 +203,10 @@ async function decodeActivity(encoded) {
   }
 
   const raw = JSON.parse(new TextDecoder().decode(bytes));
-
-  if (raw?.m === "layered-deliberation" && raw.d) {
-    return {
-      title:raw.t||"",
-      subtitle:raw.s||"",
-      template:"layered-deliberation",
-      deliberation:{
-        sourceNote:raw.d.src||"",
-        fixedQuestion:raw.d.q||"",
-        chartType:raw.d.chart === "pie" ? "pie" : "bar",
-        reasonMode:(raw.d.req?.rm === "choices" || raw.d.req?.reasonMode === "choices") ? "choices" : "text",
-        reasonChoices:Array.isArray(raw.d.req?.rc)
-          ? raw.d.req.rc
-          : Array.isArray(raw.d.req?.reasonChoices) ? raw.d.req.reasonChoices : [],
-        reasonRequired:raw.d.req?.reason !== false,
-        needToKnowRequired:Boolean(raw.d.req?.need),
-        options:Array.isArray(raw.d.o)?raw.d.o:[],
-        layers:Array.isArray(raw.d.l)?raw.d.l:[],
-        reflection:raw.d.r||{}
-      }
-    };
-  }
-
-  if (raw?.m === "open-classification" && raw.o) {
-    return {
-      title:raw.t||"",
-      subtitle:raw.s||"",
-      template:"open-classification",
-      openClassification:{
-        work:{name:raw.o.w?.n||"未命名材料",showName:raw.o.w?.sh!==false,intro:raw.o.w?.i||"",image:raw.o.w?.img||""},
-        prompt:raw.o.p||"",
-        elements:Array.isArray(raw.o.e)?raw.o.e:[],
-        types:Array.isArray(raw.o.y)?raw.o.y:[],
-        minEvidence:Math.max(1,Number(raw.o.min)||2),
-        discussionPrompt:raw.o.q||"",
-        allowRejudge:raw.o.r!==false
-      }
-    };
-  }
-
-  if (raw?.m === "progressive-reveal" && raw.g) {
-    return {
-      title:raw.t||"", subtitle:raw.s||"", template:"progressive-reveal",
-      progressive:{
-        work:{name:raw.g.w?.n||"未命名材料",showName:raw.g.w?.sh!==false,intro:raw.g.w?.i||"",image:raw.g.w?.img||""},
-        prompt:raw.g.p||"",
-        clues:Array.isArray(raw.g.l)?raw.g.l:[],
-        types:Array.isArray(raw.g.y)?raw.g.y:[],
-        referenceTypeId:Number.isInteger(raw.g.ry)&&raw.g.ry>=0?raw.g.y?.[raw.g.ry]?.i||"":""
-      }
-    };
-  }
-
-  if (raw?.m === "element-type" && Array.isArray(raw.x)) {
-    return {
-      title: raw.t || "",
-      subtitle: raw.s || "",
-      template: "element-type",
-      tasks: raw.x.map(task => ({
-        work: {
-          name: task.w?.n || "未命名材料",
-          showName: task.w?.sh !== false,
-          intro: task.w?.i || "",
-          image: task.w?.img || ""
-        },
-        prompt: task.p || "",
-        elements: Array.isArray(task.e) ? task.e : [],
-        correctElementIds: Array.isArray(task.ce)
-          ? task.ce.map(index => task.e?.[index]?.i).filter(Boolean)
-          : [],
-        types: Array.isArray(task.y) ? task.y : [],
-        correctTypeId: Number.isInteger(task.cy) && task.cy >= 0
-          ? task.y?.[task.cy]?.i || ""
-          : "",
-        minElements: Math.max(1, Number(task.min) || 1)
-      }))
-    };
-  }
-
-  if (raw?.c && Array.isArray(raw.c)) {
-    return {
-      title: raw.t || "",
-      subtitle: raw.s || "",
-      template: raw.m === "open-tags" ? "open-tags" : "drag-reveal",
-      cases: raw.c.map(c => ({
-        title: c.t || "",
-        intro: c.i || "",
-        prompt: c.p || "",
-        cards: Array.isArray(c.a) ? c.a : [],
-        correctCards: Array.isArray(c.o)
-          ? c.o.map(index => c.a?.[index]).filter(Boolean)
-          : [],
-        revealTitle: c.r || "",
-        keywords: Array.isArray(c.k) ? c.k : [],
-        revealDescription: c.d || "",
-        discussionPrompt: c.q || ""
-      }))
-    };
-  }
-
+  const mode = ActivityModules?.normalizeMode?.(raw?.m) || "drag-reveal";
+  const decoded = ActivityModules?.invoke?.("codec", mode, "decode", raw);
+  if (decoded) return decoded;
+  if (Array.isArray(raw?.c)) return decodeStandardActivity(raw, mode);
   return raw;
 }
 
@@ -241,13 +250,8 @@ function stopStudentRealtime() {
 }
 
 function refreshStudentRealtimeTarget() {
-  if (activity?.template === "progressive-reveal") {
-    syncProgressiveStageFromSession(false);
-  } else if (activity?.template === "open-classification") {
-    syncOpenClassificationState(false);
-  } else if (activity?.template === "layered-deliberation") {
-    syncDeliberationState(false);
-  }
+  if (!activity?.template) return;
+  ActivityModules?.invoke?.("student", activity.template, "syncRealtime", false);
 }
 
 function startStudentRealtimeSync() {
@@ -271,12 +275,8 @@ function startStudentRealtimeSync() {
         clearInterval(deliberationPollTimer);
         return;
       }
-      if (activity?.template === "progressive-reveal") {
-        startProgressivePolling(status === "connected" ? 12000 : 1800);
-      } else if (activity?.template === "open-classification") {
-        startOpenPolling(status === "connected" ? 12000 : 1800);
-      } else if (activity?.template === "layered-deliberation") {
-        startDeliberationPolling(status === "connected" ? 12000 : 1800);
+      if (activity?.template) {
+        ActivityModules?.invoke?.("student", activity.template, "startPolling", status === "connected" ? 12000 : 1800);
       }
     }
   });
@@ -324,16 +324,7 @@ async function loadFromUrl() {
     if (!data) throw new Error("missing-data");
 
     activity = await decodeActivity(data);
-    const hasContent = activity?.template === "element-type"
-      ? Array.isArray(activity.tasks) && activity.tasks.length
-      : activity?.template === "progressive-reveal"
-        ? Array.isArray(activity.progressive?.clues) && activity.progressive.clues.length >= 2
-        : activity?.template === "open-classification"
-          ? Array.isArray(activity.openClassification?.elements) && activity.openClassification.elements.length
-            && Array.isArray(activity.openClassification?.types) && activity.openClassification.types.length
-          : activity?.template === "layered-deliberation"
-            ? Boolean(activity.deliberation?.fixedQuestion)
-            : Array.isArray(activity.cases) && activity.cases.length;
+    const hasContent = ActivityModules?.hasStudentContent?.(activity);
     if (!activity || !hasContent) throw new Error("invalid-activity");
 
     el("loadingState").classList.add("hidden");
@@ -351,19 +342,11 @@ async function loadFromUrl() {
 }
 
 function totalTasks() {
-  if (activity.template === "element-type") return activity.tasks.length;
-  if (activity.template === "progressive-reveal") return 1;
-  if (activity.template === "open-classification") return 1;
-  if (activity.template === "layered-deliberation") return 1;
-  return activity.cases.length;
+  return ActivityModules?.studentTaskCount?.(activity) || 1;
 }
 
 function currentTask() {
-  if (activity.template === "element-type") return activity.tasks[currentCaseIndex];
-  if (activity.template === "progressive-reveal") return activity.progressive;
-  if (activity.template === "open-classification") return activity.openClassification;
-  if (activity.template === "layered-deliberation") return activity.deliberation;
-  return activity.cases[currentCaseIndex];
+  return ActivityModules?.currentStudentTask?.(activity, currentCaseIndex);
 }
 
 function resetPanels() {
@@ -393,17 +376,8 @@ function renderCase() {
   el("progressBar").style.width = `${progress}%`;
   el("progressText").textContent = `${Math.round(progress)}%`;
 
-  if (activity.template === "element-type") {
-    renderElementTypeTask();
-  } else if (activity.template === "progressive-reveal") {
-    renderProgressiveTask();
-  } else if (activity.template === "open-classification") {
-    renderOpenClassificationTask();
-  } else if (activity.template === "layered-deliberation") {
-    renderDeliberationTask();
-  } else {
-    renderStandardCase();
-  }
+  const rendered = ActivityModules?.invoke?.("student", activity.template, "render");
+  if (rendered === undefined) renderStandardCase();
 }
 
 function updateProgress(value) {
@@ -1956,25 +1930,8 @@ function showComplete() {
   notifyCoursePlayerComplete();
 
   const completeText = el("completeText");
-  if (activity.template === "layered-deliberation") {
-    completeText.textContent =
-      "你完成了逐層思辨。這個活動不評分，也不要求你改變立場；重點是看見哪些新資訊、假設與價值影響了自己的判斷。";
-  } else if (activity.template === "progressive-reveal") {
-    completeText.textContent =
-      "你完成了逐步判斷。回頭看看自己的答案在哪一項資訊後改變，並用材料內容說明理由。";
-  } else if (activity.template === "open-classification") {
-    completeText.textContent =
-      "你完成了討論後再判斷。比較初次與最終判斷：答案可以改，也可以不改，重點是能用依據說明自己的選擇。";
-  } else if (activity.template === "element-type") {
-    completeText.textContent =
-      "你完成了「先找依據，再進行分類」的練習。重要的不只是答案，而是能用材料內容說明自己的判斷。";
-  } else if (activity.template === "open-tags") {
-    completeText.textContent =
-      "你已經完成所有關卡。比較彼此的選擇與理由，看看同一份材料為什麼可能支持不同觀點。";
-  } else {
-    completeText.textContent =
-      "你已經完成所有關卡。現在回頭看看：哪些資訊或依據最影響你的判斷？";
-  }
+  const definition = ActivityModules?.get?.(activity?.template);
+  completeText.textContent = definition?.completeText || "你已完成活動。";
 }
 
 function resetCurrentCase() {
@@ -2065,5 +2022,46 @@ window.addEventListener("beforeunload",()=>{
   clearInterval(deliberationPollTimer);
   stopStudentRealtime();
 });
+
+
+function registerStudentActivityModules() {
+  const registerCodec = (mode, decode) => ActivityModules?.registerHooks?.("codec", mode, {decode});
+  const registerStudent = (mode, hooks) => ActivityModules?.registerHooks?.("student", mode, hooks);
+
+  registerCodec("drag-reveal", raw => decodeStandardActivity(raw,"drag-reveal"));
+  registerCodec("open-tags", raw => decodeStandardActivity(raw,"open-tags"));
+  registerCodec("element-type", decodeElementType);
+  registerCodec("progressive-reveal", decodeProgressiveReveal);
+  registerCodec("open-classification", decodeOpenClassification);
+  registerCodec("layered-deliberation", decodeLayeredDeliberation);
+
+  ["drag-reveal","open-tags"].forEach(mode => registerStudent(mode, {
+    render:() => { renderStandardCase(); return true; }
+  }));
+
+  registerStudent("element-type", {
+    render:() => { renderElementTypeTask(); return true; }
+  });
+
+  registerStudent("progressive-reveal", {
+    render:() => { renderProgressiveTask(); return true; },
+    syncRealtime:refresh => syncProgressiveStageFromSession(refresh),
+    startPolling:startProgressivePolling
+  });
+
+  registerStudent("open-classification", {
+    render:() => { renderOpenClassificationTask(); return true; },
+    syncRealtime:refresh => syncOpenClassificationState(refresh),
+    startPolling:startOpenPolling
+  });
+
+  registerStudent("layered-deliberation", {
+    render:() => { renderDeliberationTask(); return true; },
+    syncRealtime:refresh => syncDeliberationState(refresh),
+    startPolling:startDeliberationPolling
+  });
+}
+
+registerStudentActivityModules();
 
 loadFromUrl();

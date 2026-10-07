@@ -1,4 +1,5 @@
 (() => {
+  const ActivityModules = window.ClassroomActivityModules;
   const CONFIG_KEY = "interactive-classroom-cloud-config";
   const LOCAL_SESSIONS_KEY = "interactive-classroom-local-sessions";
   const TEACHER_HISTORY_KEY = "interactive-classroom-session-history";
@@ -407,22 +408,17 @@
     const teacherToken = randomToken();
     const totalStages = Math.max(1, Number(stageCount) || 1);
 
-    if (activityMode === "layered-deliberation" && !isCloudConfigured()) {
-      throw new Error("逐層思辨正式 Session 必須先完成 Supabase 雲端設定，才能確保未公開資訊不會傳到學生端");
+    if (ActivityModules?.get?.(activityMode)?.requiresCloud && !isCloudConfigured()) {
+      throw new Error(`${ActivityModules.modeLabel(activityMode)}正式 Session 必須先完成 Supabase 雲端設定，才能確保未公開資訊不會傳到學生端`);
     }
 
     if (isCloudConfigured()) {
       let result;
-      if (activityMode === "layered-deliberation") {
-        if (!shellEncoded || !deliberationData) throw new Error("逐層思辨 Session 資料不完整");
-        result = await rpc("create_deliberation_session", {
-          p_code:code,
-          p_teacher_token:teacherToken,
-          p_title:title,
-          p_activity_shell_encoded:shellEncoded,
-          p_deliberation_data:deliberationData,
-          p_stage_count:totalStages
-        });
+      const customCreate = ActivityModules?.invoke?.("session", activityMode, "createCloud", {
+        code, teacherToken, title, activityEncoded, activityMode, totalStages, shellEncoded, deliberationData
+      });
+      if (customCreate !== undefined) {
+        result = await customCreate;
       } else {
         result = await rpc("create_classroom_session", {
           p_code: code,
@@ -439,7 +435,7 @@
         activityMode: activityMode || "",
         stageCount: totalStages,
         currentStage: 1,
-        roundState: activityMode === "layered-deliberation" ? "open" : "",
+        roundState: ActivityModules?.get?.(activityMode)?.initialRoundState || "",
         createdAt:new Date().toISOString()
       };
       rememberTeacherSession(session);
@@ -709,7 +705,7 @@
     const config = getConfig();
     if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
     return {
-      schema:"classroom-teacher-handoff", version:1, appVersion:"2.17.3", exportedAt:new Date().toISOString(),
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.18.0", exportedAt:new Date().toISOString(),
       warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
       cloud:{url:config.url,key:config.key},
       session:{
@@ -1038,7 +1034,7 @@
     const participant = session.participants.find(item => item.id === context.participantId && item.participantToken === context.participantToken);
     if (!participant) throw new Error("學生加入憑證已失效");
     const ownResponses = session.responses
-      .filter(r => r.participantId === participant.id && ["progressive-reveal","open-classification"].includes(r.mode))
+      .filter(r => r.participantId === participant.id && Boolean(ActivityModules?.get?.(r.mode)?.realtimeStudent))
       .map(r => ({
         stage_key:r.stageKey,
         mode:r.mode,
@@ -1105,6 +1101,24 @@
     }
     return url.toString();
   }
+
+  function registerSessionActivityModules() {
+    ActivityModules?.registerHooks?.("session", "layered-deliberation", {
+      createCloud:async ({code,teacherToken,title,totalStages,shellEncoded,deliberationData}) => {
+        if (!shellEncoded || !deliberationData) throw new Error("逐層思辨 Session 資料不完整");
+        return rpc("create_deliberation_session", {
+          p_code:code,
+          p_teacher_token:teacherToken,
+          p_title:title,
+          p_activity_shell_encoded:shellEncoded,
+          p_deliberation_data:deliberationData,
+          p_stage_count:totalStages
+        });
+      }
+    });
+  }
+
+  registerSessionActivityModules();
 
   window.ClassroomSessionAPI = {
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,

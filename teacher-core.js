@@ -1,4 +1,4 @@
-/* V2.17.3 | Teacher Core: workflow + Course/Type/Work libraries */
+/* V2.18.0 | Teacher Core: workflow + Course/Type/Work libraries */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2
@@ -21,6 +21,7 @@
   };
 
   const $ = (id) => document.getElementById(id);
+  const ActivityModules = window.ClassroomActivityModules;
   const uuid = () => globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const nowIso = () => new Date().toISOString();
 
@@ -990,8 +991,8 @@
     for (const id of activityIds) {
       const snap = await window.ClassroomActivityAPI?.buildSessionSnapshot?.(id);
       if (!snap) throw new Error("活動模組尚未載入");
-      if (snap.template === "layered-deliberation") {
-        throw new Error("逐層思辨包含未公開情境資訊，V2.17.3 請以「單一活動 Session」上課，不可放入完整 Course Snapshot。");
+      if (ActivityModules?.get?.(snap.template)?.allowInCourse === false) {
+        throw new Error(`${ActivityModules.modeLabel(snap.template)}包含需要隔離的未公開資訊，請以「單一活動 Session」上課，不可放入完整 Course Snapshot。`);
       }
       activitySnapshots.push({
         id:snap.id,title:snap.title,subtitle:snap.subtitle,

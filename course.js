@@ -33,11 +33,8 @@ function presentationStorageKey(sessionId) {
 }
 
 function activityTemplateLabel(mode) {
-  if (mode === "element-type") return "依據與分類｜基礎分類";
-  if (mode === "progressive-reveal") return "逐步揭露";
-  if (mode === "open-classification") return "依據與分類｜討論後再判斷";
-  if (mode === "open-tags") return "特徵選擇";
-  return mode ? "選擇與揭示" : "互動活動";
+  if (!mode) return "互動活動";
+  return window.ClassroomActivityModules?.modeLabel?.(mode) || "選擇與揭示";
 }
 
 function setPresentationView(view) {

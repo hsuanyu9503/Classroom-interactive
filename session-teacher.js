@@ -1,7 +1,8 @@
-/* V2.17.3 | Teacher Session + student inspector + reason identity controls */
+/* V2.18.0 | Teacher Session + student inspector + reason identity controls */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
+  const ActivityModules = window.ClassroomActivityModules;
   let activeSession = null;
   let refreshTimer = null;
   let sessionRealtime = null;
@@ -26,7 +27,7 @@
     const text=String(value ?? "").trim();
     let paletteIndex=Math.abs(Number(fallbackIndex)||0)%LIVE_STATS_PALETTE.length;
 
-    // V2.17.3：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
+    // V2.18.0：顏色只由「選項本身」決定，不再依目前有哪些其他選項動態避色。
     // 這可保證 Realtime 更新、新選項首次出現或學生改答案時，既有選項永遠不換色。
     if (/^\d+$/.test(text)) {
       paletteIndex=Number(text)%LIVE_STATS_PALETTE.length;
@@ -377,18 +378,16 @@
     ).size;
 
     let relevant = responses;
-    let phaseLabel = "節點完成進度";
-    if (activeSession.activityMode === "progressive-reveal") {
-      const stage = Math.max(1,Number(activeSession.currentStage)||1);
-      relevant = responses.filter(item => item.mode === "progressive-reveal" && item.stage_key === `clue-${stage}`);
-      phaseLabel = `資訊 ${stage} / ${Math.max(1,Number(activeSession.stageCount)||1)}`;
-    } else if (activeSession.activityMode === "open-classification") {
-      const finalPhase = Number(activeSession.currentStage || 1) >= 2;
-      const key = finalPhase ? "final" : "initial";
-      relevant = responses.filter(item => item.mode === "open-classification" && item.stage_key === key);
-      phaseLabel = finalPhase ? "重新判斷" : "初次判斷";
-    } else if (activeSession.activityMode) {
-      phaseLabel = activityModeLabel(activeSession.activityMode);
+    let phaseLabel = activeSession.activityMode ? activityModeLabel(activeSession.activityMode) : "節點完成進度";
+    const phase = ActivityModules?.invoke?.("teacher", activeSession.activityMode, "presentationPhase", {
+      responses,
+      currentStage:Math.max(1,Number(activeSession.currentStage)||1),
+      stageCount:Math.max(1,Number(activeSession.stageCount)||1),
+      snapshot
+    });
+    if (phase) {
+      relevant = Array.isArray(phase.responses) ? phase.responses : relevant;
+      phaseLabel = phase.label || phaseLabel;
     }
 
     const submittedCount = new Set(relevant.map(item=>item.participant_id)).size;
@@ -402,13 +401,11 @@
       .map(([name,count])=>({name,count}))
       .sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name,"zh-Hant"));
 
-    const showChangeSummary = activeSession.activityMode === "open-classification"
-      && Number(activeSession.currentStage || 1) >= 2;
-    const finalResponses = showChangeSummary
-      ? responses.filter(item => item.mode === "open-classification" && item.stage_key === "final")
-      : [];
-    const changedCount = finalResponses.filter(item=>Boolean(item.payload?.changed)).length;
-    const unchangedCount = finalResponses.length - changedCount;
+    const extras = ActivityModules?.invoke?.("teacher", activeSession.activityMode, "presentationExtras", {
+      responses,
+      currentStage:Math.max(1,Number(activeSession.currentStage)||1),
+      snapshot
+    }) || {};
 
     return {
       participantCount:participants,
@@ -416,8 +413,8 @@
       submittedCount,
       phaseLabel,
       distribution,
-      changedCount,
-      unchangedCount
+      changedCount:Number(extras.changedCount || 0),
+      unchangedCount:Number(extras.unchangedCount || 0)
     };
   }
 
@@ -465,14 +462,10 @@
   }
 
   function activityModeLabel(mode) {
-    if (mode === "element-type") return "依據與分類｜基礎分類";
-    if (mode === "progressive-reveal") return "逐步揭露";
-    if (mode === "open-classification") return "依據與分類｜討論後再判斷";
-    if (mode === "layered-deliberation") return "逐層思辨";
-    if (mode === "open-tags") return "特徵選擇";
     if (!mode) return "—";
-    return "選擇與揭示";
+    return ActivityModules?.modeLabel?.(mode) || "選擇與揭示";
   }
+
 
   function sessionKind() {
     return document.querySelector('input[name="sessionKind"]:checked')?.value || "activity";
@@ -542,7 +535,7 @@
       <div>
         <strong>${escapeHtml(activity.title)}</strong>
         <p>${escapeHtml(activity.subtitle || "沒有副標題")}</p>
-        <small>${activityModeLabel(activity.template)} · ${activity.template === "progressive-reveal" ? `${activity.taskCount} 項資訊` : activity.template === "open-classification" ? "初次＋重新判斷" : activity.template === "layered-deliberation" ? `${activity.taskCount} 層情境 · 需雲端 Session` : `${activity.taskCount} 個任務`}</small>
+        <small>${activityModeLabel(activity.template)} · ${escapeHtml(ActivityModules?.previewSummary?.(activity) || `${activity.taskCount || 0} 個任務`)}</small>
       </div>`;
     if (!$("sessionTitleInput").value.trim() || $("sessionTitleInput").dataset.autoTitle === "1") {
       $("sessionTitleInput").value = activity.title;
@@ -809,8 +802,9 @@
         const courseId = $("sessionCourseSelect").value;
         if (!courseId) throw new Error("請先選擇一門完整課程");
         const snapshot = await window.ClassroomCourseAPI.buildSnapshot(courseId);
-        if ((snapshot.resources?.activities || []).some(item=>item.template === "layered-deliberation")) {
-          throw new Error("V2.11.0 的逐層思辨為了避免未公開資訊外洩，請先使用「單一活動 Session」上課；暫不放入完整 Course Session。");
+        const blocked = (snapshot.resources?.activities || []).find(item => ActivityModules?.get?.(item.template)?.allowInCourse === false);
+        if (blocked) {
+          throw new Error(`${activityModeLabel(blocked.template)}為了避免未公開資訊外洩，請使用「單一活動 Session」上課；暫不放入完整 Course Session。`);
         }
         const encoded = await window.ClassroomCourseAPI.encodeSnapshot(snapshot);
         const steps = flattenCourseSnapshot(snapshot);
@@ -868,6 +862,13 @@
     return null;
   }
 
+  function updateActivityModeControls() {
+    const activeControl = ActivityModules?.get?.(activeSession?.activityMode)?.teacherControlId || "";
+    (ActivityModules?.teacherControlIds?.() || []).forEach(id => {
+      $(id)?.classList.toggle("hidden", id !== activeControl);
+    });
+  }
+
   async function renderActiveSession() {
     if (!activeSession) return;
     clearInterval(refreshTimer);
@@ -892,9 +893,7 @@
       : activityModeLabel(activeSession.activityMode);
 
     $("courseSessionControl").classList.toggle("hidden",activeSession.sessionKind !== "course");
-    $("progressiveSessionControl").classList.toggle("hidden",activeSession.activityMode !== "progressive-reveal");
-    $("openClassificationSessionControl").classList.toggle("hidden",activeSession.activityMode !== "open-classification");
-    $("deliberationSessionControl")?.classList.toggle("hidden",activeSession.activityMode !== "layered-deliberation");
+    updateActivityModeControls();
 
     let joinUrl = "";
     let joinUrlError = "";
@@ -1002,10 +1001,8 @@
       renderParticipants(snapshot.participants || [],snapshot.responses || [],snapshot.progress || [],snapshot);
       renderStudentInspector(snapshot);
       await renderCourseControl(snapshot);
-      renderProgressiveControl(snapshot);
-      renderOpenClassificationControl(snapshot);
-      renderDeliberationControl(snapshot);
-      publishDeliberationPresentation(snapshot);
+      ActivityModules?.invoke?.("teacher", activeSession.activityMode, "renderControl", snapshot);
+      ActivityModules?.invoke?.("teacher", activeSession.activityMode, "publishSpecialPresentation", snapshot);
       await renderSessionSummary(snapshot);
       await publishPresentationState(snapshot);
       renderHistory();
@@ -1080,9 +1077,10 @@
             <div class="participant-main">
               <strong>${Number(participant.response_count || 0) > 0 ? "已作答" : "已加入"}</strong>
               <small>${participant.last_submitted_at ? `最後作答：${formatTime(participant.last_submitted_at)}` : `加入：${formatTime(participant.joined_at)}`}</small>
-              ${activeSession?.activityMode === "progressive-reveal" ? `<div class="participant-judgement-history">${buildParticipantHistory(participant.id,responses)}</div>` : ""}
-              ${activeSession?.activityMode === "open-classification" ? `<div class="participant-judgement-history">${buildOpenParticipantHistory(participant.id,responses)}</div>` : ""}
-              ${activeSession?.activityMode === "layered-deliberation" ? `<div class="participant-judgement-history">${buildDeliberationParticipantHistory(participant.id,responses,snapshot?.deliberation_data?.o)}</div>` : ""}
+              ${(() => {
+                const history = ActivityModules?.invoke?.("teacher", activeSession?.activityMode, "participantHistory", participant.id, responses, snapshot) || "";
+                return history ? `<div class="participant-judgement-history">${history}</div>` : "";
+              })()}
             </div>
             <div class="participant-row-actions"><span class="participant-response-count">${participant.response_count || 0} 筆</span>${inspectButton}</div>`;
         }
@@ -1100,15 +1098,10 @@
   }
 
   function responseModeLabel(mode) {
-    return ({
-      "drag-reveal":"選擇與揭示",
-      "open-tags":"特徵選擇",
-      "element-type":"依據與分類",
-      "progressive-reveal":"逐步揭露",
-      "open-classification":"討論後再判斷",
-      "layered-deliberation":"逐層思辨"
-    })[mode] || mode || "作答";
+    if (!mode) return "作答";
+    return ActivityModules?.get?.(mode)?.shortLabel || ActivityModules?.modeLabel?.(mode) || mode;
   }
+
 
   function responseStageLabel(response) {
     const key=String(response?.stage_key || "");
@@ -1125,10 +1118,8 @@
   function responseSelectedTypeLabel(response,snapshot) {
     const code=String(response?.selected_type || "").trim();
     if (!code) return "";
-    if (response?.mode === "layered-deliberation") {
-      const label=deliberationOptionLabel(code,snapshot?.deliberation_data?.o);
-      return label || "未命名選項";
-    }
+    const customLabel = ActivityModules?.invoke?.("teacher", response?.mode, "selectedTypeLabel", response, snapshot);
+    if (customLabel !== undefined) return customLabel;
     return String(response?.payload?.selectedTypeName || code);
   }
 
@@ -1253,9 +1244,7 @@
     $("presentationResultsBtn").disabled = activeSession.status === "closed";
     updatePresentationControls();
 
-    $("progressiveSessionControl").classList.toggle("hidden",activeSession.activityMode !== "progressive-reveal");
-    $("openClassificationSessionControl").classList.toggle("hidden",activeSession.activityMode !== "open-classification");
-    $("deliberationSessionControl")?.classList.toggle("hidden",activeSession.activityMode !== "layered-deliberation");
+    updateActivityModeControls();
   }
 
   function nodeTypeLabel(type) {
@@ -1874,6 +1863,36 @@
     }
   }
 
+  function renderDeliberationSessionSummary({snapshot,details,participants}) {
+    const responses=(snapshot.responses || []).filter(r=>r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""));
+    const completedByParticipant=new Map();
+    responses.forEach(r=>{
+      if (!completedByParticipant.has(r.participant_id)) completedByParticipant.set(r.participant_id,new Set());
+      completedByParticipant.get(r.participant_id).add(r.stage_key);
+    });
+    const totalStages=Math.max(1,Number(snapshot.stage_count)||1);
+    const completedPairs=[...completedByParticipant.values()].reduce((sum,set)=>sum+set.size,0);
+    const possible=participants*totalStages;
+    $("summaryCompletionRate").textContent=participants ? `${Math.round((completedPairs/Math.max(1,possible))*100)}%` : "—";
+    const section=document.createElement("section");
+    section.className="summary-section";
+    section.innerHTML=`<div class="summary-section-head"><strong>逐層判斷分布</strong><span>${totalStages} 層</span></div><div class="summary-node-list"></div>`;
+    const list=section.querySelector(".summary-node-list");
+    const options=deliberationOptionsFromSnapshot(snapshot);
+    for (let stage=1;stage<=totalStages;stage++) {
+      const current=responses.filter(r=>r.stage_key===`layer-${stage}`);
+      const row=document.createElement("div");
+      row.className="summary-node-row";
+      const counts=Object.fromEntries(options.map(option=>[option.id,0]));
+      current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
+      const summary=options.map(option=>`${option.label} ${counts[option.id] || 0}`).join(" · ");
+      row.innerHTML=`<div class="summary-node-main"><strong>第 ${stage} 層</strong><small>${escapeHtml(summary)}</small></div><b>${new Set(current.map(r=>r.participant_id)).size} / ${participants}</b>`;
+      list.appendChild(row);
+    }
+    details.appendChild(section);
+    return true;
+  }
+
   async function renderSessionSummary(snapshot) {
     const card=$("sessionSummaryCard");
     if (!card || !activeSession || !snapshot || snapshot.status !== "closed") {
@@ -1915,38 +1934,14 @@
         list.appendChild(row);
       });
       details.appendChild(section);
-    } else if (activeSession.activityMode === "layered-deliberation") {
-      const responses=(snapshot.responses || []).filter(r=>r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""));
-      const completedByParticipant=new Map();
-      responses.forEach(r=>{
-        if (!completedByParticipant.has(r.participant_id)) completedByParticipant.set(r.participant_id,new Set());
-        completedByParticipant.get(r.participant_id).add(r.stage_key);
-      });
-      const totalStages=Math.max(1,Number(snapshot.stage_count)||1);
-      const completedPairs=[...completedByParticipant.values()].reduce((sum,set)=>sum+set.size,0);
-      const possible=participants*totalStages;
-      $("summaryCompletionRate").textContent=participants ? `${Math.round((completedPairs/Math.max(1,possible))*100)}%` : "—";
-      const section=document.createElement("section");
-      section.className="summary-section";
-      section.innerHTML=`<div class="summary-section-head"><strong>逐層判斷分布</strong><span>${totalStages} 層</span></div><div class="summary-node-list"></div>`;
-      const list=section.querySelector(".summary-node-list");
-      for (let stage=1;stage<=totalStages;stage++) {
-        const current=responses.filter(r=>r.stage_key===`layer-${stage}`);
-        const row=document.createElement("div");
-        row.className="summary-node-row";
-        const options=deliberationOptionsFromSnapshot(snapshot);
-        const counts=Object.fromEntries(options.map(option=>[option.id,0]));
-        current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
-        const summary=options.map(option=>`${option.label} ${counts[option.id] || 0}`).join(" · ");
-        row.innerHTML=`<div class="summary-node-main"><strong>第 ${stage} 層</strong><small>${escapeHtml(summary)}</small></div><b>${new Set(current.map(r=>r.participant_id)).size} / ${participants}</b>`;
-        list.appendChild(row);
-      }
-      details.appendChild(section);
     } else {
-      const responses=snapshot.responses || [];
-      const responders=new Set(responses.map(item=>item.participant_id)).size;
-      const overall=participants ? Math.round((responders/participants)*100) : 0;
-      $("summaryCompletionRate").textContent = participants ? `${overall}%` : "—";
+      const handled = await ActivityModules?.invoke?.("teacher", activeSession.activityMode, "renderSummary", {snapshot,details,participants});
+      if (handled !== true) {
+        const responses=snapshot.responses || [];
+        const responders=new Set(responses.map(item=>item.participant_id)).size;
+        const overall=participants ? Math.round((responders/participants)*100) : 0;
+        $("summaryCompletionRate").textContent = participants ? `${overall}%` : "—";
+      }
     }
 
     const responses=snapshot.responses || [];
@@ -1956,7 +1951,8 @@
       const name=item.payload?.selectedTypeName || item.selected_type || "";
       if (name) counts.set(name,(counts.get(name)||0)+1);
     });
-    if (counts.size && activeSession.activityMode !== "layered-deliberation") {
+    const suppressGenericDistribution = ActivityModules?.invoke?.("teacher", activeSession.activityMode, "suppressGenericSummaryDistribution") === true;
+    if (counts.size && !suppressGenericDistribution) {
       const section=document.createElement("section");
       section.className="summary-section";
       const total=[...counts.values()].reduce((a,b)=>a+b,0);
@@ -2094,6 +2090,49 @@
     catch { $("sessionJoinUrl").select();document.execCommand("copy"); }
     showSessionToast("學生加入連結已複製");
   }
+
+  function registerTeacherActivityModules() {
+    const register = (mode, hooks) => ActivityModules?.registerHooks?.("teacher", mode, hooks);
+
+    register("progressive-reveal", {
+      renderControl:renderProgressiveControl,
+      participantHistory:(participantId,responses) => buildParticipantHistory(participantId,responses),
+      presentationPhase:({responses,currentStage,stageCount}) => ({
+        responses:responses.filter(item => item.mode === "progressive-reveal" && item.stage_key === `clue-${currentStage}`),
+        label:`資訊 ${currentStage} / ${stageCount}`
+      })
+    });
+
+    register("open-classification", {
+      renderControl:renderOpenClassificationControl,
+      participantHistory:(participantId,responses) => buildOpenParticipantHistory(participantId,responses),
+      presentationPhase:({responses,currentStage}) => {
+        const finalPhase = currentStage >= 2;
+        const key = finalPhase ? "final" : "initial";
+        return {
+          responses:responses.filter(item => item.mode === "open-classification" && item.stage_key === key),
+          label:finalPhase ? "重新判斷" : "初次判斷"
+        };
+      },
+      presentationExtras:({responses,currentStage}) => {
+        if (currentStage < 2) return {changedCount:0,unchangedCount:0};
+        const finalResponses = responses.filter(item => item.mode === "open-classification" && item.stage_key === "final");
+        const changedCount = finalResponses.filter(item=>Boolean(item.payload?.changed)).length;
+        return {changedCount,unchangedCount:finalResponses.length-changedCount};
+      }
+    });
+
+    register("layered-deliberation", {
+      renderControl:renderDeliberationControl,
+      publishSpecialPresentation:publishDeliberationPresentation,
+      renderSummary:renderDeliberationSessionSummary,
+      suppressGenericSummaryDistribution:() => true,
+      participantHistory:(participantId,responses,snapshot) => buildDeliberationParticipantHistory(participantId,responses,snapshot?.deliberation_data?.o),
+      selectedTypeLabel:(response,snapshot) => deliberationOptionLabel(response?.selected_type,snapshot?.deliberation_data?.o) || "未命名選項"
+    });
+  }
+
+  registerTeacherActivityModules();
 
   function refresh() {
     refreshActivityOptions();

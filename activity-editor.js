@@ -1,4 +1,4 @@
-/* V2.17.3 | Activity Editor + layered deliberation + custom choices */
+/* V2.18.0 | Activity Editor + layered deliberation + custom choices */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -10,6 +10,7 @@ let currentId = null;
 let toastTimer = null;
 
 const el = (id) => document.getElementById(id);
+const ActivityModules = window.ClassroomActivityModules;
 
 const activityTitle = el("activityTitle");
 const activitySubtitle = el("activitySubtitle");
@@ -413,34 +414,36 @@ function loadActivities() {
   }
 
   activities = activities.map(activity => {
-    const allowed = new Set(["drag-reveal","open-tags","element-type","progressive-reveal","open-classification","layered-deliberation"]);
-    const template = allowed.has(activity.template) ? activity.template : "drag-reveal";
-
-    return {
+    const template = ActivityModules?.normalizeMode?.(activity.template) || "drag-reveal";
+    const definition = ActivityModules?.get?.(template);
+    const normalized = {
       ...activity,
       template,
-      cases: ["drag-reveal","open-tags"].includes(template)
-        ? (Array.isArray(activity.cases) ? activity.cases : [])
-        : [],
-      tasks: template === "element-type"
-        ? (Array.isArray(activity.tasks) ? activity.tasks : [])
-        : [],
-      progressive: template === "progressive-reveal"
-        ? (activity.progressive || null)
-        : null,
-      openClassification: template === "open-classification"
-        ? (activity.openClassification || null)
-        : null,
-      deliberation: template === "layered-deliberation"
-        ? {
-            ...newDeliberationActivityData(),
-            ...(activity.deliberation || {}),
-            options:normalizeDeliberationOptionsData(activity.deliberation?.options),
-            reasonMode:activity.deliberation?.reasonMode === "choices" ? "choices" : "text",
-            reasonChoices:normalizeDeliberationReasonChoicesData(activity.deliberation?.reasonChoices)
-          }
-        : null
+      cases: [],
+      tasks: [],
+      progressive: null,
+      openClassification: null,
+      deliberation: null
     };
+
+    if (definition?.dataKey === "cases") {
+      normalized.cases = Array.isArray(activity.cases) ? activity.cases : [];
+    } else if (definition?.dataKey === "tasks") {
+      normalized.tasks = Array.isArray(activity.tasks) ? activity.tasks : [];
+    } else if (definition?.dataKey === "progressive") {
+      normalized.progressive = activity.progressive || null;
+    } else if (definition?.dataKey === "openClassification") {
+      normalized.openClassification = activity.openClassification || null;
+    } else if (definition?.dataKey === "deliberation") {
+      normalized.deliberation = {
+        ...newDeliberationActivityData(),
+        ...(activity.deliberation || {}),
+        options:normalizeDeliberationOptionsData(activity.deliberation?.options),
+        reasonMode:activity.deliberation?.reasonMode === "choices" ? "choices" : "text",
+        reasonChoices:normalizeDeliberationReasonChoicesData(activity.deliberation?.reasonChoices)
+      };
+    }
+    return normalized;
   });
 
   // V1.6.2：移除各模式不會使用的舊資料分支，讓 localStorage 也保持乾淨。
@@ -476,12 +479,7 @@ function newBlankActivity() {
 }
 
 function getModeLabel(template) {
-  if (template === "open-tags") return "特徵選擇";
-  if (template === "element-type") return "依據與分類｜基礎分類";
-  if (template === "progressive-reveal") return "逐步揭露";
-  if (template === "open-classification") return "依據與分類｜討論後再判斷";
-  if (template === "layered-deliberation") return "逐層思辨";
-  return "選擇與揭示";
+  return ActivityModules?.modeLabel?.(template) || "選擇與揭示";
 }
 
 function renderLibrary() {
@@ -490,15 +488,7 @@ function renderLibrary() {
   activities.forEach((activity) => {
     const item = document.createElement("div");
     item.className = `activity-item ${activity.id === currentId ? "active" : ""}`;
-    const count = activity.template === "element-type"
-      ? activity.tasks?.length || 0
-      : activity.template === "progressive-reveal"
-        ? activity.progressive?.clueRefs?.length || 0
-        : activity.template === "open-classification"
-          ? 1
-          : activity.template === "layered-deliberation"
-            ? (activity.deliberation?.layers?.length || 0)
-            : activity.cases?.length || 0;
+    const count = ActivityModules?.libraryTaskCount?.(activity) ?? (activity.cases?.length || 0);
     item.innerHTML = `
       <strong>${escapeHtml(activity.title || "未命名活動")}</strong>
       <small>${count} 個任務 · ${getModeLabel(activity.template)}</small>
@@ -1205,8 +1195,7 @@ function getSelectedMode() {
 }
 
 function setSelectedMode(mode) {
-  const allowed = new Set(["drag-reveal", "open-tags", "element-type", "progressive-reveal", "open-classification", "layered-deliberation"]);
-  const normalized = allowed.has(mode) ? mode : "drag-reveal";
+  const normalized = ActivityModules?.normalizeMode?.(mode) || "drag-reveal";
   modeInputs.forEach(input => {
     input.checked = input.value === normalized;
   });
@@ -1215,37 +1204,24 @@ function setSelectedMode(mode) {
 }
 
 function applyModeUI(mode) {
+  const definition = ActivityModules?.get?.(mode);
   const isOpen = mode === "open-tags";
-  const isElementType = mode === "element-type";
-  const isProgressive = mode === "progressive-reveal";
-  const isOpenClassification = mode === "open-classification";
-  const isDeliberation = mode === "layered-deliberation";
+  const editorKind = definition?.editorKind || "standard";
+  const isSpecial = editorKind !== "standard";
 
-  editorPanel?.classList.toggle("open-tags-mode", isOpen);
-  editorPanel?.classList.toggle("element-type-mode", isElementType);
-  editorPanel?.classList.toggle("progressive-reveal-mode", isProgressive);
-  editorPanel?.classList.toggle("open-classification-mode", isOpenClassification);
-  editorPanel?.classList.toggle("layered-deliberation-mode", isDeliberation);
+  ActivityModules?.list?.().forEach(item => {
+    if (item.editorClass) editorPanel?.classList.toggle(item.editorClass, item.id === mode);
+  });
 
-  if (templateKicker) {
-    templateKicker.textContent = isDeliberation ? "模板 05" : isProgressive ? "模板 04" : (isElementType || isOpenClassification) ? "模板 03" : isOpen ? "模板 02" : "模板 01";
-  }
-  if (templateTitle) {
-    templateTitle.textContent = isDeliberation
-      ? "逐層思辨"
-      : isOpenClassification ? "依據與分類｜討論後再判斷"
-      : isProgressive ? "逐步揭露"
-      : isElementType ? "依據與分類｜基礎分類"
-      : isOpen ? "特徵選擇" : "選擇與揭示";
-  }
+  if (templateKicker) templateKicker.textContent = definition?.templateKicker || "模板 01";
+  if (templateTitle) templateTitle.textContent = definition?.templateTitle || definition?.label || "選擇與揭示";
 
-  const isSpecial = isElementType || isProgressive || isOpenClassification || isDeliberation;
   standardTaskToolbar?.classList.toggle("hidden", isSpecial);
   caseEditor?.classList.toggle("hidden", isSpecial);
-  elementTypeEditorSection?.classList.toggle("hidden", !isElementType);
-  progressiveEditorSection?.classList.toggle("hidden", !isProgressive);
-  openClassificationEditorSection?.classList.toggle("hidden", !isOpenClassification);
-  deliberationEditorSection?.classList.toggle("hidden", !isDeliberation);
+  elementTypeEditorSection?.classList.toggle("hidden", editorKind !== "element-type");
+  progressiveEditorSection?.classList.toggle("hidden", editorKind !== "progressive-reveal");
+  openClassificationEditorSection?.classList.toggle("hidden", editorKind !== "open-classification");
+  deliberationEditorSection?.classList.toggle("hidden", editorKind !== "layered-deliberation");
 
   document.querySelectorAll(".card-builder-label").forEach(label => {
     label.textContent = isOpen ? "標籤設定" : "字卡設定";
@@ -1255,16 +1231,9 @@ function applyModeUI(mode) {
       ? "輸入可供學生複選的特徵、依據或標籤；此模式沒有唯一答案。按 Enter 可快速新增下一張。"
       : "輸入學生可選擇的項目後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張。";
   });
-  document.querySelectorAll(".reveal-settings").forEach(section => {
-    section.classList.toggle("hidden", isOpen);
-  });
-  document.querySelectorAll(".discussion-settings").forEach(section => {
-    section.classList.toggle("hidden", !isOpen);
-  });
-  document.querySelectorAll(".correct-toggle").forEach(toggle => {
-    toggle.classList.toggle("hidden", isOpen);
-  });
-
+  document.querySelectorAll(".reveal-settings").forEach(section => section.classList.toggle("hidden", isOpen));
+  document.querySelectorAll(".discussion-settings").forEach(section => section.classList.toggle("hidden", !isOpen));
+  document.querySelectorAll(".correct-toggle").forEach(toggle => toggle.classList.toggle("hidden", isOpen));
 }
 
 function refreshCaseNumbers() {
@@ -1274,22 +1243,8 @@ function refreshCaseNumbers() {
 }
 
 function ensureEditorForMode(mode) {
-  if (mode === "element-type") {
-    if (!elementTypeTaskEditor.children.length) addModeATask();
-    return;
-  }
-  if (mode === "progressive-reveal") {
-    if (!progressiveTaskEditor.children.length) addProgressiveTask();
-    return;
-  }
-  if (mode === "open-classification") {
-    if (!openClassificationTaskEditor.children.length) addOpenClassificationTask();
-    return;
-  }
-  if (mode === "layered-deliberation") {
-    if (!deliberationLayersEditor.children.length) loadDeliberationEditor(newDeliberationActivityData());
-    return;
-  }
+  const handled = ActivityModules?.invoke?.("editor", mode, "ensure");
+  if (handled !== undefined) return;
   if (!caseEditor.children.length) addCase();
 }
 
@@ -1303,142 +1258,134 @@ function loadIntoEditor(activity) {
   openClassificationTaskEditor.innerHTML = "";
   deliberationLayersEditor.innerHTML = "";
 
-  if (activity.template === "element-type") {
-    const tasks = activity.tasks?.length ? activity.tasks : [newModeATask()];
-    tasks.forEach(addModeATask);
-  } else if (activity.template === "progressive-reveal") {
-    addProgressiveTask(activity.progressive || newProgressiveTask());
-  } else if (activity.template === "open-classification") {
-    addOpenClassificationTask(activity.openClassification || newOpenClassificationTask());
-  } else if (activity.template === "layered-deliberation") {
-    loadDeliberationEditor(activity.deliberation || newDeliberationActivityData());
-  } else {
+  const template = ActivityModules?.normalizeMode?.(activity.template) || "drag-reveal";
+  const handled = ActivityModules?.invoke?.("editor", template, "load", activity);
+  if (handled === undefined) {
     const cases = activity.cases?.length ? activity.cases : newBlankActivity().cases;
     cases.forEach(addCase);
   }
 
-  setSelectedMode(activity.template || "drag-reveal");
+  setSelectedMode(template);
 }
 
 function readEditor() {
   const template = getSelectedMode();
-
-  return {
+  const base = {
     id: currentId || createId(),
     title: activityTitle.value.trim() || "未命名活動",
     subtitle: activitySubtitle.value.trim(),
     template,
-    cases: ["drag-reveal","open-tags"].includes(template) ? readCases() : [],
-    tasks: template === "element-type" ? readModeATasks() : [],
-    progressive: template === "progressive-reveal" ? readProgressiveTask() : null,
-    openClassification: template === "open-classification" ? readOpenClassificationTask() : null,
-    deliberation: template === "layered-deliberation" ? readDeliberationEditor() : null
+    cases: [],
+    tasks: [],
+    progressive: null,
+    openClassification: null,
+    deliberation: null
   };
+  const patch = ActivityModules?.invoke?.("editor", template, "read") || {};
+  return {...base, ...patch, template};
 }
 
 function splitKeywords(value) {
   return value.split(/[、,，]/).map(v => v.trim()).filter(Boolean);
 }
 
-function validateActivity(activity) {
-  if (activity.template === "layered-deliberation") {
-    const d=activity.deliberation;
-    if (!d?.fixedQuestion?.trim()) return "逐層思辨尚未設定固定判斷題";
-    if (!Array.isArray(d.options) || d.options.length < 2) return "逐層思辨至少需要 2 個判斷選項";
-    if (d.options.length > 10) return "逐層思辨最多只能設定 10 個判斷選項";
-    if (d.options.some(option=>!String(option.label || "").trim())) return "逐層思辨的每個判斷選項都需要填寫內容";
-    if (new Set(d.options.map(option=>String(option.id || ""))).size !== d.options.length) return "逐層思辨的選項代碼不可重複";
-    if (d.reasonMode === "choices") {
-      if (!Array.isArray(d.reasonChoices) || d.reasonChoices.length < 1) return "勾選理由模式至少需要 1 個預設理由";
-      if (d.reasonChoices.length > 12) return "預設理由最多只能設定 12 個";
-      if (d.reasonChoices.some(choice=>!String(choice.label || "").trim())) return "每個預設理由都需要填寫內容";
-      if (new Set(d.reasonChoices.map(choice=>String(choice.id || ""))).size !== d.reasonChoices.length) return "預設理由識別碼不可重複";
-    }
-    if (!Array.isArray(d.layers) || d.layers.length < DELIBERATION_MIN_LAYERS) return `逐層思辨至少需要 ${DELIBERATION_MIN_LAYERS} 層情境`;
-    if (d.layers.length > DELIBERATION_MAX_LAYERS) return `逐層思辨最多只能設定 ${DELIBERATION_MAX_LAYERS} 層情境`;
-    for (let i=0;i<d.layers.length;i++) {
-      const layer=d.layers[i];
-      if (!layer.title?.trim()) return `第 ${i+1} 層尚未填寫標題`;
-      if (!layer.content?.trim()) return `第 ${i+1} 層尚未填寫新增資訊`;
-      if (!layer.question?.trim()) return `第 ${i+1} 層尚未填寫核心提問`;
-    }
-    return "";
+function validateDeliberationActivity(activity) {
+  const d=activity.deliberation;
+  if (!d?.fixedQuestion?.trim()) return "逐層思辨尚未設定固定判斷題";
+  if (!Array.isArray(d.options) || d.options.length < 2) return "逐層思辨至少需要 2 個判斷選項";
+  if (d.options.length > 10) return "逐層思辨最多只能設定 10 個判斷選項";
+  if (d.options.some(option=>!String(option.label || "").trim())) return "逐層思辨的每個判斷選項都需要填寫內容";
+  if (new Set(d.options.map(option=>String(option.id || ""))).size !== d.options.length) return "逐層思辨的選項代碼不可重複";
+  if (d.reasonMode === "choices") {
+    if (!Array.isArray(d.reasonChoices) || d.reasonChoices.length < 1) return "勾選理由模式至少需要 1 個預設理由";
+    if (d.reasonChoices.length > 12) return "預設理由最多只能設定 12 個";
+    if (d.reasonChoices.some(choice=>!String(choice.label || "").trim())) return "每個預設理由都需要填寫內容";
+    if (new Set(d.reasonChoices.map(choice=>String(choice.id || ""))).size !== d.reasonChoices.length) return "預設理由識別碼不可重複";
   }
-
-  if (activity.template === "open-classification") {
-    const task = activity.openClassification;
-    const works = getWorkMap();
-    const elements = getLibraryElementMap();
-    const types = getTypeMap();
-    if (!task?.workRef || !works.has(task.workRef)) return "依據與分類尚未選擇有效材料";
-    if (!task.elementRefs?.length) return "依據與分類尚未提供判斷依據";
-    if (task.elementRefs.length < task.minEvidence) return "可選判斷依據少於最低選擇數";
-    if (task.elementRefs.some(id => !elements.has(id))) return "依據與分類引用了已不存在的判斷依據";
-    if (!task.typeRefs?.length) return "依據與分類尚未提供可選分類";
-    if (task.typeRefs.some(id => !types.has(id))) return "依據與分類引用了已不存在的分類";
-    return "";
+  if (!Array.isArray(d.layers) || d.layers.length < DELIBERATION_MIN_LAYERS) return `逐層思辨至少需要 ${DELIBERATION_MIN_LAYERS} 層情境`;
+  if (d.layers.length > DELIBERATION_MAX_LAYERS) return `逐層思辨最多只能設定 ${DELIBERATION_MAX_LAYERS} 層情境`;
+  for (let i=0;i<d.layers.length;i++) {
+    const layer=d.layers[i];
+    if (!layer.title?.trim()) return `第 ${i+1} 層尚未填寫標題`;
+    if (!layer.content?.trim()) return `第 ${i+1} 層尚未填寫新增資訊`;
+    if (!layer.question?.trim()) return `第 ${i+1} 層尚未填寫核心提問`;
   }
+  return "";
+}
 
-  if (activity.template === "progressive-reveal") {
-    const task = activity.progressive;
-    const works = getWorkMap();
-    const types = getTypeMap();
-    if (!task?.workRef || !works.has(task.workRef)) return "逐步揭露尚未選擇有效材料";
-    if (!task.clueRefs || task.clueRefs.length < 2) return "逐步揭露至少需要 2 項資訊";
-    const work = works.get(task.workRef);
-    const validClues = new Set((work.clues || []).map(clue => clue.id));
-    if (task.clueRefs.some(id => !validClues.has(id))) return "逐步揭露引用了已不存在的資訊";
-    if (!task.typeRefs?.length) return "逐步揭露尚未提供可選分類";
-    if (task.typeRefs.some(id => !types.has(id))) return "逐步揭露引用了已不存在的分類";
-    if (task.referenceTypeRef && !task.typeRefs.includes(task.referenceTypeRef)) return "最終參考分類必須同時提供給學生";
-    return "";
+function validateOpenClassificationActivity(activity) {
+  const task = activity.openClassification;
+  const works = getWorkMap();
+  const elements = getLibraryElementMap();
+  const types = getTypeMap();
+  if (!task?.workRef || !works.has(task.workRef)) return "依據與分類尚未選擇有效材料";
+  if (!task.elementRefs?.length) return "依據與分類尚未提供判斷依據";
+  if (task.elementRefs.length < task.minEvidence) return "可選判斷依據少於最低選擇數";
+  if (task.elementRefs.some(id => !elements.has(id))) return "依據與分類引用了已不存在的判斷依據";
+  if (!task.typeRefs?.length) return "依據與分類尚未提供可選分類";
+  if (task.typeRefs.some(id => !types.has(id))) return "依據與分類引用了已不存在的分類";
+  return "";
+}
+
+function validateProgressiveActivity(activity) {
+  const task = activity.progressive;
+  const works = getWorkMap();
+  const types = getTypeMap();
+  if (!task?.workRef || !works.has(task.workRef)) return "逐步揭露尚未選擇有效材料";
+  if (!task.clueRefs || task.clueRefs.length < 2) return "逐步揭露至少需要 2 項資訊";
+  const work = works.get(task.workRef);
+  const validClues = new Set((work.clues || []).map(clue => clue.id));
+  if (task.clueRefs.some(id => !validClues.has(id))) return "逐步揭露引用了已不存在的資訊";
+  if (!task.typeRefs?.length) return "逐步揭露尚未提供可選分類";
+  if (task.typeRefs.some(id => !types.has(id))) return "逐步揭露引用了已不存在的分類";
+  if (task.referenceTypeRef && !task.typeRefs.includes(task.referenceTypeRef)) return "最終參考分類必須同時提供給學生";
+  return "";
+}
+
+function validateElementTypeActivity(activity) {
+  if (!activity.tasks.length) return "至少需要一個分類任務";
+  const works = getWorkMap();
+  const elements = getLibraryElementMap();
+  const types = getTypeMap();
+  for (let i = 0; i < activity.tasks.length; i++) {
+    const task = activity.tasks[i];
+    if (!task.workRef || !works.has(task.workRef)) return `第 ${i + 1} 個分類任務尚未選擇有效材料`;
+    if (!task.elementRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選依據`;
+    if (task.elementRefs.length < task.minElements) return `第 ${i + 1} 個分類任務提供的依據少於最低選擇數`;
+    if (!task.correctElementRefs.length) return `第 ${i + 1} 個分類任務尚未設定參考依據`;
+    if (task.correctElementRefs.some(id => !task.elementRefs.includes(id))) return `第 ${i + 1} 個分類任務的參考依據必須同時提供給學生`;
+    if (task.elementRefs.some(id => !elements.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的依據`;
+    if (!task.typeRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選分類`;
+    if (!task.correctTypeRef) return `第 ${i + 1} 個分類任務尚未設定參考分類`;
+    if (!task.typeRefs.includes(task.correctTypeRef)) return `第 ${i + 1} 個分類任務的參考分類必須同時提供給學生`;
+    if (task.typeRefs.some(id => !types.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的分類`;
   }
+  return "";
+}
 
-  if (activity.template === "element-type") {
-    if (!activity.tasks.length) return "至少需要一個分類任務";
-    const works = getWorkMap();
-    const elements = getLibraryElementMap();
-    const types = getTypeMap();
-
-    for (let i = 0; i < activity.tasks.length; i++) {
-      const task = activity.tasks[i];
-      if (!task.workRef || !works.has(task.workRef)) return `第 ${i + 1} 個分類任務尚未選擇有效材料`;
-      if (!task.elementRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選依據`;
-      if (task.elementRefs.length < task.minElements) return `第 ${i + 1} 個分類任務提供的依據少於最低選擇數`;
-      if (!task.correctElementRefs.length) return `第 ${i + 1} 個分類任務尚未設定參考依據`;
-      if (task.correctElementRefs.some(id => !task.elementRefs.includes(id))) return `第 ${i + 1} 個分類任務的參考依據必須同時提供給學生`;
-      if (task.elementRefs.some(id => !elements.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的依據`;
-      if (!task.typeRefs.length) return `第 ${i + 1} 個分類任務尚未提供可選分類`;
-      if (!task.correctTypeRef) return `第 ${i + 1} 個分類任務尚未設定參考分類`;
-      if (!task.typeRefs.includes(task.correctTypeRef)) return `第 ${i + 1} 個分類任務的參考分類必須同時提供給學生`;
-      if (task.typeRefs.some(id => !types.has(id))) return `第 ${i + 1} 個分類任務引用了已不存在的分類`;
-    }
-    return "";
-  }
-
+function validateStandardActivity(activity) {
   if (!activity.cases.length) return "至少需要一個關卡";
-
+  const isOpen = activity.template === "open-tags";
   for (let i = 0; i < activity.cases.length; i++) {
     const c = activity.cases[i];
     if (!c.title) return `第 ${i + 1} 關尚未填寫材料／情境名稱`;
-    if (!c.cards.length) return `第 ${i + 1} 關尚未填寫${activity.template === "open-tags" ? "標籤" : "字卡"}`;
-
-    if (activity.template !== "open-tags") {
+    if (!c.cards.length) return `第 ${i + 1} 關尚未填寫${isOpen ? "標籤" : "字卡"}`;
+    if (!isOpen) {
       if (!c.correctCards.length) return `第 ${i + 1} 關尚未填寫正確字卡`;
       if (!c.revealTitle) return `第 ${i + 1} 關尚未填寫揭露標題`;
     }
-
-    if (new Set(c.cards).size !== c.cards.length) {
-      return `第 ${i + 1} 關有重複的${activity.template === "open-tags" ? "標籤" : "字卡"}文字，請讓每個內容保持唯一`;
-    }
-
-    if (activity.template !== "open-tags") {
+    if (new Set(c.cards).size !== c.cards.length) return `第 ${i + 1} 關有重複的${isOpen ? "標籤" : "字卡"}文字，請讓每個內容保持唯一`;
+    if (!isOpen) {
       if (new Set(c.correctCards).size !== c.correctCards.length) return `第 ${i + 1} 關的正確字卡有重複內容`;
       const missing = c.correctCards.filter(x => !c.cards.includes(x));
       if (missing.length) return `第 ${i + 1} 關的正確字卡「${missing[0]}」不在字卡清單裡`;
     }
   }
   return "";
+}
+
+function validateActivity(activity) {
+  return ActivityModules?.invoke?.("editor", activity.template, "validate", activity) ?? validateStandardActivity(activity);
 }
 
 function saveCurrent(showMessage = true) {
@@ -1575,38 +1522,25 @@ async function buildDeliberationShellEncoded(activity) {
 }
 
 async function encodeActivity(activity) {
-  let compact;
-
-  if (activity.template === "element-type") {
-    compact = {t:activity.title,s:activity.subtitle,m:"element-type",x:buildElementTypeSnapshot(activity)};
-  } else if (activity.template === "progressive-reveal") {
-    compact = {t:activity.title,s:activity.subtitle,m:"progressive-reveal",g:buildProgressiveSnapshot(activity)};
-  } else if (activity.template === "open-classification") {
-    compact = {t:activity.title,s:activity.subtitle,m:"open-classification",o:buildOpenClassificationSnapshot(activity)};
-  } else if (activity.template === "layered-deliberation") {
-    compact = {t:activity.title,s:activity.subtitle,m:"layered-deliberation",d:buildDeliberationSnapshot(activity,{includeLayers:true})};
-  } else {
-    compact = {
-      t: activity.title,
-      s: activity.subtitle,
-      m: activity.template,
-      c: activity.cases.map(c => {
-        const isOpen = activity.template === "open-tags";
-        return {
-          t: c.title,
-          i: c.intro,
-          p: c.prompt,
-          a: c.cards,
-          o: isOpen ? [] : c.correctCards.map(card => c.cards.indexOf(card)),
-          r: isOpen ? "" : c.revealTitle,
-          k: isOpen ? [] : c.keywords,
-          d: isOpen ? "" : c.revealDescription,
-          q: isOpen ? c.discussionPrompt : ""
-        };
-      })
-    };
-  }
-
+  const compact = ActivityModules?.invoke?.("editor", activity.template, "encode", activity) || {
+    t: activity.title,
+    s: activity.subtitle,
+    m: activity.template,
+    c: activity.cases.map(c => {
+      const isOpen = activity.template === "open-tags";
+      return {
+        t: c.title,
+        i: c.intro,
+        p: c.prompt,
+        a: c.cards,
+        o: isOpen ? [] : c.correctCards.map(card => c.cards.indexOf(card)),
+        r: isOpen ? "" : c.revealTitle,
+        k: isOpen ? [] : c.keywords,
+        d: isOpen ? "" : c.revealDescription,
+        q: isOpen ? c.discussionPrompt : ""
+      };
+    })
+  };
   return encodeCompactActivity(compact);
 }
 
@@ -1748,15 +1682,7 @@ function getActivitySummaries() {
     title: activity.title || "未命名活動",
     subtitle: activity.subtitle || "",
     template: activity.template || "drag-reveal",
-    taskCount: activity.template === "element-type"
-      ? (activity.tasks?.length || 0)
-      : activity.template === "progressive-reveal"
-        ? (activity.progressive?.clueRefs?.length || 0)
-        : activity.template === "open-classification"
-          ? 1
-          : activity.template === "layered-deliberation"
-            ? (activity.deliberation?.layers?.length || 0)
-            : (activity.cases?.length || 0)
+    taskCount: ActivityModules?.libraryTaskCount?.(activity) ?? (activity.cases?.length || 0)
   }));
 }
 
@@ -1774,20 +1700,92 @@ async function buildSessionActivitySnapshot(activityId) {
     title: activity.title || "未命名活動",
     subtitle: activity.subtitle || "",
     template: activity.template || "drag-reveal",
-    stageCount: activity.template === "progressive-reveal"
-      ? (activity.progressive?.clueRefs?.length || 1)
-      : activity.template === "open-classification" && activity.openClassification?.allowRejudge !== false
-        ? 2
-        : activity.template === "layered-deliberation"
-          ? (activity.deliberation?.layers?.length || 1)
-          : 1,
+    stageCount: ActivityModules?.stageCount?.(activity) || 1,
     encoded: await encodeActivity(activity),
-    shellEncoded: activity.template === "layered-deliberation" ? await buildDeliberationShellEncoded(activity) : "",
-    deliberationData: activity.template === "layered-deliberation"
-      ? buildDeliberationSnapshot(activity,{includeLayers:true,includeTeacherNotes:true})
-      : null
+    shellEncoded: await (ActivityModules?.invoke?.("editor", activity.template, "buildShellEncoded", activity) || ""),
+    deliberationData: ActivityModules?.invoke?.("editor", activity.template, "teacherData", activity) || null
   };
 }
+
+
+function registerActivityEditorModules() {
+  const register = (mode, hooks) => ActivityModules?.registerHooks?.("editor", mode, hooks);
+
+  ["drag-reveal","open-tags"].forEach(mode => register(mode, {
+    ensure:() => {
+      if (!caseEditor.children.length) addCase();
+      return true;
+    },
+    load:activity => {
+      const cases = activity.cases?.length ? activity.cases : newBlankActivity().cases;
+      cases.forEach(addCase);
+      return true;
+    },
+    read:() => ({cases:readCases()}),
+    validate:validateStandardActivity
+  }));
+
+  register("element-type", {
+    ensure:() => {
+      if (!elementTypeTaskEditor.children.length) addModeATask();
+      return true;
+    },
+    load:activity => {
+      const tasks = activity.tasks?.length ? activity.tasks : [newModeATask()];
+      tasks.forEach(addModeATask);
+      return true;
+    },
+    read:() => ({tasks:readModeATasks()}),
+    validate:validateElementTypeActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"element-type",x:buildElementTypeSnapshot(activity)})
+  });
+
+  register("progressive-reveal", {
+    ensure:() => {
+      if (!progressiveTaskEditor.children.length) addProgressiveTask();
+      return true;
+    },
+    load:activity => {
+      addProgressiveTask(activity.progressive || newProgressiveTask());
+      return true;
+    },
+    read:() => ({progressive:readProgressiveTask()}),
+    validate:validateProgressiveActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"progressive-reveal",g:buildProgressiveSnapshot(activity)})
+  });
+
+  register("open-classification", {
+    ensure:() => {
+      if (!openClassificationTaskEditor.children.length) addOpenClassificationTask();
+      return true;
+    },
+    load:activity => {
+      addOpenClassificationTask(activity.openClassification || newOpenClassificationTask());
+      return true;
+    },
+    read:() => ({openClassification:readOpenClassificationTask()}),
+    validate:validateOpenClassificationActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"open-classification",o:buildOpenClassificationSnapshot(activity)})
+  });
+
+  register("layered-deliberation", {
+    ensure:() => {
+      if (!deliberationLayersEditor.children.length) loadDeliberationEditor(newDeliberationActivityData());
+      return true;
+    },
+    load:activity => {
+      loadDeliberationEditor(activity.deliberation || newDeliberationActivityData());
+      return true;
+    },
+    read:() => ({deliberation:readDeliberationEditor()}),
+    validate:validateDeliberationActivity,
+    encode:activity => ({t:activity.title,s:activity.subtitle,m:"layered-deliberation",d:buildDeliberationSnapshot(activity,{includeLayers:true})}),
+    buildShellEncoded:buildDeliberationShellEncoded,
+    teacherData:activity => buildDeliberationSnapshot(activity,{includeLayers:true,includeTeacherNotes:true})
+  });
+}
+
+registerActivityEditorModules();
 
 window.ClassroomActivityAPI = {
   list: getActivitySummaries,
@@ -1931,7 +1929,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.17.3",
+    appVersion:"2.18.0",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),
