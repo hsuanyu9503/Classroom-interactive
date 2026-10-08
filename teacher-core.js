@@ -1,4 +1,4 @@
-/* V2.26.1 | Teacher Core: workflow + collapsible Course/Lesson/Node editors */
+/* V2.26.2 | Teacher Core: workflow + collapsible Course/Lesson/Node editors */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2

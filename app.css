@@ -5428,3 +5428,107 @@ select:focus{
 .activity-module-picker .mode-family-card.collapsed .mode-family-head{
   min-height:0;
 }
+
+/* =========================================================
+   V2.26.2 — Live stance red/blue tug + smooth motion
+   ========================================================= */
+.live-stance-tug-board{
+  --stance-left:#3b82f6;
+  --stance-left-soft:#75a7f8;
+  --stance-right:#ef476f;
+  --stance-right-soft:#f27a92;
+}
+.live-stance-tug-arena{
+  isolation:isolate;
+}
+.live-stance-rope{
+  left:4%;
+  right:4%;
+  height:12px;
+  border:1px solid rgba(15,23,42,.08);
+  background:linear-gradient(90deg,
+    var(--stance-left) 0%,
+    var(--stance-left-soft) 48.8%,
+    #d9dee8 48.8%,
+    #d9dee8 51.2%,
+    var(--stance-right-soft) 51.2%,
+    var(--stance-right) 100%);
+  box-shadow:0 4px 12px rgba(15,23,42,.14),inset 0 2px 2px rgba(255,255,255,.38),inset 0 -2px 3px rgba(15,23,42,.08);
+}
+.live-stance-rope::after{
+  content:"";
+  position:absolute;
+  inset:1px 4px auto;
+  height:3px;
+  border-radius:999px;
+  background:linear-gradient(90deg,rgba(255,255,255,.42),rgba(255,255,255,.2));
+  pointer-events:none;
+}
+.live-stance-tug-arena::before,
+.live-stance-tug-arena::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  z-index:1;
+  width:15px;
+  height:15px;
+  border:3px solid #fff;
+  border-radius:50%;
+  box-shadow:0 3px 8px rgba(15,23,42,.18);
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+.live-stance-tug-arena::before{
+  left:4%;
+  background:var(--stance-left);
+}
+.live-stance-tug-arena::after{
+  left:96%;
+  background:var(--stance-right);
+}
+.live-stance-knot{
+  left:var(--tug-position);
+  width:38px;
+  height:38px;
+  border:5px solid transparent;
+  background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,var(--stance-left) 5%,#8b7fc7 50%,var(--stance-right) 95%) border-box;
+  box-shadow:0 8px 22px rgba(15,23,42,.18),0 0 0 4px rgba(255,255,255,.7);
+  will-change:left;
+  transition:box-shadow .2s ease,transform .2s ease;
+}
+.live-stance-knot span{
+  display:block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:linear-gradient(135deg,var(--stance-left),var(--stance-right));
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.7);
+  font-size:0;
+}
+.live-stance-tug-board.large .live-stance-rope{
+  height:16px;
+}
+.live-stance-tug-board.large .live-stance-knot{
+  width:50px;
+  height:50px;
+  border-width:7px;
+}
+.live-stance-tug-board.large .live-stance-knot span{
+  width:13px;
+  height:13px;
+}
+.live-stance-tug-board.large .live-stance-tug-arena::before,
+.live-stance-tug-board.large .live-stance-tug-arena::after{
+  width:20px;
+  height:20px;
+  border-width:4px;
+}
+.live-stance-tug-score.left{
+  box-shadow:0 8px 22px rgba(59,130,246,.08);
+}
+.live-stance-tug-score.right{
+  box-shadow:0 8px 22px rgba(239,71,111,.08);
+}
+@media (prefers-reduced-motion:reduce){
+  .live-stance-knot{transition:none;}
+}

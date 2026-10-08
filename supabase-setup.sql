@@ -1,4 +1,4 @@
--- V2.26.1 SQL SETUP (schema / RPC unchanged from V2.26.0)
+-- V2.26.2 SQL SETUP (schema / RPC unchanged from V2.26.0)
 -- 新增可重用的小組底層：Session 分組、組員關係與每組共同提交；首波整合「小組共識」活動。
 -- 保留 V2.25.0 匿名提問牆＋同儕回應。
 -- 同時保留 V2.20.0 的 predict-reveal 學生狀態還原能力。

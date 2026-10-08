@@ -1,4 +1,4 @@
-/* Classroom Interactive V2.26.1 - Activity Module Registry
+/* Classroom Interactive V2.26.2 - Activity Module Registry
  * Centralizes activity metadata and context hooks so new activity types can be
  * registered without adding mode switch/if chains throughout the core files.
  */

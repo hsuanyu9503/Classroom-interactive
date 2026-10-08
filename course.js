@@ -50,6 +50,127 @@ function setPresentationView(view) {
   }
 }
 
+const presentationLiveStanceMetricAnimations=new WeakMap();
+const presentationLiveStanceMotion=new WeakMap();
+
+function animatePresentationLiveStanceMetric(element,target,{suffix="",empty=false,duration=320}={}) {
+  if(!element)return;
+  const previousFrame=presentationLiveStanceMetricAnimations.get(element);
+  if(previousFrame)cancelAnimationFrame(previousFrame);
+  if(empty){
+    element.textContent="—";
+    presentationLiveStanceMetricAnimations.delete(element);
+    return;
+  }
+  const next=Number(target)||0;
+  if(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches){
+    element.textContent=empty?"—":`${Math.round(next)}${suffix}`;
+    presentationLiveStanceMetricAnimations.delete(element);
+    return;
+  }
+  const parsed=parseFloat(String(element.textContent||"").replace(/[^0-9.-]/g,""));
+  const start=Number.isFinite(parsed)?parsed:next;
+  if(Math.abs(start-next)<0.01){
+    element.textContent=`${Math.round(next)}${suffix}`;
+    presentationLiveStanceMetricAnimations.delete(element);
+    return;
+  }
+  const started=performance.now();
+  const step=now=>{
+    const progress=Math.min(1,(now-started)/duration);
+    const eased=1-Math.pow(1-progress,3);
+    const value=Math.round(start+(next-start)*eased);
+    element.textContent=`${value}${suffix}`;
+    if(progress<1){
+      presentationLiveStanceMetricAnimations.set(element,requestAnimationFrame(step));
+    }else{
+      presentationLiveStanceMetricAnimations.delete(element);
+    }
+  };
+  presentationLiveStanceMetricAnimations.set(element,requestAnimationFrame(step));
+}
+
+function ensurePresentationLiveStanceBoard(container,liveStance) {
+  const allowUndecided=liveStance.allowUndecided!==false;
+  const structureKey=allowUndecided?"with-undecided":"without-undecided";
+  if(container.dataset.liveStanceStructure===structureKey && container.querySelector("[data-live-stance-role='knot']"))return false;
+  container.dataset.liveStanceStructure=structureKey;
+  container.style.setProperty("--tug-position","50%");
+  container.innerHTML=`
+    <div class="live-stance-tug-score left"><span data-live-stance-role="left-label"></span><strong data-live-stance-role="left-count">0</strong><small data-live-stance-role="left-pct">—</small></div>
+    <div class="live-stance-tug-arena" aria-label="左右立場拉鋸"><span class="live-stance-center-flag">中心</span><div class="live-stance-rope" aria-hidden="true"></div><div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div></div>
+    <div class="live-stance-tug-score right"><span data-live-stance-role="right-label"></span><strong data-live-stance-role="right-count">0</strong><small data-live-stance-role="right-pct">—</small></div>
+    ${allowUndecided?`<div class="live-stance-undecided-count"><span data-live-stance-role="undecided-label"></span><strong data-live-stance-role="undecided-count">0</strong></div>`:""}
+  `;
+  return true;
+}
+
+function animatePresentationLiveStancePosition(container,target) {
+  const numericTarget=Number(target);
+  const clamped=Math.max(4,Math.min(96,Number.isFinite(numericTarget)?numericTarget:50));
+  if(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches){
+    container.style.setProperty("--tug-position",`${clamped}%`);
+    return;
+  }
+  let motion=presentationLiveStanceMotion.get(container);
+  if(!motion){
+    const current=parseFloat(container.style.getPropertyValue("--tug-position"))||50;
+    motion={current,target:clamped,last:performance.now(),raf:0};
+    presentationLiveStanceMotion.set(container,motion);
+  }
+  motion.target=clamped;
+  if(motion.raf)return;
+  const tick=now=>{
+    const dt=Math.min(48,Math.max(8,now-motion.last||16));
+    motion.last=now;
+    const alpha=1-Math.exp(-dt/150);
+    motion.current+=(motion.target-motion.current)*alpha;
+    if(Math.abs(motion.target-motion.current)<0.04)motion.current=motion.target;
+    container.style.setProperty("--tug-position",`${motion.current.toFixed(3)}%`);
+    if(motion.current!==motion.target){
+      motion.raf=requestAnimationFrame(tick);
+    }else{
+      motion.raf=0;
+    }
+  };
+  motion.raf=requestAnimationFrame(tick);
+}
+
+function renderPresentationLiveStanceBoard(container,liveStance) {
+  if(!container || !liveStance)return;
+  const left=Math.max(0,Number(liveStance.left)||0);
+  const right=Math.max(0,Number(liveStance.right)||0);
+  const undecided=Math.max(0,Number(liveStance.undecided)||0);
+  const decided=left+right;
+  const leftPct=decided?Math.round(left/decided*100):50;
+  const rightPct=decided?100-leftPct:50;
+  const target=decided?right/decided*100:50;
+  const fresh=ensurePresentationLiveStanceBoard(container,liveStance);
+  container.querySelector("[data-live-stance-role='left-label']").textContent=liveStance.leftLabel||"左側立場";
+  container.querySelector("[data-live-stance-role='right-label']").textContent=liveStance.rightLabel||"右側立場";
+  const undecidedLabel=container.querySelector("[data-live-stance-role='undecided-label']");
+  if(undecidedLabel)undecidedLabel.textContent=liveStance.undecidedLabel||"還不確定";
+  const leftCount=container.querySelector("[data-live-stance-role='left-count']");
+  const rightCount=container.querySelector("[data-live-stance-role='right-count']");
+  const leftPctEl=container.querySelector("[data-live-stance-role='left-pct']");
+  const rightPctEl=container.querySelector("[data-live-stance-role='right-pct']");
+  const undecidedCount=container.querySelector("[data-live-stance-role='undecided-count']");
+  if(fresh){
+    leftCount.textContent=String(left);
+    rightCount.textContent=String(right);
+    leftPctEl.textContent=decided?`${leftPct}%`:"—";
+    rightPctEl.textContent=decided?`${rightPct}%`:"—";
+    if(undecidedCount)undecidedCount.textContent=String(undecided);
+  }else{
+    animatePresentationLiveStanceMetric(leftCount,left);
+    animatePresentationLiveStanceMetric(rightCount,right);
+    animatePresentationLiveStanceMetric(leftPctEl,leftPct,{suffix:"%",empty:!decided});
+    animatePresentationLiveStanceMetric(rightPctEl,rightPct,{suffix:"%",empty:!decided});
+    if(undecidedCount)animatePresentationLiveStanceMetric(undecidedCount,undecided);
+  }
+  animatePresentationLiveStancePosition(container,target);
+}
+
 function renderPresentationResults(summary = presentationSummary) {
   if (!presentationMode || !summary) return;
 
@@ -210,20 +331,7 @@ function renderPresentationResults(summary = presentationSummary) {
   }
 
   if (liveStance && liveStanceBoard) {
-    const left=Math.max(0,Number(liveStance.left)||0);
-    const right=Math.max(0,Number(liveStance.right)||0);
-    const undecided=Math.max(0,Number(liveStance.undecided)||0);
-    const decided=left+right;
-    const leftPct=decided ? Math.round(left/decided*100) : 50;
-    const rightPct=decided ? 100-leftPct : 50;
-    const knot=decided ? Math.max(4,Math.min(96,left/decided*100)) : 50;
-    liveStanceBoard.style.setProperty("--tug-position",`${knot}%`);
-    liveStanceBoard.innerHTML=`
-      <div class="live-stance-tug-score left"><span>${escapeHtml(liveStance.leftLabel||"左側立場")}</span><strong>${left}</strong><small>${decided?leftPct+"%":"—"}</small></div>
-      <div class="live-stance-tug-arena"><span class="live-stance-center-flag">中心</span><div class="live-stance-rope"></div><div class="live-stance-knot"><span>●</span></div></div>
-      <div class="live-stance-tug-score right"><span>${escapeHtml(liveStance.rightLabel||"右側立場")}</span><strong>${right}</strong><small>${decided?rightPct+"%":"—"}</small></div>
-      ${liveStance.allowUndecided!==false?`<div class="live-stance-undecided-count"><span>${escapeHtml(liveStance.undecidedLabel||"還不確定")}</span><strong>${undecided}</strong></div>`:""}
-    `;
+    renderPresentationLiveStanceBoard(liveStanceBoard,liveStance);
     $("presentationLiveStanceTotal").textContent=`已表態 ${Number(liveStance.answered)||0} / ${Number(liveStance.total)||participantCount}`;
     liveStanceSection.classList.remove("hidden");
   } else {

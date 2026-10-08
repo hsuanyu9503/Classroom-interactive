@@ -1,4 +1,4 @@
-/* V2.26.1 | Teacher Session + focus mode + group consensus */
+/* V2.26.2 | Teacher Session + focus mode + group consensus */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -1903,6 +1903,103 @@
     };
   }
 
+  const liveStanceMetricAnimations=new WeakMap();
+  const liveStanceBoardMotion=new WeakMap();
+
+  function animateLiveStanceMetric(element,target,{suffix="",empty=false,duration=320}={}) {
+    if(!element)return;
+    const previousFrame=liveStanceMetricAnimations.get(element);
+    if(previousFrame)cancelAnimationFrame(previousFrame);
+    if(empty){
+      element.textContent="—";
+      liveStanceMetricAnimations.delete(element);
+      return;
+    }
+    const next=Number(target)||0;
+    if(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches){
+      element.textContent=empty?"—":`${Math.round(next)}${suffix}`;
+      liveStanceMetricAnimations.delete(element);
+      return;
+    }
+    const parsed=parseFloat(String(element.textContent||"").replace(/[^0-9.-]/g,""));
+    const start=Number.isFinite(parsed)?parsed:next;
+    if(Math.abs(start-next)<0.01){
+      element.textContent=`${Math.round(next)}${suffix}`;
+      liveStanceMetricAnimations.delete(element);
+      return;
+    }
+    const started=performance.now();
+    const step=now=>{
+      const progress=Math.min(1,(now-started)/duration);
+      const eased=1-Math.pow(1-progress,3);
+      const value=Math.round(start+(next-start)*eased);
+      element.textContent=`${value}${suffix}`;
+      if(progress<1){
+        liveStanceMetricAnimations.set(element,requestAnimationFrame(step));
+      }else{
+        liveStanceMetricAnimations.delete(element);
+      }
+    };
+    liveStanceMetricAnimations.set(element,requestAnimationFrame(step));
+  }
+
+  function ensureLiveStanceBoardStructure(container,summary) {
+    const structureKey=summary.allowUndecided ? "with-undecided" : "without-undecided";
+    if(container.dataset.liveStanceStructure===structureKey && container.querySelector("[data-live-stance-role='knot']"))return false;
+    container.dataset.liveStanceStructure=structureKey;
+    container.style.setProperty("--tug-position","50%");
+    container.innerHTML=`
+      <div class="live-stance-tug-score left">
+        <span data-live-stance-role="left-label"></span>
+        <strong data-live-stance-role="left-count">0</strong>
+        <small data-live-stance-role="left-pct">—</small>
+      </div>
+      <div class="live-stance-tug-arena" aria-label="左右立場拉鋸">
+        <span class="live-stance-center-flag">中心</span>
+        <div class="live-stance-rope" aria-hidden="true"></div>
+        <div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div>
+      </div>
+      <div class="live-stance-tug-score right">
+        <span data-live-stance-role="right-label"></span>
+        <strong data-live-stance-role="right-count">0</strong>
+        <small data-live-stance-role="right-pct">—</small>
+      </div>
+      ${summary.allowUndecided ? `<div class="live-stance-undecided-count"><span data-live-stance-role="undecided-label"></span><strong data-live-stance-role="undecided-count">0</strong></div>` : ""}
+    `;
+    return true;
+  }
+
+  function animateLiveStancePosition(container,target) {
+    const numericTarget=Number(target);
+    const clamped=Math.max(4,Math.min(96,Number.isFinite(numericTarget)?numericTarget:50));
+    if(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches){
+      container.style.setProperty("--tug-position",`${clamped}%`);
+      return;
+    }
+    let motion=liveStanceBoardMotion.get(container);
+    if(!motion){
+      const current=parseFloat(container.style.getPropertyValue("--tug-position")) || 50;
+      motion={current,target:clamped,last:performance.now(),raf:0};
+      liveStanceBoardMotion.set(container,motion);
+    }
+    motion.target=clamped;
+    if(motion.raf)return;
+    const tick=now=>{
+      const dt=Math.min(48,Math.max(8,now-motion.last||16));
+      motion.last=now;
+      const alpha=1-Math.exp(-dt/150);
+      motion.current += (motion.target-motion.current)*alpha;
+      if(Math.abs(motion.target-motion.current)<0.04)motion.current=motion.target;
+      container.style.setProperty("--tug-position",`${motion.current.toFixed(3)}%`);
+      if(motion.current!==motion.target){
+        motion.raf=requestAnimationFrame(tick);
+      }else{
+        motion.raf=0;
+      }
+    };
+    motion.raf=requestAnimationFrame(tick);
+  }
+
   function renderLiveStanceBoard(container,summary,{large=false}={}) {
     if(!container)return;
     const left=summary.counts.left || 0;
@@ -1911,27 +2008,32 @@
     const decided=Math.max(0,left+right);
     const leftPct=decided ? Math.round(left/decided*100) : 50;
     const rightPct=decided ? 100-leftPct : 50;
-    const knot=decided ? Math.max(4,Math.min(96,right/decided*100)) : 50;
+    const knot=decided ? right/decided*100 : 50;
+    const fresh=ensureLiveStanceBoardStructure(container,summary);
     container.classList.toggle("large",Boolean(large));
-    container.style.setProperty("--tug-position",`${knot}%`);
-    container.innerHTML=`
-      <div class="live-stance-tug-score left">
-        <span>${escapeHtml(summary.leftLabel)}</span>
-        <strong>${left}</strong>
-        <small>${decided ? `${leftPct}%` : "—"}</small>
-      </div>
-      <div class="live-stance-tug-arena" aria-label="左右立場拉鋸">
-        <span class="live-stance-center-flag">中心</span>
-        <div class="live-stance-rope"></div>
-        <div class="live-stance-knot" title="目前拉鋸位置"><span>●</span></div>
-      </div>
-      <div class="live-stance-tug-score right">
-        <span>${escapeHtml(summary.rightLabel)}</span>
-        <strong>${right}</strong>
-        <small>${decided ? `${rightPct}%` : "—"}</small>
-      </div>
-      ${summary.allowUndecided ? `<div class="live-stance-undecided-count"><span>${escapeHtml(summary.undecidedLabel)}</span><strong>${undecided}</strong></div>` : ""}
-    `;
+    container.querySelector("[data-live-stance-role='left-label']").textContent=summary.leftLabel || "左側立場";
+    container.querySelector("[data-live-stance-role='right-label']").textContent=summary.rightLabel || "右側立場";
+    const undecidedLabel=container.querySelector("[data-live-stance-role='undecided-label']");
+    if(undecidedLabel)undecidedLabel.textContent=summary.undecidedLabel || "還不確定";
+    const leftCount=container.querySelector("[data-live-stance-role='left-count']");
+    const rightCount=container.querySelector("[data-live-stance-role='right-count']");
+    const leftPctEl=container.querySelector("[data-live-stance-role='left-pct']");
+    const rightPctEl=container.querySelector("[data-live-stance-role='right-pct']");
+    const undecidedCount=container.querySelector("[data-live-stance-role='undecided-count']");
+    if(fresh){
+      leftCount.textContent=String(left);
+      rightCount.textContent=String(right);
+      leftPctEl.textContent=decided?`${leftPct}%`:"—";
+      rightPctEl.textContent=decided?`${rightPct}%`:"—";
+      if(undecidedCount)undecidedCount.textContent=String(undecided);
+    }else{
+      animateLiveStanceMetric(leftCount,left);
+      animateLiveStanceMetric(rightCount,right);
+      animateLiveStanceMetric(leftPctEl,leftPct,{suffix:"%",empty:!decided});
+      animateLiveStanceMetric(rightPctEl,rightPct,{suffix:"%",empty:!decided});
+      if(undecidedCount)animateLiveStanceMetric(undecidedCount,undecided);
+    }
+    animateLiveStancePosition(container,knot);
   }
 
   function liveStanceHistoryArrays(snapshot) {
