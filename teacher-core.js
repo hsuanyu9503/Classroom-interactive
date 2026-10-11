@@ -1,4 +1,4 @@
-/* V2.26.2 | Teacher Core: workflow + collapsible Course/Lesson/Node editors */
+/* V2.27.1 | Teacher Core: workflow + collapsible Course/Lesson/Node editors */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2
@@ -390,11 +390,10 @@
 
     updateBackToTopVisibility();
 
+    $("workflowEyebrow").textContent = "CLASSROOM INTERACTIVE";
     if (currentWorkflow === "teach") {
-      $("workflowEyebrow").textContent = "TEACH WORKSPACE";
       $("workflowSubtitle").textContent = "建立課堂 Session，控制全班進度與教師投影。";
     } else {
-      $("workflowEyebrow").textContent = "PREP WORKSPACE";
       $("workflowSubtitle").textContent = "先整理教材與活動，再把它們編排成完整課程。";
     }
   }

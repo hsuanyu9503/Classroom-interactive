@@ -26,13 +26,13 @@
     <section id="activityState" class="hidden">
       <header class="student-hero">
         <div>
-          <p class="eyebrow">今日課堂任務</p>
+          <p id="studentHeroEyebrow" class="eyebrow">CLASSROOM INTERACTIVE</p>
           <h1 id="studentTitle">活動名稱</h1>
           <p id="studentSubtitle" class="subtle"></p>
         <div id="studentSessionBadge" class="student-session-badge hidden"></div>
         <div id="studentRealtimeStatus" class="student-realtime-status hidden">↻ 同步準備中</div>
         </div>
-        <div class="progress-wrap">
+        <div id="studentProgressWrap" class="progress-wrap">
           <div class="progress-meta">
             <span id="caseCounter">1 / 1</span>
             <span id="progressText">0%</span>
@@ -44,7 +44,7 @@
       </header>
 
       <section id="missionCard" class="student-card mission-card">
-        <div class="mission-heading">
+        <div id="missionHeading" class="mission-heading">
           <div>
             <span id="studentCaseIndex" class="section-kicker">任務 01</span>
             <h2 id="studentCaseTitle">材料名稱</h2>
@@ -320,6 +320,7 @@
               <div><span id="deliberationStageKicker" class="step-number">第 1 層 / 1</span><h3>目前公開資訊</h3></div>
               <span id="deliberationSyncBadge" class="sync-badge">教師同步</span>
             </div>
+            <p id="deliberationSourceNoteText" class="student-context-note hidden"></p>
             <div id="deliberationReleasedLayers" class="deliberation-released-layers"></div>
           </section>
           <section id="deliberationAnswerPanel" class="classification-step">

@@ -335,29 +335,23 @@ function setStudentRealtimeStatus(status, detail = "") {
   const badge = el("studentRealtimeStatus");
   if (!badge || !isSessionPlay()) return;
   badge.className = "student-realtime-status";
+  badge.title = detail || "";
 
-  const context = window.ClassroomSessionAPI?.getParticipantContext?.();
-  if (context?.mode !== "cloud") {
-    badge.classList.add("local");
-    badge.textContent = "🧪 本機同步";
+  // Student focus mode: healthy sync is intentionally invisible.
+  // Only surface a state when the student may need to know about it.
+  if (status === "closed") {
+    badge.classList.add("closed");
+    badge.textContent = "活動已結束";
     badge.classList.remove("hidden");
     return;
   }
-
-  if (status === "connected") {
-    badge.classList.add("live");
-    badge.textContent = "⚡ 即時同步";
-  } else if (status === "connecting") {
-    badge.textContent = "⚡ Realtime 連線中";
-  } else if (status === "closed") {
-    badge.classList.add("closed");
-    badge.textContent = "Session 已結束";
-  } else {
+  if (!["connected","connecting","local"].includes(status)) {
     badge.classList.add("fallback");
-    badge.textContent = "↻ 輪詢備援";
+    badge.textContent = "↻ 連線較慢，仍在同步";
+    badge.classList.remove("hidden");
+    return;
   }
-  badge.title = detail || "";
-  badge.classList.remove("hidden");
+  badge.classList.add("hidden");
 }
 
 function stopStudentRealtime() {
@@ -403,15 +397,9 @@ function startStudentRealtimeSync() {
 }
 
 function renderSessionBadge() {
-  const badge = el("studentSessionBadge");
-  if (!badge) return;
-  const context = window.ClassroomSessionAPI?.getParticipantContext?.();
-  if (!isSessionPlay() || !context) {
-    badge.classList.add("hidden");
-    return;
-  }
-  badge.textContent = `📡 已加入課堂 · ${context.studentCode}`;
-  badge.classList.remove("hidden");
+  // QR / Session details are teacher-facing information.
+  // Once the student has joined successfully, keep the activity screen focused.
+  el("studentSessionBadge")?.classList.add("hidden");
 }
 
 async function recordSessionResponse(mode, {
@@ -452,7 +440,9 @@ async function loadFromUrl() {
     el("loadingState").classList.add("hidden");
     el("activityState").classList.remove("hidden");
     el("studentTitle").textContent = activity.title || "課堂活動";
-    el("studentSubtitle").textContent = activity.subtitle || "";
+    const subtitle=(activity.subtitle || "").trim();
+    el("studentSubtitle").textContent = subtitle;
+    el("studentSubtitle").classList.toggle("hidden", !subtitle || subtitle === (activity.title || "").trim());
     renderSessionBadge();
     renderCase();
     startStudentRealtimeSync();
@@ -473,6 +463,7 @@ function currentTask() {
 
 function resetPanels() {
   el("missionCard").classList.remove("hidden");
+  el("missionHeading")?.classList.remove("hidden");
   el("interactionArea").classList.add("hidden");
   el("elementTypeInteraction").classList.add("hidden");
   el("progressiveInteraction").classList.add("hidden");
@@ -506,6 +497,7 @@ function renderCase() {
   el("caseCounter").textContent = `${currentCaseIndex + 1} / ${count}`;
   el("progressBar").style.width = `${progress}%`;
   el("progressText").textContent = `${Math.round(progress)}%`;
+  el("studentProgressWrap")?.classList.toggle("hidden", count <= 1);
 
   const rendered = ActivityModules?.invoke?.("student", activity.template, "render");
   if (rendered === undefined) renderStandardCase();
@@ -533,13 +525,11 @@ function renderWorkMedia(image, name) {
 
 
 function renderSimpleModuleHeader(kind,question) {
+  // The module interaction already contains the actual question and the only
+  // instructions a student needs. Avoid repeating activity title/subtitle/question.
   el("studentCaseIndex").textContent=kind;
-  el("studentCaseTitle").textContent=activity.title || kind;
   renderWorkMedia("","");
-  el("studentCaseIntro").textContent=activity.subtitle || "";
-  el("studentCaseIntro").classList.toggle("hidden",!activity.subtitle);
-  el("studentCasePrompt").textContent=question || "";
-  el("lockBadge").textContent="作答中";
+  el("missionHeading")?.classList.add("hidden");
 }
 
 function renderConfidencePanel() {
@@ -1079,11 +1069,11 @@ function deliberationPostResponse(stage) {
 function renderDeliberationTask() {
   clearInterval(deliberationPollTimer);
   el("studentCaseIndex").textContent="逐層思辨";
-  el("studentCaseTitle").textContent=activity.title || "逐層思辨";
   renderWorkMedia("", "");
-  el("studentCaseIntro").textContent=activity.deliberation?.sourceNote || "";
-  el("studentCaseIntro").classList.toggle("hidden",!activity.deliberation?.sourceNote);
-  el("studentCasePrompt").textContent="每一層只根據目前已公開資訊作答；沒有標準答案，也不計分。";
+  el("missionHeading")?.classList.add("hidden");
+  const sourceNote=(activity.deliberation?.sourceNote || "").trim();
+  const sourceEl=el("deliberationSourceNoteText");
+  if(sourceEl){sourceEl.textContent=sourceNote;sourceEl.classList.toggle("hidden",!sourceNote);}
   el("deliberationInteraction").classList.remove("hidden");
 
   if (isSessionPlay()) {

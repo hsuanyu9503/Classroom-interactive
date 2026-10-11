@@ -2716,7 +2716,9 @@ html{
   .topbar-actions .btn{
     flex:1 1 180px;
   }
-  .workspace-version{
+  .workspace-brandline{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.workspace-brandline .eyebrow{margin:0}
+.workspace-version{
     flex:0 0 auto;
     align-self:flex-start;
   }
@@ -5531,4 +5533,589 @@ select:focus{
 }
 @media (prefers-reduced-motion:reduce){
   .live-stance-knot{transition:none;}
+}
+
+
+/* =========================================================
+   V2.27.1 — Student focus mode
+   Keep QR-join and student activity screens task-first.
+   ========================================================= */
+.student-page .student-hero{
+  min-height:0;
+  padding:22px 26px;
+}
+.student-page .student-hero .eyebrow{display:none}
+.student-page .student-hero h1{
+  margin-top:0;
+  font-size:clamp(27px,4vw,40px);
+}
+.student-page .student-hero .subtle{max-width:760px}
+.student-page .mission-card:has(.mission-heading.hidden){
+  padding-top:22px;
+}
+.student-context-note{
+  margin:0 0 14px;
+  padding:10px 12px;
+  border:1px solid #e4e8ef;
+  border-radius:14px;
+  background:#f8fafc;
+  color:#687386;
+  font-size:13px;
+  line-height:1.65;
+}
+.qr-join .join-card{max-width:520px}
+.qr-join .join-icon{margin-bottom:8px}
+.qr-join .join-form{margin-top:22px}
+
+.course-session-player .course-player-header .eyebrow{display:none}
+.course-session-player .course-player-header{padding-block:18px}
+.course-session-player .course-brand h1{margin-top:0}
+
+@media(max-width:640px){
+  .student-page .student-hero{padding:18px 18px}
+  .student-page .student-hero h1{font-size:27px}
+  .student-page .mission-card:has(.mission-heading.hidden){padding-top:16px}
+}
+.course-player-page:not(.teacher-course-presentation) .course-player-header .eyebrow{display:none}
+.course-player-page:not(.teacher-course-presentation) #courseNodeKicker{display:none}
+
+/* =========================================================
+   V2.27.1 — Classroom Manager visual language
+   Flat, calm, classroom-first UI shared by teacher/student views.
+   ========================================================= */
+:root{
+  --bg:#f5f9fd;
+  --panel:#ffffff;
+  --text:#21304a;
+  --muted:#7a89a3;
+  --line:#dbe5f0;
+  --primary:#665cff;
+  --primary-dark:#554be6;
+  --accent:#7c72ff;
+  --accent-dark:#6258e9;
+  --success:#1f9a70;
+  --danger:#d95563;
+  --soft:#efedff;
+  --shadow:0 10px 28px rgba(45,63,91,.055);
+  --radius:18px;
+}
+
+body{
+  background:#f5f9fd;
+}
+body::before{
+  content:"";
+  position:fixed;
+  z-index:9999;
+  top:0;
+  left:0;
+  right:0;
+  height:4px;
+  pointer-events:none;
+  background:linear-gradient(90deg,#6672ff 0%,#6b79ff 20%,#5bc9b2 43%,#d7de67 63%,#ffc176 82%,#ff8ea5 100%);
+}
+
+/* Core controls: closer to Classroom Manager's simple rounded controls. */
+.btn{
+  min-height:42px;
+  border-radius:12px;
+  font-weight:850;
+  letter-spacing:0;
+  box-shadow:none;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{
+  border:1px solid #665cff;
+  background:#665cff;
+  color:#fff;
+  box-shadow:0 7px 18px rgba(102,92,255,.18);
+}
+.btn-primary:hover{
+  border-color:#554be6;
+  background:#554be6;
+  box-shadow:0 9px 22px rgba(102,92,255,.22);
+}
+.btn-accent{
+  border:1px solid #665cff;
+  background:#665cff;
+  color:#fff;
+  box-shadow:0 7px 18px rgba(102,92,255,.16);
+}
+.btn-accent:hover{background:#554be6;border-color:#554be6}
+.btn-secondary{
+  border:1px solid transparent;
+  background:#f0efff;
+  color:#5d52e8;
+}
+.btn-secondary:hover{background:#e9e7ff;color:#5046d7}
+.btn-ghost{
+  color:#62718b;
+  border-color:#dce5ef;
+  background:#fff;
+}
+.btn-danger-soft{color:#c74b5a;background:#fff0f2;border-color:transparent}
+.icon-btn{background:#f3f6fa;color:#5f6f88}
+
+input,textarea,select{
+  border-color:#d4deea;
+  border-radius:12px;
+  background:#fff;
+  color:#21304a;
+}
+input:focus,textarea:focus,select:focus{
+  border-color:#756cff;
+  box-shadow:0 0 0 3px rgba(102,92,255,.10);
+}
+.status-chip{
+  background:#f0efff;
+  color:#5e54db;
+}
+.section-kicker,.eyebrow{
+  color:#655cff;
+  letter-spacing:.14em;
+}
+.subtle{color:#7b89a2}
+
+.panel,.student-card,.course-state-card{
+  border:1px solid #dce6f1;
+  background:#fff;
+  box-shadow:var(--shadow);
+}
+.tip-box{
+  border:1px solid #e2e7f2;
+  background:#f7f7ff;
+  color:#606b82;
+}
+
+/* ---------- Teacher workspace ---------- */
+.teacher-page{
+  background:#f5f9fd;
+}
+.teacher-page .topbar{
+  width:min(1380px,calc(100% - 40px));
+  max-width:none;
+  min-height:0;
+  margin:0 auto;
+  padding:32px 0 18px;
+  overflow:visible;
+  border:0;
+  border-radius:0;
+  color:#21304a;
+  background:transparent;
+  box-shadow:none;
+}
+.teacher-page .topbar::after{display:none}
+.teacher-page .topbar h1{
+  margin:3px 0 7px;
+  color:#21304a;
+  font-size:clamp(29px,3.2vw,40px);
+  font-weight:900;
+  letter-spacing:-.035em;
+}
+.teacher-page .topbar .eyebrow{color:#665cff}
+.teacher-page .topbar .subtle{color:#7b89a2;font-size:14px}
+.teacher-page .topbar .btn-secondary{
+  min-height:42px;
+  padding-inline:16px;
+  color:#5d52e8;
+  border:0;
+  background:#f0efff;
+  box-shadow:none;
+}
+.workspace-brandline{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.workspace-brandline .eyebrow{margin:0}
+.workspace-version{
+  padding:6px 10px;
+  border:0;
+  background:#eeeaff;
+  color:#665cff;
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.teacher-workflow-nav,
+.workflow-context-bar,
+.v15-layout,
+.workspace-tabs{
+  width:min(1380px,calc(100% - 40px));
+}
+.teacher-workflow-nav{margin:4px auto 0}
+.workflow-switcher{
+  gap:6px;
+  padding:6px;
+  border:0;
+  border-radius:15px;
+  background:#e9f0ff;
+  box-shadow:none;
+}
+.workflow-mode-btn{
+  min-height:58px;
+  padding:10px 15px;
+  border:0;
+  border-radius:11px;
+  color:#6b7890;
+}
+.workflow-mode-btn:hover{background:rgba(255,255,255,.62)}
+.workflow-mode-btn.active{
+  border:0;
+  background:#fff;
+  color:#5d52e8;
+  box-shadow:0 3px 10px rgba(65,78,109,.06);
+}
+.workflow-mode-icon{
+  width:36px;
+  height:36px;
+  border-radius:10px;
+  background:transparent;
+}
+.workflow-mode-btn.active .workflow-mode-icon{background:#f0efff}
+.workflow-mode-btn strong{font-size:15px}
+.workflow-mode-btn small{color:#8996aa;font-size:11px}
+.workspace-tabs{
+  margin:10px auto 18px;
+  padding:6px;
+  gap:4px;
+  border:0;
+  border-radius:15px;
+  background:#e9f0ff;
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.workspace-tab{
+  min-height:42px;
+  border-radius:10px;
+  color:#718098;
+}
+.workspace-tab:hover{background:rgba(255,255,255,.58);color:#56657f}
+.workspace-tab.active{
+  color:#5f54e6;
+  background:#fff;
+  box-shadow:0 3px 9px rgba(65,78,109,.055);
+}
+.workflow-context-bar{
+  min-height:70px;
+  margin:0 auto 16px;
+  padding:15px 17px;
+  border:1px solid #dce6f1;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 8px 22px rgba(45,63,91,.035);
+}
+.teacher-page[data-workflow="teach"] .workflow-context-bar{
+  border-color:#dce6f1;
+  background:#fff;
+}
+.workflow-context-stat{
+  min-width:78px;
+  border:0;
+  border-radius:12px;
+  background:#f4f7fc;
+}
+.workflow-context-stat strong{color:#665cff}
+.teacher-page[data-workflow="teach"] .workflow-context-stat strong{color:#1f936e}
+.v15-layout{gap:18px;margin-bottom:50px}
+.v15-sidebar{
+  padding:18px 16px;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 8px 24px rgba(45,63,91,.04);
+  backdrop-filter:none;
+}
+.v15-list{gap:8px}
+.v15-list-item{
+  padding:12px 13px;
+  border:1px solid transparent;
+  border-radius:12px;
+  background:#f6f8fc;
+}
+.v15-list-item:hover{border-color:#dce5ef;background:#fff}
+.v15-list-item.active{
+  border-color:transparent;
+  background:#f0efff;
+}
+.v15-list-item.active::before{background:#665cff}
+.v15-editor{
+  padding:24px;
+  border-radius:18px;
+  box-shadow:0 8px 24px rgba(45,63,91,.045);
+}
+.v15-editor::before{display:none}
+.v15-editor-head{
+  margin-bottom:20px;
+  padding-bottom:16px;
+  border-bottom:1px solid #e8edf4;
+}
+.v15-section-toolbar{
+  border-color:#e8edf4;
+}
+.case-card,
+.wave-editor-card,
+.student-inspector,
+.session-card,
+.course-session-control,
+.wave-session-control{
+  border-color:#dfe7f1;
+  background:#fff;
+  box-shadow:none;
+}
+.case-card{background:#fff}
+.v15-savebar,
+.workspace-view[data-workspace-view="activities"] .sticky-actions{
+  border-color:#dce5ef !important;
+  background:rgba(255,255,255,.97) !important;
+  box-shadow:0 10px 28px rgba(45,63,91,.10) !important;
+}
+
+/* ---------- Student activity / join ---------- */
+.student-page{
+  background:#f5f9fd;
+}
+.student-page::after,.student-page::before{display:none}
+.student-shell{
+  width:min(1040px,calc(100% - 32px));
+  padding:32px 0 56px;
+}
+.student-page .student-hero{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  min-height:0;
+  margin:0 0 16px;
+  padding:8px 4px 12px;
+  overflow:visible;
+  border:0;
+  border-radius:0;
+  color:#21304a;
+  background:transparent;
+  box-shadow:none;
+}
+.student-page .student-hero::after{display:none}
+.student-page .student-hero .eyebrow{
+  display:block;
+  margin-bottom:5px;
+  color:#665cff;
+  font-size:11px;
+}
+.student-page .student-hero h1{
+  margin:0 0 6px;
+  color:#21304a;
+  font-size:clamp(26px,4vw,38px);
+  letter-spacing:-.035em;
+}
+.student-page .student-hero .subtle{
+  color:#7b89a2;
+  font-size:14px;
+}
+.student-page .student-session-badge{
+  border:0;
+  background:#f0efff;
+  color:#5e54dc;
+}
+.student-card{
+  border-radius:18px;
+  box-shadow:0 8px 24px rgba(45,63,91,.05);
+}
+.mission-card{
+  min-height:0;
+  padding:24px;
+}
+.mission-card::before{display:none}
+.classification-step,
+.wave-session-control,
+.progressive-clue-board,
+.progressive-waiting-panel,
+.open-classification-waiting-panel{
+  border-color:#dfe7f1;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:none;
+}
+.classification-step-head h3{color:#263650}
+.classification-step-head p{color:#7b89a2}
+.step-number,.summary-label{color:#655cff}
+.student-type-choice,
+.classification-choice,
+.scale-choice,
+.ranking-student-item,
+.question-wall-post,
+.group-consensus-option{
+  border-color:#dce5ef;
+  box-shadow:none;
+}
+.student-type-choice:hover,
+.classification-choice:hover{
+  border-color:#cfd8e6;
+  box-shadow:0 5px 14px rgba(45,63,91,.045);
+}
+.classification-step-footer{border-color:#e8edf4}
+
+.join-page{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+.join-shell{
+  width:min(540px,calc(100% - 28px));
+  margin:auto;
+  padding:72px 0 42px;
+}
+.join-card{
+  padding:32px;
+  border:1px solid #dce6f1;
+  border-radius:20px;
+  background:#fff;
+  box-shadow:0 12px 32px rgba(45,63,91,.07);
+}
+.join-icon{
+  width:64px;
+  height:64px;
+  margin-bottom:14px;
+  border-radius:18px;
+  background:#f0efff;
+  color:#665cff;
+  font-size:30px;
+}
+.join-card h1{color:#21304a;font-size:29px}
+.join-card>.subtle{color:#7b89a2}
+.join-mode-notice{
+  border:1px solid #e2e8f1;
+  background:#f7f9fc;
+  color:#6e7d94;
+}
+.app-credit{color:#9aa6b8}
+
+/* ---------- Course player ---------- */
+.course-player-page{
+  background:#f5f9fd;
+}
+.course-player-shell{
+  width:min(1180px,calc(100% - 32px));
+}
+.course-player-header{
+  border:1px solid #dce6f1;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 8px 24px rgba(45,63,91,.045);
+}
+.course-cover-icon{
+  border-radius:14px;
+  background:#f0efff;
+  color:#665cff;
+  box-shadow:none;
+}
+.course-brand h1{color:#21304a}
+.course-node-card,
+.course-lesson-intro,
+.course-presentation-results{
+  border-color:#dce6f1;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 8px 24px rgba(45,63,91,.04);
+}
+.course-content-node,
+.course-work-card,
+.course-type-card{
+  border-color:#dfe7f1;
+  background:#fff;
+  box-shadow:none;
+}
+.course-player-nav{
+  border-color:#dce6f1;
+  background:rgba(245,249,253,.92);
+}
+
+/* Keep semantic live-stance colours intentionally distinct. */
+.live-stance-tug-board{
+  --stance-left:#3b82f6;
+  --stance-left-soft:#79aaf8;
+  --stance-right:#ef476f;
+  --stance-right-soft:#f58aa0;
+}
+
+@media(max-width:760px){
+  .teacher-page .topbar,
+  .teacher-workflow-nav,
+  .workflow-context-bar,
+  .v15-layout,
+  .workspace-tabs{
+    width:min(100% - 20px,1380px);
+  }
+  .teacher-page .topbar{padding:24px 0 12px}
+  .teacher-page .topbar h1{font-size:29px}
+  .workflow-switcher{grid-template-columns:1fr 1fr}
+  .workflow-mode-btn{min-height:52px;padding:8px 10px;gap:8px}
+  .workflow-mode-btn small{display:none}
+  .workflow-mode-icon{width:30px;height:30px;font-size:17px}
+  .workflow-context-bar{border-radius:15px}
+  .v15-editor{padding:18px}
+  .student-shell{width:min(100% - 20px,1040px);padding-top:24px}
+  .student-page .student-hero{grid-template-columns:1fr;padding:5px 2px 10px}
+  .mission-card{padding:18px}
+  .join-shell{padding:52px 0 32px}
+  .join-card{padding:24px 20px;border-radius:18px}
+  .course-player-shell{width:min(100% - 20px,1180px)}
+}
+
+/* =========================================================
+   V2.27.1 — Layered deliberation mobile overflow fix
+   ========================================================= */
+.layout > *,
+.v15-layout > *,
+.editor-panel,
+.deliberation-editor-section,
+.deliberation-toolbar,
+.deliberation-layer-toolbar{
+  min-width:0;
+}
+
+@media(max-width:640px){
+  .deliberation-toolbar{
+    width:100%;
+    min-width:0;
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .deliberation-toolbar > div:first-child{
+    min-width:0;
+  }
+  .deliberation-layer-toolbar{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    width:100%;
+    min-width:0;
+    gap:8px;
+  }
+  .deliberation-layer-count-control{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 34px minmax(48px,58px) 34px;
+    grid-template-areas:
+      "label minus count plus"
+      "hint hint hint hint";
+    align-items:center;
+    justify-content:stretch;
+    width:100%;
+    min-width:0;
+    gap:6px;
+    padding:8px;
+  }
+  .deliberation-layer-count-control > span{
+    grid-area:label;
+    min-width:0;
+    white-space:normal;
+  }
+  .deliberation-layer-count-control #decreaseDeliberationLayerBtn{grid-area:minus}
+  .deliberation-layer-count-control input{
+    grid-area:count;
+    width:100%;
+    min-width:0;
+  }
+  .deliberation-layer-count-control #increaseDeliberationLayerBtn{grid-area:plus}
+  .deliberation-layer-count-control small{
+    grid-area:hint;
+    min-width:0;
+    white-space:normal;
+    text-align:right;
+  }
+  .deliberation-layer-toolbar > .btn{
+    width:100%;
+    min-width:0;
+  }
 }

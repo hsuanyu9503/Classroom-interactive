@@ -1,4 +1,4 @@
-/* V2.26.2 | Teacher Session + focus mode + group consensus */
+/* V2.27.1 | Teacher Session + focus mode + group consensus */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);

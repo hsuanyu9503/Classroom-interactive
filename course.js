@@ -584,7 +584,8 @@ function renderActivityNode(node,container) {
 function renderLessonIntro(step) {
   const box = $("courseLessonIntro");
   const lesson = step.lesson;
-  if (!lesson.goal) {
+  // Show the lesson goal when the lesson begins instead of repeating it at every node.
+  if (!lesson.goal || step.nodeIndex !== 0) {
     box.classList.add("hidden");
     return;
   }
@@ -607,7 +608,7 @@ function renderCurrentStep() {
   $("courseProgressWrap").classList.toggle("hidden",courseSnapshot.course.settings?.showProgress === false);
 
   renderLessonIntro(step);
-  $("courseNodeKicker").textContent = nodeTypeLabel(node.type);
+  $("courseNodeKicker").textContent = "目前任務";
   $("courseNodeTitle").textContent = node.title || "教學節點";
   $("courseNodeSubtitle").textContent = node.subtitle || "";
   $("courseNodeSubtitle").classList.toggle("hidden",!node.subtitle);
@@ -753,29 +754,20 @@ function setCourseRealtimeStatus(status, detail = "") {
   const badge = $("courseRealtimeStatus");
   if (!badge || !courseSessionMode) return;
   badge.className = "student-realtime-status";
-
-  const context = participantContext();
-  if (context?.mode !== "cloud") {
-    badge.classList.add("local");
-    badge.textContent = "🧪 本機同步";
+  badge.title = detail || "";
+  if (status === "closed") {
+    badge.classList.add("closed");
+    badge.textContent = "課堂已結束";
     badge.classList.remove("hidden");
     return;
   }
-
-  if (status === "connected") {
-    badge.classList.add("live");
-    badge.textContent = "⚡ 即時同步";
-  } else if (status === "connecting") {
-    badge.textContent = "⚡ Realtime 連線中";
-  } else if (status === "closed") {
-    badge.classList.add("closed");
-    badge.textContent = "Session 已結束";
-  } else {
+  if (!["connected","connecting","local"].includes(status)) {
     badge.classList.add("fallback");
-    badge.textContent = "↻ 輪詢備援";
+    badge.textContent = "↻ 連線較慢，仍在同步";
+    badge.classList.remove("hidden");
+    return;
   }
-  badge.title = detail || "";
-  badge.classList.remove("hidden");
+  badge.classList.add("hidden");
 }
 
 function startCourseSessionPolling(intervalMs = 2200) {
@@ -864,9 +856,7 @@ async function loadCourse() {
       const targetIndex = flatSteps.findIndex(step => step.node.id === context.currentNodeRef);
       if (targetIndex >= 0) currentStepIndex = targetIndex;
       lastCourseRevision = Number(context.revision || 0);
-      const badge = $("courseSessionBadge");
-      badge.textContent = `📡 已加入完整課程 · ${context.studentCode}`;
-      badge.classList.remove("hidden");
+      $("courseSessionBadge")?.classList.add("hidden");
     }
 
     $("coursePlayerTitle").textContent = courseSnapshot.course.title || "完整課程";

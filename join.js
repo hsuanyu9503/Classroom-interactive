@@ -5,9 +5,27 @@
   if (code) $("joinCode").value = code;
 
   const cloud = window.ClassroomSessionAPI.configFromUrlFragment();
-  $("joinModeNotice").innerHTML = cloud
-    ? "<strong>☁️ 已連線到課堂雲端 Session</strong><span>你的作答會傳回老師的課堂控制台。</span>"
-    : "<strong>🧪 本機測試 Session</strong><span>沒有雲端設定時，只能在建立 Session 的同一個瀏覽器測試。</span>";
+  const codeField = $("joinCodeField");
+  const modeNotice = $("joinModeNotice");
+
+  if (code) {
+    document.body.classList.add("qr-join");
+    codeField?.classList.add("hidden");
+    $("joinEyebrow").textContent = "CLASSROOM INTERACTIVE";
+    $("joinTitle").textContent = "輸入暱稱，開始活動";
+    $("joinSubtitle").textContent = "填寫老師能辨識的暱稱即可加入。";
+  } else {
+    $("joinEyebrow").textContent = "CLASSROOM INTERACTIVE";
+    $("joinTitle").textContent = "加入今天的課堂活動";
+    $("joinSubtitle").textContent = "輸入課堂代碼與暱稱即可加入。";
+  }
+
+  if (cloud) {
+    modeNotice?.classList.add("hidden");
+  } else {
+    modeNotice.innerHTML = "<strong>🧪 本機測試模式</strong><span>此連結目前只適合在老師建立 Session 的同一個瀏覽器測試。</span>";
+    modeNotice.classList.remove("hidden");
+  }
 
   $("joinForm").addEventListener("submit", async event => {
     event.preventDefault();
