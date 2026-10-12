@@ -392,7 +392,10 @@ async function recordSessionResponse(mode, {
 } = {}) {
   if (!isSessionPlay()) return true;
   try {
-    await window.ClassroomSessionAPI?.submitResponse?.({
+    if (typeof window.ClassroomSessionAPI?.submitResponse !== "function") {
+      throw new Error("課堂連線尚未準備好");
+    }
+    await window.ClassroomSessionAPI.submitResponse({
       taskIndex: currentCaseIndex,
       stageKey,
       mode,
@@ -403,7 +406,7 @@ async function recordSessionResponse(mode, {
     return true;
   } catch (error) {
     console.error("Session 作答紀錄失敗", error);
-    showToast("作答已完成，但暫時無法回傳老師端");
+    showToast("作答尚未回傳成功，請稍後重試；若老師已切換階段，請先確認目前開放的題目。");
     return false;
   }
 }
@@ -593,7 +596,7 @@ async function submitRankingResponse() {
   const labels=rankingOrder.map(id=>byId.get(id)?.label || id);
   if(!ensureConfidenceSelection())return;
   const payload=confidencePayload({orderIds:[...rankingOrder],orderLabels:labels,selectedTypeName:labels[0] || ""});
-  await recordSessionResponse("ranking",{selectedElements:labels,selectedType:rankingOrder[0] || "",payload});
+  if (!(await recordSessionResponse("ranking",{selectedElements:labels,selectedType:rankingOrder[0] || "",payload}))) return;
   completeConfidenceStep();markCurrentTaskComplete();showComplete();
 }
 
@@ -622,7 +625,8 @@ async function submitOpenTextResponse() {
   if (!text) { showToast("請先寫下你的想法"); return; }
   if(!ensureConfidenceSelection())return;
   openTextValue=text;const payload=confidencePayload({text});
-  await recordSessionResponse("open-text",{payload});completeConfidenceStep();markCurrentTaskComplete();showComplete();
+  if (!(await recordSessionResponse("open-text",{payload}))) return;
+  completeConfidenceStep();markCurrentTaskComplete();showComplete();
 }
 
 function questionWallTask() { return activity?.questionWall || {}; }
@@ -800,7 +804,7 @@ async function submitGroupConsensusAction(){
   const stage=Math.max(1,Number(groupConsensusState?.current_stage)||1);groupConsensusBusy=true;el("submitGroupConsensusBtn").disabled=true;
   try{
     const name=groupConsensusOptionName(groupConsensusChoice);
-    if(stage<2){await recordSessionResponse("group-consensus",{stageKey:"individual",selectedType:groupConsensusChoice,payload:{selectedTypeName:name}});if(!isSessionPlay()){groupConsensusState.responses=[{mode:"group-consensus",stage_key:"individual",selected_type:groupConsensusChoice,payload:{selectedTypeName:name}}];renderGroupConsensusState();showToast("預覽模式已記錄個人判斷");}else await syncGroupConsensusState(false);}
+    if(stage<2){if(!(await recordSessionResponse("group-consensus",{stageKey:"individual",selectedType:groupConsensusChoice,payload:{selectedTypeName:name}})))return;if(!isSessionPlay()){groupConsensusState.responses=[{mode:"group-consensus",stage_key:"individual",selected_type:groupConsensusChoice,payload:{selectedTypeName:name}}];renderGroupConsensusState();showToast("預覽模式已記錄個人判斷");}else await syncGroupConsensusState(false);}
     else{
       if(!groupConsensusState?.group_consensus?.group){showToast("老師尚未完成分組");return;}
       const reason=(el("groupConsensusReasonInput")?.value||"").trim();if(task.reasonRequired!==false&&!reason){showToast("請先填寫小組共識理由");return;}
@@ -823,7 +827,8 @@ function renderPredictRevealTask() {
 async function submitPredictInitial() {
   if(!predictInitialChoice){showToast("請先選擇你的預測");return;}
   const option=predictOptions().find(x=>x.id===predictInitialChoice);const payload=confidencePayload({selectedTypeName:option?.label||predictInitialChoice});if(!payload)return;
-  await recordSessionResponse("predict-reveal",{selectedType:predictInitialChoice,stageKey:"initial",payload});savePredictInitialMemory(predictInitialChoice);completeConfidenceStep();
+  if (!(await recordSessionResponse("predict-reveal",{selectedType:predictInitialChoice,stageKey:"initial",payload}))) return;
+  savePredictInitialMemory(predictInitialChoice);completeConfidenceStep();
   el("predictInitialPanel").classList.add("hidden");el("predictWaitingPanel").classList.remove("hidden");
   if(!isSessionPlay()){el("predictLocalRevealBtn").classList.remove("hidden");} else {startPredictPolling();}
 }
@@ -833,7 +838,8 @@ function showPredictFinalPanel() {
 async function submitPredictFinal() {
   if(!predictFinalChoice){showToast("請先選擇再次判斷的答案");return;}
   const option=predictOptions().find(x=>x.id===predictFinalChoice);const payload=confidencePayload({selectedTypeName:option?.label||predictFinalChoice,initialType:predictInitialChoice,initialTypeName:predictOptions().find(x=>x.id===predictInitialChoice)?.label||predictInitialChoice,changed:Boolean(predictInitialChoice&&predictInitialChoice!==predictFinalChoice)});if(!payload)return;
-  await recordSessionResponse("predict-reveal",{selectedType:predictFinalChoice,stageKey:"final",payload});savePredictInitialMemory("");completeConfidenceStep();markCurrentTaskComplete();showComplete();
+  if (!(await recordSessionResponse("predict-reveal",{selectedType:predictFinalChoice,stageKey:"final",payload}))) return;
+  savePredictInitialMemory("");completeConfidenceStep();markCurrentTaskComplete();showComplete();
 }
 async function syncPredictRevealState(refresh=false) {
   if(!isSessionPlay())return;
@@ -1636,15 +1642,14 @@ async function submitProgressiveJudgement() {
     typeName:type?.n || "未命名分類",
     clueText:task.clues[progressiveStageIndex]?.t || ""
   };
-  const existing = progressiveHistory.findIndex(item => item.stage === entry.stage);
-  if (existing >= 0) progressiveHistory[existing] = entry;
-  else progressiveHistory.push(entry);
-
-  await recordSessionResponse("progressive-reveal", {
+  if (!(await recordSessionResponse("progressive-reveal", {
     selectedType:progressiveSelectedType,
     stageKey:`clue-${entry.stage}`,
     payload:confidencePayload({selectedTypeName:entry.typeName, clueIndex:progressiveStageIndex, clueText:entry.clueText})
-  });
+  }))) return;
+  const existing = progressiveHistory.findIndex(item => item.stage === entry.stage);
+  if (existing >= 0) progressiveHistory[existing] = entry;
+  else progressiveHistory.push(entry);
   completeConfidenceStep();
   el("progressiveJudgementPanel").classList.add("hidden");
   el("progressiveWaitingPanel").classList.remove("hidden");
@@ -1921,7 +1926,7 @@ async function submitOpenClassification() {
     changed
   };
 
-  await recordSessionResponse("open-classification", {
+  if (!(await recordSessionResponse("open-classification", {
     selectedElements,
     selectedType:openSelectedType,
     stageKey:isRejudge ? "final" : "initial",
@@ -1931,7 +1936,7 @@ async function submitOpenClassification() {
       changeReason,
       changed
     })
-  });
+  }))) return;
   completeConfidenceStep();
 
   if (isRejudge) openFinalResponse = response;
@@ -2220,7 +2225,7 @@ function markCurrentTaskComplete() {
   el("progressText").textContent = `${Math.round(progress)}%`;
 }
 
-function submitElementType() {
+async function submitElementType() {
   const task = currentTask();
   if (!modeASelectedType) {
     showToast("請先選擇一個你認為最合理的分類");
@@ -2228,15 +2233,33 @@ function submitElementType() {
   }
   if(!ensureConfidenceSelection())return;
 
+  const studentElements = [...modeASelectedElements];
+  const exactElements = arraysEqualAsSets(studentElements, task.correctElementIds);
+  const exactType = modeASelectedType === task.correctTypeId;
+  const elementNames = task.elements
+    .filter(element => modeASelectedElements.has(element.i))
+    .map(element => element.n);
+  const selectedTypeName = task.types.find(type => type.i === modeASelectedType)?.n || modeASelectedType;
+  if (!(await recordSessionResponse("element-type", {
+    selectedElements: studentElements,
+    selectedType: modeASelectedType,
+    payload: confidencePayload({
+      elementNames,
+      selectedTypeName,
+      exactElements,
+      exactType,
+      referenceElementIds: task.correctElementIds,
+      referenceTypeId: task.correctTypeId
+    })
+  }))) return;
+  completeConfidenceStep();
+
   el("elementTypeInteraction").classList.add("hidden");
   el("progressiveInteraction").classList.add("hidden");
   el("elementTypeResultPanel").classList.remove("hidden");
   el("lockBadge").textContent = "已完成判斷";
   markCurrentTaskComplete();
 
-  const studentElements = [...modeASelectedElements];
-  const exactElements = arraysEqualAsSets(studentElements, task.correctElementIds);
-  const exactType = modeASelectedType === task.correctTypeId;
 
   el("elementTypeResultIcon").textContent = exactElements && exactType ? "🎯" : "🔎";
   el("elementTypeResultTitle").textContent = exactElements && exactType
@@ -2255,25 +2278,6 @@ function submitElementType() {
 
   renderResultType("studentTypeResult", task.types.find(type => type.i === modeASelectedType));
   renderResultType("referenceTypeResult", task.types.find(type => type.i === task.correctTypeId));
-
-  const elementNames = task.elements
-    .filter(element => modeASelectedElements.has(element.i))
-    .map(element => element.n);
-  const selectedTypeName = task.types.find(type => type.i === modeASelectedType)?.n || modeASelectedType;
-
-  recordSessionResponse("element-type", {
-    selectedElements: studentElements,
-    selectedType: modeASelectedType,
-    payload: confidencePayload({
-      elementNames,
-      selectedTypeName,
-      exactElements,
-      exactType,
-      referenceElementIds: task.correctElementIds,
-      referenceTypeId: task.correctTypeId
-    })
-  });
-  completeConfidenceStep();
 
   el("elementTypeNextBtn").textContent =
     currentCaseIndex === totalTasks() - 1 ? "完成活動" : "下一關";
@@ -2435,7 +2439,7 @@ function arraysEqualAsSets(a, b) {
   return a.every(x => setB.has(x));
 }
 
-function submitCase() {
+async function submitCase() {
   const c = currentTask();
   const chosen = [...selected];
 
@@ -2448,10 +2452,10 @@ function submitCase() {
   if(!ensureConfidenceSelection())return;
 
   if (isOpenChoiceActivity()) {
-    recordSessionResponse("choice-identify", {
+    if (!(await recordSessionResponse("choice-identify", {
       selectedElements: chosen,
       payload: confidencePayload({choiceMode:"open",selectedLabels: chosen})
-    });
+    }))) return;
     completeConfidenceStep();
     showOpenDiscussion(c, chosen);
     return;
@@ -2462,11 +2466,7 @@ function submitCase() {
   const correctChosen = chosen.filter(x => correct.includes(x)).length;
   const missed = correct.filter(x => !selected.has(x)).length;
 
-  el("interactionArea").classList.add("hidden");
-  el("feedbackPanel").classList.remove("hidden");
-  el("lockBadge").textContent = "已作答";
-
-  recordSessionResponse("choice-identify", {
+  if (!(await recordSessionResponse("choice-identify", {
     selectedElements: chosen,
     payload: confidencePayload({
       choiceMode:"reference",
@@ -2475,7 +2475,10 @@ function submitCase() {
       missed,
       referenceCards: correct
     })
-  });
+  }))) return;
+  el("interactionArea").classList.add("hidden");
+  el("feedbackPanel").classList.remove("hidden");
+  el("lockBadge").textContent = "已作答";
   completeConfidenceStep();
 
   if (exact) {
