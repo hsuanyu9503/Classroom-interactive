@@ -1,4 +1,4 @@
-/* V2.27.1 | Teacher Session + focus mode + group consensus */
+/* V2.32.1 | Teacher Session + unified choice/identify module */
 /* ----- Classroom Session Manager V2.4 ----- */
 (() => {
   const $ = id => document.getElementById(id);
@@ -425,7 +425,6 @@
       secondaryList:Array.isArray(extras.secondaryList) ? extras.secondaryList : [],
       textWall:Array.isArray(extras.textWall) ? extras.textWall : [],
       wordCloud:Array.isArray(extras.wordCloud) ? extras.wordCloud : [],
-      stanceMap:extras.stanceMap && typeof extras.stanceMap === "object" ? extras.stanceMap : null,
       liveStance:extras.liveStance && typeof extras.liveStance === "object" ? extras.liveStance : null,
       confidence:buildPresentationConfidence(responses,Math.max(1,Number(activeSession.currentStage)||1))
     };
@@ -476,7 +475,22 @@
 
   function activityModeLabel(mode) {
     if (!mode) return "—";
-    return ActivityModules?.modeLabel?.(mode) || "選擇與揭示";
+    return ActivityModules?.modeLabel?.(mode) || "選擇與辨識";
+  }
+
+  function activitySummaryModeLabel(activity) {
+    const base=activityModeLabel(activity?.template);
+    const normalizedMode=ActivityModules?.normalizeMode?.(activity?.template);
+    if (normalizedMode === "choice-identify") {
+      return `${base}｜${activity?.choiceMode === "open" ? "開放選擇" : "有參考答案"}`;
+    }
+    if (normalizedMode === "evidence-classification") {
+      return `${base}｜${activity?.classificationFlow === "discussion" ? "討論後再判斷" : "單次判斷"}`;
+    }
+    if (normalizedMode === "information-revision") {
+      return `${base}｜${activity?.informationRevisionFlow === "progressive" ? "逐步揭露" : "預測揭曉"}`;
+    }
+    return base;
   }
 
 
@@ -507,7 +521,7 @@
     activities.forEach(activity => {
       const option = document.createElement("option");
       option.value = activity.id;
-      option.textContent = `${activity.title}｜${activityModeLabel(activity.template)}`;
+      option.textContent = `${activity.title}｜${activitySummaryModeLabel(activity)}`;
       select.appendChild(option);
     });
     if (activities.some(activity => activity.id === current)) select.value = current;
@@ -548,7 +562,7 @@
       <div>
         <strong>${escapeHtml(activity.title)}</strong>
         <p>${escapeHtml(activity.subtitle || "沒有副標題")}</p>
-        <small>${activityModeLabel(activity.template)} · ${escapeHtml(ActivityModules?.previewSummary?.(activity) || `${activity.taskCount || 0} 個任務`)}</small>
+        <small>${activitySummaryModeLabel(activity)} · ${escapeHtml(ActivityModules?.previewSummary?.(activity) || `${activity.taskCount || 0} 個任務`)}</small>
       </div>`;
     if (!$("sessionTitleInput").value.trim() || $("sessionTitleInput").dataset.autoTitle === "1") {
       $("sessionTitleInput").value = activity.title;
@@ -1273,9 +1287,10 @@
         : Array.isArray(response.selected_elements) ? response.selected_elements : [];
       const selectedLabels=Array.isArray(response.payload?.selectedLabels) ? response.payload.selectedLabels : [];
       const selectionRows=[];
-      if (response.mode === "open-tags") {
-        selectionRows.push(createInspectorLine("選取標籤",selectedLabels.length ? chipListHtml(selectedLabels) : "",{html:true}));
-      } else if (response.mode === "drag-reveal") {
+      if (response.mode === "open-tags" || (response.mode === "choice-identify" && (response.payload?.choiceMode === "open" || selectedLabels.length))) {
+        const values=selectedLabels.length ? selectedLabels : selectedElements;
+        selectionRows.push(createInspectorLine("選取特徵／標籤",values.length ? chipListHtml(values) : "",{html:true}));
+      } else if (response.mode === "drag-reveal" || response.mode === "choice-identify") {
         selectionRows.push(createInspectorLine("選取項目",selectedElements.length ? chipListHtml(selectedElements) : "",{html:true}));
       } else {
         selectionRows.push(createInspectorLine("選取依據",selectedElements.length ? chipListHtml(selectedElements) : "",{html:true}));
@@ -2249,38 +2264,6 @@
       try { document.exitFullscreen?.(); } catch {}
     }
   }
-
-  function renderScaleControl(snapshot) {
-    const panel=$("scaleSessionControl");
-    if (!panel || activeSession?.activityMode!=="scale-spectrum" || activeSession.status==="closed") { panel?.classList.add("hidden"); return; }
-    panel.classList.remove("hidden");
-    const responses=moduleResponses(snapshot,"scale-spectrum");
-    const total=Number(snapshot?.participant_count)||0;
-    $("scaleAnsweredBadge").textContent=`${new Set(responses.map(r=>r.participant_id)).size} / ${total}`;
-    const sample=responses.find(r=>Number(r.payload?.pointCount)>0);
-    const count=sample ? Math.max(3,Math.min(10,Number(sample?.payload?.pointCount)||5)) : 0;
-    const counts=count ? Array.from({length:count},(_,index)=>({id:String(index+1),label:String(index+1),count:0,order:index})) : [];
-    const values=[];
-    responses.forEach(response=>{
-      const value=Number(response.payload?.value ?? response.selected_type);
-      if (!Number.isFinite(value) || value<1 || value>count) return;
-      counts[value-1].count++;values.push(value);
-    });
-    const key=`scale:${activeSession?.id || ""}:${activeSession?.currentNodeRef || "activity"}`;
-    renderLiveBarStats($("scaleLiveDistribution"),counts,{key,totalParticipants:total,emptyText:"目前還沒有學生提交量表。"});
-    const shown=liveStatsIsShown(key);
-    values.sort((a,b)=>a-b);
-    const avg=values.length ? values.reduce((sum,value)=>sum+value,0)/values.length : 0;
-    const median=values.length ? (values.length%2 ? values[(values.length-1)/2] : (values[values.length/2-1]+values[values.length/2])/2) : 0;
-    $("scaleAverageValue").textContent=shown&&values.length ? avg.toFixed(2).replace(/\.00$/,"") : "—";
-    $("scaleMedianValue").textContent=shown&&values.length ? String(median) : "—";
-    $("scaleEndpointLabels").textContent=sample
-      ? `${sample.payload?.leftLabel || "低"} ← 1 ～ ${count} → ${sample.payload?.rightLabel || "高"}`
-      : "等待第一份量表作答後顯示量尺設定";
-    const list=$("scaleLiveDistribution");
-    if (list) list._rerenderLiveStats=()=>renderScaleControl(snapshot);
-  }
-
   function renderRankingControl(snapshot) {
     const panel=$("rankingSessionControl");
     if (!panel || activeSession?.activityMode!=="ranking" || activeSession.status==="closed") { panel?.classList.add("hidden"); return; }
@@ -2469,11 +2452,6 @@
     const finals=responses.filter(r=>r.stage_key==="final"),summary=$("predictChangeSummary");if(stage>=2&&finals.length){const changed=finals.filter(r=>Boolean(r.payload?.changed)).length;$("predictChangedCount").textContent=changed;$("predictUnchangedCount").textContent=finals.length-changed;summary.classList.remove("hidden");}else summary.classList.add("hidden");
   }
   async function changePredictPhase(delta){if(!activeSession||activeSession.activityMode!=="predict-reveal")return;const target=Math.max(1,Math.min((activeSession.currentStage||1)+delta,2));try{await window.ClassroomSessionAPI.setStage(activeSession,target);await refreshActiveSession();}catch(error){showSessionToast(error.message||"更新預測揭曉階段失敗");}}
-  function renderStanceMapControl(snapshot){
-    const panel=$("stanceMapSessionControl");if(!panel||activeSession?.activityMode!=="stance-map"||activeSession.status==="closed"){panel?.classList.add("hidden");return;}panel.classList.remove("hidden");const responses=moduleResponses(snapshot,"stance-map").filter(r=>Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y))),total=Number(snapshot?.participant_count)||0;$("stanceAnsweredBadge").textContent=`${new Set(responses.map(r=>r.participant_id)).size} / ${total}`;
-    const map=$("stanceTeacherMap");map.innerHTML='<i class="stance-cross stance-cross-x"></i><i class="stance-cross stance-cross-y"></i>';responses.forEach((r,index)=>{const point=document.createElement("span");point.className="stance-cloud-point";point.style.left=`${Math.max(0,Math.min(100,Number(r.payload.x)))}%`;point.style.bottom=`${Math.max(0,Math.min(100,Number(r.payload.y)))}%`;point.style.setProperty("--point-color",stableLiveStatColor(r.participant_id||index,index));point.title="匿名學生";map.appendChild(point);});
-    const avgX=responses.length?responses.reduce((sum,r)=>sum+Number(r.payload.x),0)/responses.length:0,avgY=responses.length?responses.reduce((sum,r)=>sum+Number(r.payload.y),0)/responses.length:0;$("stanceAverageX").textContent=responses.length?avgX.toFixed(1):"—";$("stanceAverageY").textContent=responses.length?avgY.toFixed(1):"—";const sample=responses[0]?.payload;$("stanceTeacherAxes").textContent=sample?`X：${sample.xLeft||"左"} → ${sample.xRight||"右"}｜Y：${sample.yBottom||"下"} → ${sample.yTop||"上"}`:"等待第一份作答後顯示座標設定";
-  }
   function confidenceStageKeyForSession(stageOverride=null){const mode=activeSession?.activityMode,stage=Math.max(1,Number(stageOverride ?? activeSession?.currentStage)||1);if(mode==="progressive-reveal")return `clue-${stage}`;if(mode==="open-classification"||mode==="predict-reveal")return stage>=2?"final":"initial";if(mode==="layered-deliberation")return `layer-${stage}`;return "final";}
   function buildPresentationConfidence(responses,currentStage){
     const stageKey=confidenceStageKeyForSession(currentStage);
@@ -2493,22 +2471,6 @@
   function renderPredictSessionSummary({snapshot,details,participants}) {
     const rows=sessionResponsesForMode(snapshot,"predict-reveal"),initials=rows.filter(r=>r.stage_key==="initial"),finals=rows.filter(r=>r.stage_key==="final"),responders=new Set(finals.map(r=>r.participant_id)).size;$("summaryCompletionRate").textContent=participants?`${Math.round((responders/participants)*100)}%`:"—";const changed=finals.filter(r=>r.payload?.changed).length;const section=document.createElement("section");section.className="summary-section";section.innerHTML=`<div class="summary-section-head"><strong>預測與再次判斷</strong><span>${finals.length} 份最終回答</span></div><div class="wave-metrics"><div><span>改變答案</span><strong>${changed}</strong></div><div><span>維持答案</span><strong>${Math.max(0,finals.length-changed)}</strong></div><div><span>初次預測</span><strong>${initials.length}</strong></div></div>`;details.appendChild(section);return true;
   }
-  function renderStanceSessionSummary({snapshot,details,participants}) {
-    const rows=moduleResponses(snapshot,"stance-map").filter(r=>Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y))),responders=new Set(rows.map(r=>r.participant_id)).size;$("summaryCompletionRate").textContent=participants?`${Math.round((responders/participants)*100)}%`:"—";const ax=rows.length?rows.reduce((s,r)=>s+Number(r.payload.x),0)/rows.length:0,ay=rows.length?rows.reduce((s,r)=>s+Number(r.payload.y),0)/rows.length:0;const section=document.createElement("section");section.className="summary-section";section.innerHTML=`<div class="summary-section-head"><strong>二維立場摘要</strong><span>${rows.length} 筆</span></div><div class="wave-metrics"><div><span>X 平均</span><strong>${rows.length?ax.toFixed(1):"—"}</strong></div><div><span>Y 平均</span><strong>${rows.length?ay.toFixed(1):"—"}</strong></div></div>`;details.appendChild(section);return true;
-  }
-
-  function renderScaleSessionSummary({snapshot,details,participants}) {
-    const responses=moduleResponses(snapshot,"scale-spectrum");
-    const values=responses.map(r=>Number(r.payload?.value ?? r.selected_type)).filter(Number.isFinite).sort((a,b)=>a-b);
-    const responders=new Set(responses.map(r=>r.participant_id)).size;
-    $("summaryCompletionRate").textContent=participants ? `${Math.round((responders/participants)*100)}%` : "—";
-    const avg=values.length ? values.reduce((a,b)=>a+b,0)/values.length : 0;
-    const median=values.length ? (values.length%2 ? values[(values.length-1)/2] : (values[values.length/2-1]+values[values.length/2])/2) : 0;
-    const section=document.createElement("section");section.className="summary-section";
-    section.innerHTML=`<div class="summary-section-head"><strong>量表摘要</strong><span>${responses.length} 筆</span></div><div class="wave-metrics"><div><span>平均</span><strong>${values.length?avg.toFixed(2).replace(/\.00$/,""):"—"}</strong></div><div><span>中位數</span><strong>${values.length?median:"—"}</strong></div></div>`;
-    details.appendChild(section);return true;
-  }
-
   function renderRankingSessionSummary({snapshot,details,participants}) {
     const responses=moduleResponses(snapshot,"ranking");
     const responders=new Set(responses.map(r=>r.participant_id)).size;
@@ -2904,38 +2866,6 @@
         return {changedCount,unchangedCount:finalResponses.length-changedCount};
       }
     });
-
-    register("scale-spectrum", {
-      renderControl:renderScaleControl,
-      participantHistory:(participantId,responses) => {
-        const response=responses.find(item=>item.participant_id===participantId && item.mode==="scale-spectrum" && item.stage_key==="final");
-        return response ? `<span class="judgement-chip">量表 ${escapeHtml(String(response.payload?.value ?? response.selected_type ?? "—"))}</span>` : "";
-      },
-      inspectorFields:response => [
-        {label:"量表位置",value:String(response.payload?.value ?? response.selected_type ?? "")},
-        {label:"光譜範圍",value:`${response.payload?.leftLabel || "低"} ～ ${response.payload?.rightLabel || "高"}`}
-      ],
-      presentationPhase:({responses}) => ({
-        responses:responses.filter(item=>item.mode==="scale-spectrum" && item.stage_key==="final"),
-        label:"量表分布"
-      }),
-      presentationExtras:({responses}) => {
-        const rows=responses.filter(item=>item.mode==="scale-spectrum" && item.stage_key==="final");
-        const values=rows.map(item=>Number(item.payload?.value ?? item.selected_type)).filter(Number.isFinite).sort((a,b)=>a-b);
-        if (!values.length) return {customMetrics:[]};
-        const average=values.reduce((sum,value)=>sum+value,0)/values.length;
-        const median=values.length%2 ? values[(values.length-1)/2] : (values[values.length/2-1]+values[values.length/2])/2;
-        const sample=rows.find(item=>Number(item.payload?.pointCount)>0);
-        const note=sample ? `${sample.payload?.leftLabel || "低"} ～ ${sample.payload?.rightLabel || "高"}` : "全班量表";
-        return {customMetrics:[
-          {label:"平均",value:average.toFixed(2).replace(/\.00$/,""),note},
-          {label:"中位數",value:String(median),note:`${values.length} 份回答`}
-        ]};
-      },
-      renderSummary:renderScaleSessionSummary,
-      suppressGenericSummaryDistribution:() => true
-    });
-
     register("ranking", {
       renderControl:renderRankingControl,
       participantHistory:(participantId,responses) => {
@@ -3019,30 +2949,6 @@
       presentationExtras:({responses,currentStage})=>{if(currentStage<2)return{};const finals=responses.filter(r=>r.mode==="predict-reveal"&&r.stage_key==="final"),changed=finals.filter(r=>r.payload?.changed).length;return {changedCount:changed,unchangedCount:finals.length-changed};},
       renderSummary:renderPredictSessionSummary
     });
-    register("stance-map", {
-      renderControl:renderStanceMapControl,
-      participantHistory:(participantId,responses)=>{const r=responses.find(x=>x.participant_id===participantId&&x.mode==="stance-map"&&x.stage_key==="final");return r?`<span class="judgement-chip">X ${escapeHtml(r.payload?.x)} · Y ${escapeHtml(r.payload?.y)}</span>`:"";},
-      inspectorFields:response=>[{label:"二維位置",value:`X ${response.payload?.x ?? "—"} · Y ${response.payload?.y ?? "—"}`},{label:"X 軸",value:`${response.payload?.xLeft||"左"} ～ ${response.payload?.xRight||"右"}`},{label:"Y 軸",value:`${response.payload?.yBottom||"下"} ～ ${response.payload?.yTop||"上"}`}],
-      presentationPhase:({responses})=>({responses:responses.filter(r=>r.mode==="stance-map"&&r.stage_key==="final"&&Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y))),label:"二維立場"}),
-      presentationExtras:({responses})=>{
-        const rows=responses.filter(r=>r.mode==="stance-map"&&r.stage_key==="final"&&Number.isFinite(Number(r.payload?.x))&&Number.isFinite(Number(r.payload?.y)));
-        if(!rows.length)return{customMetrics:[],stanceMap:null,suppressDistribution:true};
-        const ax=rows.reduce((s,r)=>s+Number(r.payload.x),0)/rows.length,ay=rows.reduce((s,r)=>s+Number(r.payload.y),0)/rows.length;
-        const sample=rows[0]?.payload||{};
-        return{
-          suppressDistribution:true,
-          customMetrics:[{label:"X 平均",value:ax.toFixed(1),note:"二維立場中心"},{label:"Y 平均",value:ay.toFixed(1),note:`${rows.length} 份回答`}],
-          stanceMap:{
-            points:rows.slice(0,120).map(r=>({x:Number(r.payload.x),y:Number(r.payload.y)})),
-            average:{x:ax,y:ay},
-            labels:{xLeft:sample.xLeft||"左",xRight:sample.xRight||"右",yBottom:sample.yBottom||"下",yTop:sample.yTop||"上"}
-          }
-        };
-      },
-      renderSummary:renderStanceSessionSummary,
-      suppressGenericSummaryDistribution:()=>true
-    });
-
     register("live-stance", {
       renderControl:renderLiveStanceControl,
       participantHistory:(participantId,responses)=>{

@@ -2500,8 +2500,6 @@ input[type="color"]{height:46px;padding:5px 7px;cursor:pointer}
 /* =========================================================
    V2.4 — Teach Home / Session Summary / legacy activity mode
    ========================================================= */
-.legacy-mode-option{display:none}
-.editor-panel.open-tags-mode .legacy-mode-option{display:flex}
 
 .teach-home-dashboard{display:grid;gap:18px}
 .teach-home-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
@@ -6118,4 +6116,47 @@ input:focus,textarea:focus,select:focus{
     width:100%;
     min-width:0;
   }
+}
+
+/* V2.28.0 — scale spectrum and 2D stance map modules retired; legacy CSS may remain inert for backup compatibility. */
+
+/* V2.30.0 — unified choice & identify module */
+.choice-identify-mode-panel{
+  margin:18px 0;
+  padding:18px;
+  border:1px solid var(--line, #d8e1ee);
+  border-radius:18px;
+  background:rgba(255,255,255,.88);
+  box-shadow:0 8px 20px rgba(59,71,111,.05);
+}
+.choice-identify-mode-head h3{margin:.2rem 0 .35rem;}
+.choice-identify-mode-options{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin-top:14px;
+}
+.choice-identify-mode-option{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:14px;
+  border:1px solid #d7dfec;
+  border-radius:15px;
+  background:#fff;
+  cursor:pointer;
+  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+}
+.choice-identify-mode-option:has(input:checked){
+  border-color:#7667d9;
+  background:#f6f4ff;
+  box-shadow:0 0 0 3px rgba(118,103,217,.10);
+}
+.choice-identify-mode-option>input{width:18px;height:18px;min-height:0;padding:0;margin:2px 0 0;flex:0 0 18px;accent-color:#675cff;}
+.choice-identify-mode-option span{display:grid;gap:4px;min-width:0;}
+.choice-identify-mode-option strong{font-size:.98rem;}
+.choice-identify-mode-option small{color:var(--muted,#667085);line-height:1.55;}
+@media (max-width:640px){
+  .choice-identify-mode-panel{padding:14px;margin:14px 0;}
+  .choice-identify-mode-options{grid-template-columns:1fr;gap:9px;}
 }

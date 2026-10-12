@@ -662,6 +662,30 @@
     const session = sessions.find(item => item.id === context.sessionId);
     if (!session) throw new Error("本機 Session 已不存在");
     if (session.status !== "active") throw new Error("Session 已結束");
+    // V2.32.1：本機 Session 與 Supabase 的階段提交規則一致。
+    // 防止從舊分頁或自行送出的請求提前寫入後續階段答案。
+    if (session.activityMode === "predict-reveal") {
+      const currentStage = Number(session.currentStage || 1);
+      if (mode !== "predict-reveal" ||
+          !((stageKey === "initial" && currentStage === 1) ||
+            (stageKey === "final" && currentStage === 2))) {
+        throw new Error("目前尚未開放這個預測揭曉作答階段");
+      }
+    }
+    if (session.activityMode === "progressive-reveal") {
+      const match = mode === "progressive-reveal" && /^clue-([1-9]\d*)$/.exec(stageKey);
+      if (!match || Number(match[1]) !== Number(session.currentStage || 1)) {
+        throw new Error("目前尚未開放這個資訊揭露作答階段");
+      }
+    }
+    if (session.activityMode === "open-classification") {
+      const currentStage = Number(session.currentStage || 1);
+      if (mode !== "open-classification" ||
+          !((stageKey === "initial" && currentStage === 1) ||
+            (stageKey === "final" && currentStage === 2))) {
+        throw new Error("目前尚未開放這個分類作答階段");
+      }
+    }
     if (mode === "group-consensus" && session.activityMode === "group-consensus") {
       if (stageKey !== "individual") throw new Error("小組共識的個人階段資料格式不正確");
       if (Number(session.currentStage || 1) !== 1) throw new Error("個人判斷階段已結束");
@@ -893,7 +917,7 @@
     const config = getConfig();
     if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
     return {
-      schema:"classroom-teacher-handoff", version:1, appVersion:"2.27.0", exportedAt:new Date().toISOString(),
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.32.1", exportedAt:new Date().toISOString(),
       warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
       cloud:{url:config.url,key:config.key},
       session:{

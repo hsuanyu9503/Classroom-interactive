@@ -1,4 +1,4 @@
-/* V2.27.1 | Activity Editor + layered deliberation + accordion module picker */
+/* V2.32.1 | Activity Editor + unified choice/identify + evidence/classification modules */
 /* ----- Activity Template Editor ----- */
 const STORAGE_KEY = "interactive-classroom-v1";
 const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
@@ -11,6 +11,8 @@ let toastTimer = null;
 
 const el = (id) => document.getElementById(id);
 const ActivityModules = window.ClassroomActivityModules;
+const RETIRED_ACTIVITY_MODES = new Set(["scale-spectrum", "stance-map"]);
+let retiredActivities = [];
 
 const activityTitle = el("activityTitle");
 const activitySubtitle = el("activitySubtitle");
@@ -46,11 +48,6 @@ const deliberationReflectionKey = el("deliberationReflectionKey");
 const deliberationReflectionValue = el("deliberationReflectionValue");
 const deliberationReflectionAction = el("deliberationReflectionAction");
 const deliberationReflectionExtension = el("deliberationReflectionExtension");
-const scaleEditorSection = el("scaleEditorSection");
-const scaleQuestion = el("scaleQuestion");
-const scalePointCount = el("scalePointCount");
-const scaleLeftLabel = el("scaleLeftLabel");
-const scaleRightLabel = el("scaleRightLabel");
 const rankingEditorSection = el("rankingEditorSection");
 const rankingQuestion = el("rankingQuestion");
 const rankingItemsEditor = el("rankingItemsEditor");
@@ -87,12 +84,6 @@ const addPredictOptionBtn = el("addPredictOptionBtn");
 const predictRevealTitle = el("predictRevealTitle");
 const predictRevealContent = el("predictRevealContent");
 const predictRejudgePrompt = el("predictRejudgePrompt");
-const stanceMapEditorSection = el("stanceMapEditorSection");
-const stanceQuestion = el("stanceQuestion");
-const stanceXLeft = el("stanceXLeft");
-const stanceXRight = el("stanceXRight");
-const stanceYBottom = el("stanceYBottom");
-const stanceYTop = el("stanceYTop");
 const liveStanceEditorSection = el("liveStanceEditorSection");
 const liveStanceQuestion = el("liveStanceQuestion");
 const liveStanceLeftLabel = el("liveStanceLeftLabel");
@@ -101,6 +92,14 @@ const liveStanceAllowUndecided = el("liveStanceAllowUndecided");
 const liveStanceUndecidedLabelField = el("liveStanceUndecidedLabelField");
 const liveStanceUndecidedLabel = el("liveStanceUndecidedLabel");
 const standardTaskToolbar = el("standardTaskToolbar");
+const choiceIdentifyModePanel = el("choiceIdentifyModePanel");
+const choiceIdentifyModeInputs = [...document.querySelectorAll('input[name="choiceIdentifyMode"]')];
+const classificationFlowPanel = el("classificationFlowPanel");
+const classificationFlowInputs = [...document.querySelectorAll('input[name="classificationFlow"]')];
+const informationRevisionFlowPanel = el("informationRevisionFlowPanel");
+const informationRevisionFlowInputs = [...document.querySelectorAll('input[name="informationRevisionFlow"]')];
+const textExchangeFlowPanel = el("textExchangeFlowPanel");
+const textExchangeFlowInputs = [...document.querySelectorAll('input[name="textExchangeFlow"]')];
 const shareDialog = el("shareDialog");
 const shareUrlInput = el("shareUrl");
 const qrcodeEl = el("qrcode");
@@ -233,12 +232,6 @@ function newOpenClassificationTask() {
     allowRejudge:true
   };
 }
-
-
-function newScaleActivityData() {
-  return {question:"",pointCount:5,leftLabel:"完全不同意",rightLabel:"非常同意"};
-}
-
 function newRankingActivityData() {
   return {
     question:"",
@@ -309,14 +302,6 @@ function normalizePredictRevealData(data) {
   const options=source.map((item,index)=>({id:String(item?.id||createId()),label:String(item?.label||"").trim()||`選項 ${index+1}`})).slice(0,10);
   return {question:String(data?.question||""),options:options.length>=2?options:base.options,revealTitle:String(data?.revealTitle||base.revealTitle),revealContent:String(data?.revealContent||""),rejudgePrompt:String(data?.rejudgePrompt||base.rejudgePrompt)};
 }
-function newStanceMapActivityData() {
-  return {question:"",xLeft:"不合理",xRight:"合理",yBottom:"影響小",yTop:"影響大"};
-}
-function normalizeStanceMapData(data) {
-  const base=newStanceMapActivityData();
-  return {question:String(data?.question||""),xLeft:String(data?.xLeft||base.xLeft),xRight:String(data?.xRight||base.xRight),yBottom:String(data?.yBottom||base.yBottom),yTop:String(data?.yTop||base.yTop)};
-}
-
 function newLiveStanceActivityData() {
   return {question:"",leftLabel:"支持",rightLabel:"反對",allowUndecided:true,undecidedLabel:"還不確定"};
 }
@@ -331,18 +316,6 @@ function normalizeLiveStanceData(data) {
     undecidedLabel:String(data?.undecidedLabel || base.undecidedLabel)
   };
 }
-
-function normalizeScaleData(data) {
-  const base=newScaleActivityData();
-  const pointCount=Math.max(3,Math.min(10,Math.round(Number(data?.pointCount)||base.pointCount)));
-  return {
-    question:String(data?.question || ""),
-    pointCount,
-    leftLabel:String(data?.leftLabel || base.leftLabel),
-    rightLabel:String(data?.rightLabel || base.rightLabel)
-  };
-}
-
 function normalizeRankingData(data) {
   const source=Array.isArray(data?.items) ? data.items : [];
   const items=source.map((item,index)=>({
@@ -368,7 +341,7 @@ function normalizeQuestionWallData(data) {
     placeholder:String(data?.placeholder || base.placeholder),
     maxLength:Math.max(30,Math.min(500,Math.round(Number(data?.maxLength)||base.maxLength))),
     maxPosts:Math.max(1,Math.min(5,Math.round(Number(data?.maxPosts)||base.maxPosts))),
-    allowReplies:Object.prototype.hasOwnProperty.call(data || {}, "allowReplies") ? data.allowReplies !== false : false,
+    allowReplies:Object.prototype.hasOwnProperty.call(data || {}, "allowReplies") ? data.allowReplies !== false : base.allowReplies,
     replyMaxLength:Math.max(30,Math.min(300,Math.round(Number(data?.replyMaxLength)||base.replyMaxLength)))
   };
 }
@@ -564,7 +537,10 @@ const defaultActivity = {
   id: createId(),
   title: "示例活動｜關鍵依據判斷",
   subtitle: "先選出重要資訊，再揭示教師整理",
-  template: "drag-reveal",
+  template: "choice-identify",
+  choiceMode: "reference",
+  classificationFlow: "single",
+  textExchangeFlow: "responses",
   cases: [
     {
       title: "校園植物觀察",
@@ -596,15 +572,19 @@ function showToast(message) {
 }
 
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(activities));
+  // 已停用模組的舊活動保留在備份資料中，但不再出現在編輯器、Course 或 Session。
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...activities, ...retiredActivities]));
 }
 
 function loadActivities() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    activities = Array.isArray(saved) ? saved : [];
+    const all = Array.isArray(saved) ? saved : [];
+    retiredActivities = all.filter(activity => RETIRED_ACTIVITY_MODES.has(String(activity?.template || "")));
+    activities = all.filter(activity => !RETIRED_ACTIVITY_MODES.has(String(activity?.template || "")));
   } catch {
     activities = [];
+    retiredActivities = [];
   }
 
   if (!activities.length) {
@@ -613,28 +593,57 @@ function loadActivities() {
   }
 
   activities = activities.map(activity => {
-    const template = ActivityModules?.normalizeMode?.(activity.template) || "drag-reveal";
+    const originalTemplate = String(activity?.template || "");
+    const legacyClassification = ["element-type","open-classification"].includes(originalTemplate);
+    const legacyRevision = ["predict-reveal","progressive-reveal"].includes(originalTemplate);
+    const legacyTextExchange = ["open-text","question-wall"].includes(originalTemplate);
+    const template = legacyClassification
+      ? "evidence-classification"
+      : legacyRevision ? "information-revision"
+      : legacyTextExchange ? "text-exchange"
+      : (ActivityModules?.normalizeMode?.(originalTemplate) || "choice-identify");
     const definition = ActivityModules?.get?.(template);
     const normalized = {
       ...activity,
       template,
+      choiceMode: template === "choice-identify"
+        ? normalizeChoiceIdentifyMode(activity.choiceMode, originalTemplate)
+        : "reference",
+      classificationFlow: template === "evidence-classification"
+        ? normalizeClassificationFlow(activity.classificationFlow, originalTemplate)
+        : "single",
+      informationRevisionFlow: template === "information-revision"
+        ? normalizeInformationRevisionFlow(activity.informationRevisionFlow, originalTemplate)
+        : "predict",
+      textExchangeFlow: template === "text-exchange"
+        ? normalizeTextExchangeFlow(activity.textExchangeFlow, originalTemplate)
+        : "responses",
       cases: [],
       tasks: [],
       progressive: null,
       openClassification: null,
       deliberation: null,
-      scale: null,
       ranking: null,
       openText: null,
       questionWall: null,
       groupConsensus: null,
       predictReveal: null,
-      stanceMap: null,
       liveStance: null,
       confidence: normalizeConfidenceData(activity.confidence)
     };
 
-    if (definition?.dataKey === "cases") {
+    if (template === "evidence-classification") {
+      normalized.tasks = Array.isArray(activity.tasks) ? activity.tasks : [];
+      normalized.openClassification = activity.openClassification || null;
+    } else if (template === "information-revision") {
+      // Preserve both configurations so switching flows cannot discard unsaved settings.
+      normalized.progressive = activity.progressive || null;
+      normalized.predictReveal = activity.predictReveal ? normalizePredictRevealData(activity.predictReveal) : null;
+    } else if (template === "text-exchange") {
+      // Each flow has its own fields; don't normalize away either set of inputs.
+      normalized.openText = activity.openText ? normalizeOpenTextData(activity.openText) : null;
+      normalized.questionWall = activity.questionWall ? normalizeQuestionWallData(activity.questionWall) : null;
+    } else if (definition?.dataKey === "cases") {
       normalized.cases = Array.isArray(activity.cases) ? activity.cases : [];
     } else if (definition?.dataKey === "tasks") {
       normalized.tasks = Array.isArray(activity.tasks) ? activity.tasks : [];
@@ -642,8 +651,6 @@ function loadActivities() {
       normalized.progressive = activity.progressive || null;
     } else if (definition?.dataKey === "openClassification") {
       normalized.openClassification = activity.openClassification || null;
-    } else if (definition?.dataKey === "scale") {
-      normalized.scale = normalizeScaleData(activity.scale);
     } else if (definition?.dataKey === "ranking") {
       normalized.ranking = normalizeRankingData(activity.ranking);
     } else if (definition?.dataKey === "openText") {
@@ -654,8 +661,6 @@ function loadActivities() {
       normalized.groupConsensus = normalizeGroupConsensusData(activity.groupConsensus);
     } else if (definition?.dataKey === "predictReveal") {
       normalized.predictReveal = normalizePredictRevealData(activity.predictReveal);
-    } else if (definition?.dataKey === "stanceMap") {
-      normalized.stanceMap = normalizeStanceMapData(activity.stanceMap);
     } else if (definition?.dataKey === "liveStance") {
       normalized.liveStance = normalizeLiveStanceData(activity.liveStance);
     } else if (definition?.dataKey === "deliberation") {
@@ -670,7 +675,7 @@ function loadActivities() {
     return normalized;
   });
 
-  // V1.6.2：移除各模式不會使用的舊資料分支，讓 localStorage 也保持乾淨。
+  // V2.32：舊文字牆及匿名提問模組升級為統一入口，保留各自原始資料。
   persist();
 
   currentId = activities[0].id;
@@ -683,7 +688,11 @@ function newBlankActivity() {
     id: createId(),
     title: "未命名活動",
     subtitle: "",
-    template: "drag-reveal",
+    template: "choice-identify",
+    choiceMode: "reference",
+    classificationFlow: "single",
+    informationRevisionFlow: "predict",
+    textExchangeFlow: "responses",
     cases: [{
       title: "",
       intro: "",
@@ -699,20 +708,73 @@ function newBlankActivity() {
     progressive: null,
     openClassification: null,
     deliberation: null,
-    scale: null,
     ranking: null,
     openText: null,
     questionWall: null,
     groupConsensus: null,
     predictReveal: null,
-    stanceMap: null,
     liveStance: null,
     confidence: newConfidenceData()
   };
 }
 
+function normalizeTextExchangeFlow(value, legacyTemplate = "") {
+  if (legacyTemplate === "question-wall") return "questions";
+  if (legacyTemplate === "open-text") return "responses";
+  return value === "questions" ? "questions" : "responses";
+}
+function getTextExchangeFlow() {
+  return textExchangeFlowInputs.find(input => input.checked)?.value === "questions" ? "questions" : "responses";
+}
+function setTextExchangeFlow(value, {refresh=true}={}) {
+  const flow = normalizeTextExchangeFlow(value);
+  textExchangeFlowInputs.forEach(input => { input.checked=input.value === flow; });
+  if (refresh && getSelectedMode() === "text-exchange") applyModeUI("text-exchange");
+}
+function textExchangeRuntimeMode(activity) {
+  return normalizeTextExchangeFlow(activity?.textExchangeFlow, activity?.template) === "questions"
+    ? "question-wall" : "open-text";
+}
+
+function normalizeInformationRevisionFlow(value, legacyTemplate = "") {
+  if (legacyTemplate === "progressive-reveal") return "progressive";
+  if (legacyTemplate === "predict-reveal") return "predict";
+  return value === "progressive" ? "progressive" : "predict";
+}
+function getInformationRevisionFlow() {
+  return informationRevisionFlowInputs.find(input => input.checked)?.value === "progressive"
+    ? "progressive" : "predict";
+}
+function setInformationRevisionFlow(value, {refresh=true} = {}) {
+  const flow = normalizeInformationRevisionFlow(value);
+  informationRevisionFlowInputs.forEach(input => { input.checked = input.value === flow; });
+  if (refresh && getSelectedMode() === "information-revision") applyModeUI("information-revision");
+}
+function informationRevisionRuntimeMode(activity) {
+  return normalizeInformationRevisionFlow(activity?.informationRevisionFlow, activity?.template) === "progressive"
+    ? "progressive-reveal" : "predict-reveal";
+}
+
 function getModeLabel(template) {
-  return ActivityModules?.modeLabel?.(template) || "選擇與揭示";
+  return ActivityModules?.modeLabel?.(template) || "選擇與辨識";
+}
+
+function getActivityModeLabel(activity) {
+  const base=getModeLabel(activity?.template);
+  const mode=ActivityModules?.normalizeMode?.(activity?.template);
+  if (mode === "choice-identify") {
+    return `${base}｜${normalizeChoiceIdentifyMode(activity?.choiceMode,activity?.template)==="open" ? "開放選擇" : "有參考答案"}`;
+  }
+  if (mode === "evidence-classification") {
+    return `${base}｜${normalizeClassificationFlow(activity?.classificationFlow,activity?.template)==="discussion" ? "討論後再判斷" : "單次判斷"}`;
+  }
+  if (mode === "information-revision") {
+    return `${base}｜${normalizeInformationRevisionFlow(activity?.informationRevisionFlow)==="progressive" ? "逐步揭露" : "預測揭曉"}`;
+  }
+  if (mode === "text-exchange") {
+    return `${base}｜${normalizeTextExchangeFlow(activity?.textExchangeFlow)==="questions" ? "匿名提問" : "短答蒐集"}`;
+  }
+  return base;
 }
 
 function renderLibrary() {
@@ -724,7 +786,7 @@ function renderLibrary() {
     const count = ActivityModules?.libraryTaskCount?.(activity) ?? (activity.cases?.length || 0);
     item.innerHTML = `
       <strong>${escapeHtml(activity.title || "未命名活動")}</strong>
-      <small>${count} 個任務 · ${getModeLabel(activity.template)}</small>
+      <small>${count} 個任務 · ${getActivityModeLabel(activity)}</small>
     `;
     item.addEventListener("click", () => {
       saveCurrent(false);
@@ -736,7 +798,52 @@ function renderLibrary() {
   });
 }
 
-// ---------- 舊兩種活動模板 ----------
+// ---------- 選擇與辨識：共同模式 ----------
+function normalizeChoiceIdentifyMode(value, legacyTemplate = "") {
+  if (String(legacyTemplate || "") === "open-tags") return "open";
+  if (String(legacyTemplate || "") === "drag-reveal") return "reference";
+  return value === "open" ? "open" : "reference";
+}
+
+function getChoiceIdentifyMode() {
+  return choiceIdentifyModeInputs.find(input => input.checked)?.value === "open" ? "open" : "reference";
+}
+
+function setChoiceIdentifyMode(value, {refresh=true} = {}) {
+  const normalized = normalizeChoiceIdentifyMode(value);
+  choiceIdentifyModeInputs.forEach(input => { input.checked = input.value === normalized; });
+  if (refresh) applyModeUI(getSelectedMode());
+}
+
+function isOpenChoiceActivity(activity) {
+  return normalizeChoiceIdentifyMode(activity?.choiceMode, activity?.template) === "open";
+}
+
+// ---------- 依據與分類：共同流程 ----------
+function normalizeClassificationFlow(value, legacyTemplate = "") {
+  const legacy=String(legacyTemplate || "");
+  if (legacy === "open-classification") return "discussion";
+  if (legacy === "element-type") return "single";
+  return value === "discussion" ? "discussion" : "single";
+}
+
+function getClassificationFlow() {
+  return classificationFlowInputs.find(input => input.checked)?.value === "discussion" ? "discussion" : "single";
+}
+
+function setClassificationFlow(value, {refresh=true} = {}) {
+  const normalized=normalizeClassificationFlow(value);
+  classificationFlowInputs.forEach(input => { input.checked = input.value === normalized; });
+  if (refresh) applyModeUI(getSelectedMode());
+}
+
+function classificationRuntimeMode(activity) {
+  return normalizeClassificationFlow(activity?.classificationFlow, activity?.template) === "discussion"
+    ? "open-classification"
+    : "element-type";
+}
+
+// ---------- 選擇與辨識任務編輯器 ----------
 function addCardRow(caseCard, text = "", isCorrect = false) {
   const list = caseCard.querySelector(".card-editor-list");
   const row = document.createElement("div");
@@ -755,7 +862,7 @@ function addCardRow(caseCard, text = "", isCorrect = false) {
   checkbox.className = "card-correct-toggle";
   checkbox.checked = isCorrect;
   const correctText = document.createElement("span");
-  correctText.textContent = "正確";
+  correctText.textContent = "參考答案";
   correctLabel.append(checkbox, correctText);
 
   const removeButton = document.createElement("button");
@@ -1448,17 +1555,6 @@ function addRankingEditorItem(item=null) {
   rankingItemsEditor.appendChild(row);
   refreshRankingItemRows();
 }
-
-function loadScaleEditor(data) {
-  const value=normalizeScaleData(data);
-  scaleQuestion.value=value.question;
-  scalePointCount.value=String(value.pointCount);
-  scaleLeftLabel.value=value.leftLabel;
-  scaleRightLabel.value=value.rightLabel;
-}
-function readScaleEditor() {
-  return normalizeScaleData({question:scaleQuestion.value.trim(),pointCount:scalePointCount.value,leftLabel:scaleLeftLabel.value.trim(),rightLabel:scaleRightLabel.value.trim()});
-}
 function loadRankingEditor(data) {
   const value=normalizeRankingData(data);
   rankingQuestion.value=value.question;
@@ -1566,13 +1662,6 @@ function loadPredictRevealEditor(data) {
 function readPredictRevealEditor() {
   return normalizePredictRevealData({question:predictQuestion.value.trim(),options:[...predictOptionsEditor.querySelectorAll(".predict-option-row")].map(row=>({id:row.dataset.optionId,label:row.querySelector(".predict-option-label").value.trim()})),revealTitle:predictRevealTitle.value.trim(),revealContent:predictRevealContent.value.trim(),rejudgePrompt:predictRejudgePrompt.value.trim()});
 }
-function loadStanceMapEditor(data) {
-  const value=normalizeStanceMapData(data);stanceQuestion.value=value.question;stanceXLeft.value=value.xLeft;stanceXRight.value=value.xRight;stanceYBottom.value=value.yBottom;stanceYTop.value=value.yTop;
-}
-function readStanceMapEditor() {
-  return normalizeStanceMapData({question:stanceQuestion.value.trim(),xLeft:stanceXLeft.value.trim(),xRight:stanceXRight.value.trim(),yBottom:stanceYBottom.value.trim(),yTop:stanceYTop.value.trim()});
-}
-
 function loadLiveStanceEditor(data) {
   const value=normalizeLiveStanceData(data);
   liveStanceQuestion.value=value.question;
@@ -1597,7 +1686,7 @@ function updateLiveStanceUndecidedUi() {
 
 // ---------- 模式切換 ----------
 function getSelectedMode() {
-  return modeInputs.find(input => input.checked)?.value || "drag-reveal";
+  return modeInputs.find(input => input.checked)?.value || "choice-identify";
 }
 
 function setModeFamilyExpanded(card, expanded) {
@@ -1637,7 +1726,7 @@ function initModeFamilyAccordion() {
 }
 
 function setSelectedMode(mode) {
-  const normalized = ActivityModules?.normalizeMode?.(mode) || "drag-reveal";
+  const normalized = ActivityModules?.normalizeMode?.(mode) || "choice-identify";
   modeInputs.forEach(input => {
     input.checked = input.value === normalized;
   });
@@ -1648,7 +1737,13 @@ function setSelectedMode(mode) {
 
 function applyModeUI(mode) {
   const definition = ActivityModules?.get?.(mode);
-  const isOpen = mode === "open-tags";
+  const isOpen = mode === "choice-identify" && getChoiceIdentifyMode() === "open";
+  const isClassification = mode === "evidence-classification";
+  const classificationFlow = isClassification ? getClassificationFlow() : "single";
+  const isInformationRevision = mode === "information-revision";
+  const revisionFlow = isInformationRevision ? getInformationRevisionFlow() : "predict";
+  const isTextExchange = mode === "text-exchange";
+  const textFlow = isTextExchange ? getTextExchangeFlow() : "responses";
   const editorKind = definition?.editorKind || "standard";
   const isSpecial = editorKind !== "standard";
 
@@ -1657,36 +1752,44 @@ function applyModeUI(mode) {
   });
 
   if (templateKicker) templateKicker.textContent = definition?.templateKicker || "活動模組";
-  if (templateTitle) templateTitle.textContent = definition?.templateTitle || definition?.label || "選擇與揭示";
-  if (activityModulePickerCurrent) activityModulePickerCurrent.textContent = definition?.templateTitle || definition?.label || "選擇與揭示";
+  if (templateTitle) templateTitle.textContent = definition?.templateTitle || definition?.label || "選擇與辨識";
+  if (activityModulePickerCurrent) activityModulePickerCurrent.textContent = definition?.templateTitle || definition?.label || "選擇與辨識";
 
   standardTaskToolbar?.classList.toggle("hidden", isSpecial);
+  choiceIdentifyModePanel?.classList.toggle("hidden", isSpecial || mode !== "choice-identify");
+  classificationFlowPanel?.classList.toggle("hidden", !isClassification);
+  informationRevisionFlowPanel?.classList.toggle("hidden", !isInformationRevision);
+  textExchangeFlowPanel?.classList.toggle("hidden", !isTextExchange);
   caseEditor?.classList.toggle("hidden", isSpecial);
-  elementTypeEditorSection?.classList.toggle("hidden", editorKind !== "element-type");
-  progressiveEditorSection?.classList.toggle("hidden", editorKind !== "progressive-reveal");
-  openClassificationEditorSection?.classList.toggle("hidden", editorKind !== "open-classification");
+  elementTypeEditorSection?.classList.toggle("hidden", !(isClassification && classificationFlow === "single") && editorKind !== "element-type");
+  progressiveEditorSection?.classList.toggle("hidden", !(isInformationRevision && revisionFlow === "progressive") && editorKind !== "progressive-reveal");
+  openClassificationEditorSection?.classList.toggle("hidden", !(isClassification && classificationFlow === "discussion") && editorKind !== "open-classification");
   deliberationEditorSection?.classList.toggle("hidden", editorKind !== "layered-deliberation");
-  scaleEditorSection?.classList.toggle("hidden", editorKind !== "scale-spectrum");
   rankingEditorSection?.classList.toggle("hidden", editorKind !== "ranking");
-  openTextEditorSection?.classList.toggle("hidden", editorKind !== "open-text");
-  questionWallEditorSection?.classList.toggle("hidden", editorKind !== "question-wall");
+  openTextEditorSection?.classList.toggle("hidden", !(isTextExchange && textFlow === "responses") && editorKind !== "open-text");
+  questionWallEditorSection?.classList.toggle("hidden", !(isTextExchange && textFlow === "questions") && editorKind !== "question-wall");
   groupConsensusEditorSection?.classList.toggle("hidden", editorKind !== "group-consensus");
-  confidenceEditorCard?.classList.toggle("hidden", editorKind === "question-wall" || editorKind === "group-consensus");
-  predictRevealEditorSection?.classList.toggle("hidden", editorKind !== "predict-reveal");
-  stanceMapEditorSection?.classList.toggle("hidden", editorKind !== "stance-map");
+  confidenceEditorCard?.classList.toggle("hidden", editorKind === "question-wall" || editorKind === "group-consensus" || (isTextExchange && textFlow === "questions"));
+  predictRevealEditorSection?.classList.toggle("hidden", !(isInformationRevision && revisionFlow === "predict") && editorKind !== "predict-reveal");
   liveStanceEditorSection?.classList.toggle("hidden", editorKind !== "live-stance");
 
   document.querySelectorAll(".card-builder-label").forEach(label => {
-    label.textContent = isOpen ? "標籤設定" : "字卡設定";
+    label.textContent = isOpen ? "特徵／標籤設定" : "可選項目設定";
   });
   document.querySelectorAll(".card-builder-help").forEach(help => {
     help.textContent = isOpen
       ? "輸入可供學生複選的特徵、依據或標籤；此模式沒有唯一答案。按 Enter 可快速新增下一張。"
-      : "輸入學生可選擇的項目後，直接勾選「正確」即可設定答案；按 Enter 可快速新增下一張。";
+      : "輸入學生可選擇的項目後，直接勾選「參考答案」即可設定答案；按 Enter 可快速新增下一張。";
   });
   document.querySelectorAll(".reveal-settings").forEach(section => section.classList.toggle("hidden", isOpen));
   document.querySelectorAll(".discussion-settings").forEach(section => section.classList.toggle("hidden", !isOpen));
   document.querySelectorAll(".correct-toggle").forEach(toggle => toggle.classList.toggle("hidden", isOpen));
+  document.querySelectorAll(".add-card-btn").forEach(button => {
+    button.textContent = isOpen ? "＋ 新增特徵／標籤" : "＋ 新增項目";
+  });
+  document.querySelectorAll(".card-text").forEach(input => {
+    input.placeholder = isOpen ? "輸入特徵、依據或標籤" : "輸入可選項目";
+  });
 }
 
 function refreshCaseNumbers() {
@@ -1711,16 +1814,22 @@ function loadIntoEditor(activity) {
   openClassificationTaskEditor.innerHTML = "";
   deliberationLayersEditor.innerHTML = "";
   if (rankingItemsEditor) rankingItemsEditor.innerHTML = "";
-  if (scaleQuestion) loadScaleEditor(newScaleActivityData());
   if (openTextQuestion) loadOpenTextEditor(newOpenTextActivityData());
   if (questionWallQuestion) loadQuestionWallEditor(newQuestionWallActivityData());
   if (groupConsensusQuestion) loadGroupConsensusEditor(newGroupConsensusActivityData());
   if (predictOptionsEditor) predictOptionsEditor.innerHTML="";
-  if (stanceQuestion) loadStanceMapEditor(newStanceMapActivityData());
   if (liveStanceQuestion) loadLiveStanceEditor(newLiveStanceActivityData());
   loadConfidenceEditor(activity.confidence || newConfidenceData());
 
-  const template = ActivityModules?.normalizeMode?.(activity.template) || "drag-reveal";
+  const template = ActivityModules?.normalizeMode?.(activity.template) || "choice-identify";
+  if (template === "choice-identify") setChoiceIdentifyMode(activity.choiceMode, {refresh:false});
+  if (template === "evidence-classification") setClassificationFlow(activity.classificationFlow, {refresh:false});
+  if (template === "information-revision") setInformationRevisionFlow(
+    normalizeInformationRevisionFlow(activity.informationRevisionFlow, activity.template), {refresh:false}
+  );
+  if (template === "text-exchange") setTextExchangeFlow(
+    normalizeTextExchangeFlow(activity.textExchangeFlow, activity.template), {refresh:false}
+  );
   const handled = ActivityModules?.invoke?.("editor", template, "load", activity);
   if (handled === undefined) {
     const cases = activity.cases?.length ? activity.cases : newBlankActivity().cases;
@@ -1737,18 +1846,19 @@ function readEditor() {
     title: activityTitle.value.trim() || "未命名活動",
     subtitle: activitySubtitle.value.trim(),
     template,
+    classificationFlow: template === "evidence-classification" ? getClassificationFlow() : "single",
+    informationRevisionFlow: template === "information-revision" ? getInformationRevisionFlow() : "predict",
+    textExchangeFlow: template === "text-exchange" ? getTextExchangeFlow() : "responses",
     cases: [],
     tasks: [],
     progressive: null,
     openClassification: null,
     deliberation: null,
-    scale: null,
     ranking: null,
     openText: null,
     questionWall: null,
     groupConsensus: null,
     predictReveal: null,
-    stanceMap: null,
     liveStance: null,
     confidence: readConfidenceEditor()
   };
@@ -1758,14 +1868,6 @@ function readEditor() {
 
 function splitKeywords(value) {
   return value.split(/[、,，]/).map(v => v.trim()).filter(Boolean);
-}
-
-function validateScaleActivity(activity) {
-  const data=normalizeScaleData(activity.scale);
-  if (!data.question.trim()) return "量表／立場光譜尚未填寫題目";
-  if (data.pointCount<3 || data.pointCount>10) return "量表刻度數需介於 3～10";
-  if (!data.leftLabel.trim() || !data.rightLabel.trim()) return "量表左右端標籤都需要填寫";
-  return "";
 }
 function validateRankingActivity(activity) {
   const data=normalizeRankingData(activity.ranking);
@@ -1802,12 +1904,6 @@ function validatePredictRevealActivity(activity) {
   if(data.options.length<2) return "預測揭曉至少需要 2 個選項";
   if(data.options.some(item=>!item.label.trim())) return "每個預測選項都需要填寫內容";
   if(!data.revealContent.trim()) return "預測揭曉尚未填寫揭曉內容";
-  return "";
-}
-function validateStanceMapActivity(activity) {
-  const data=normalizeStanceMapData(activity.stanceMap);
-  if(!data.question.trim()) return "二維立場圖尚未填寫題目";
-  if(!data.xLeft.trim()||!data.xRight.trim()||!data.yBottom.trim()||!data.yTop.trim()) return "二維立場圖四個軸端標籤都需要填寫";
   return "";
 }
 function validateLiveStanceActivity(activity) {
@@ -1901,20 +1997,20 @@ function validateElementTypeActivity(activity) {
 
 function validateStandardActivity(activity) {
   if (!activity.cases.length) return "至少需要一個關卡";
-  const isOpen = activity.template === "open-tags";
+  const isOpen = isOpenChoiceActivity(activity);
   for (let i = 0; i < activity.cases.length; i++) {
     const c = activity.cases[i];
     if (!c.title) return `第 ${i + 1} 關尚未填寫材料／情境名稱`;
-    if (!c.cards.length) return `第 ${i + 1} 關尚未填寫${isOpen ? "標籤" : "字卡"}`;
+    if (!c.cards.length) return `第 ${i + 1} 關尚未填寫${isOpen ? "特徵／標籤" : "可選項目"}`;
     if (!isOpen) {
-      if (!c.correctCards.length) return `第 ${i + 1} 關尚未填寫正確字卡`;
+      if (!c.correctCards.length) return `第 ${i + 1} 關尚未設定參考答案`;
       if (!c.revealTitle) return `第 ${i + 1} 關尚未填寫揭露標題`;
     }
-    if (new Set(c.cards).size !== c.cards.length) return `第 ${i + 1} 關有重複的${isOpen ? "標籤" : "字卡"}文字，請讓每個內容保持唯一`;
+    if (new Set(c.cards).size !== c.cards.length) return `第 ${i + 1} 關有重複的${isOpen ? "特徵／標籤" : "可選項目"}文字，請讓每個內容保持唯一`;
     if (!isOpen) {
-      if (new Set(c.correctCards).size !== c.correctCards.length) return `第 ${i + 1} 關的正確字卡有重複內容`;
+      if (new Set(c.correctCards).size !== c.correctCards.length) return `第 ${i + 1} 關的參考答案有重複內容`;
       const missing = c.correctCards.filter(x => !c.cards.includes(x));
-      if (missing.length) return `第 ${i + 1} 關的正確字卡「${missing[0]}」不在字卡清單裡`;
+      if (missing.length) return `第 ${i + 1} 關的參考答案「${missing[0]}」不在可選項目清單裡`;
     }
   }
   return "";
@@ -1922,7 +2018,11 @@ function validateStandardActivity(activity) {
 
 function validateActivity(activity) {
   const moduleError=ActivityModules?.invoke?.("editor", activity.template, "validate", activity) ?? validateStandardActivity(activity);
-  return moduleError || validateConfidenceActivity(activity);
+  // Question wall has no per-response confidence step. Its settings may be
+  // preserved while switching flows but must not block question-wall publishing.
+  const withoutConfidence = activity.template === "group-consensus" || activity.template === "question-wall"
+    || (activity.template === "text-exchange" && textExchangeRuntimeMode(activity) === "question-wall");
+  return moduleError || (withoutConfidence ? "" : validateConfidenceActivity(activity));
 }
 
 function saveCurrent(showMessage = true) {
@@ -2018,12 +2118,6 @@ function buildOpenClassificationSnapshot(activity) {
     r:task.allowRejudge!==false
   };
 }
-
-
-function buildScaleSnapshot(activity) {
-  const d=normalizeScaleData(activity.scale);
-  return {q:d.question,n:d.pointCount,l:d.leftLabel,r:d.rightLabel};
-}
 function buildRankingSnapshot(activity) {
   const d=normalizeRankingData(activity.ranking);
   return {q:d.question,i:d.items.map(item=>({i:item.id,l:item.label}))};
@@ -2042,9 +2136,6 @@ function buildGroupConsensusSnapshot(activity) {
 }
 function buildPredictRevealSnapshot(activity) {
   const d=normalizePredictRevealData(activity.predictReveal);return {q:d.question,o:d.options.map(item=>({i:item.id,l:item.label})),rt:d.revealTitle,rc:d.revealContent,rp:d.rejudgePrompt};
-}
-function buildStanceMapSnapshot(activity) {
-  const d=normalizeStanceMapData(activity.stanceMap);return {q:d.question,xl:d.xLeft,xr:d.xRight,yb:d.yBottom,yt:d.yTop};
 }
 function buildLiveStanceSnapshot(activity) {
   const d=normalizeLiveStanceData(activity.liveStance);
@@ -2094,13 +2185,34 @@ async function buildDeliberationShellEncoded(activity) {
   return encodeCompactActivity(compact);
 }
 
+function buildChoiceIdentifyCompact(activity) {
+  const isOpen = isOpenChoiceActivity(activity);
+  return {
+    t: activity.title,
+    s: activity.subtitle,
+    m: "choice-identify",
+    cm: isOpen ? "open" : "reference",
+    c: (activity.cases || []).map(c => ({
+      t: c.title,
+      i: c.intro,
+      p: c.prompt,
+      a: c.cards,
+      o: isOpen ? [] : c.correctCards.map(card => c.cards.indexOf(card)).filter(index => index >= 0),
+      r: isOpen ? "" : c.revealTitle,
+      k: isOpen ? [] : c.keywords,
+      d: isOpen ? "" : c.revealDescription,
+      q: isOpen ? c.discussionPrompt : ""
+    }))
+  };
+}
+
 async function encodeActivity(activity) {
   const compact = ActivityModules?.invoke?.("editor", activity.template, "encode", activity) || {
     t: activity.title,
     s: activity.subtitle,
     m: activity.template,
     c: activity.cases.map(c => {
-      const isOpen = activity.template === "open-tags";
+      const isOpen = isOpenChoiceActivity(activity);
       return {
         t: c.title,
         i: c.intro,
@@ -2114,7 +2226,7 @@ async function encodeActivity(activity) {
       };
     })
   };
-  const confidence=["question-wall","group-consensus"].includes(activity.template) ? null : buildConfidenceSnapshot(activity);
+  const confidence=["question-wall","group-consensus"].includes(activity.template) || textExchangeRuntimeMode(activity)==="question-wall" && activity.template==="text-exchange" ? null : buildConfidenceSnapshot(activity);
   if(confidence) compact.cf=confidence;
   return encodeCompactActivity(compact);
 }
@@ -2258,7 +2370,11 @@ function getActivitySummaries() {
     id: activity.id,
     title: activity.title || "未命名活動",
     subtitle: activity.subtitle || "",
-    template: activity.template || "drag-reveal",
+    template: activity.template || "choice-identify",
+    choiceMode: activity.template === "choice-identify" ? normalizeChoiceIdentifyMode(activity.choiceMode,activity.template) : "",
+    classificationFlow: ActivityModules?.normalizeMode?.(activity.template) === "evidence-classification" ? normalizeClassificationFlow(activity.classificationFlow,activity.template) : "",
+    informationRevisionFlow: activity.template === "information-revision" ? normalizeInformationRevisionFlow(activity.informationRevisionFlow) : "",
+    textExchangeFlow: activity.template === "text-exchange" ? normalizeTextExchangeFlow(activity.textExchangeFlow) : "",
     taskCount: ActivityModules?.libraryTaskCount?.(activity) ?? (activity.cases?.length || 0)
   }));
 }
@@ -2276,7 +2392,12 @@ async function buildSessionActivitySnapshot(activityId) {
     id: activity.id,
     title: activity.title || "未命名活動",
     subtitle: activity.subtitle || "",
-    template: activity.template || "drag-reveal",
+    template: ActivityModules?.normalizeMode?.(activity.template) === "evidence-classification" ? classificationRuntimeMode(activity)
+      : activity.template === "information-revision" ? informationRevisionRuntimeMode(activity)
+      : activity.template === "text-exchange" ? textExchangeRuntimeMode(activity)
+      : (activity.template || "choice-identify"),
+    choiceMode: activity.template === "choice-identify" ? normalizeChoiceIdentifyMode(activity.choiceMode,activity.template) : "",
+    classificationFlow: ActivityModules?.normalizeMode?.(activity.template) === "evidence-classification" ? normalizeClassificationFlow(activity.classificationFlow,activity.template) : "",
     stageCount: ActivityModules?.stageCount?.(activity) || 1,
     encoded: await encodeActivity(activity),
     shellEncoded: await (ActivityModules?.invoke?.("editor", activity.template, "buildShellEncoded", activity) || ""),
@@ -2289,7 +2410,7 @@ async function buildSessionActivitySnapshot(activityId) {
 function registerActivityEditorModules() {
   const register = (mode, hooks) => ActivityModules?.registerHooks?.("editor", mode, hooks);
 
-  ["drag-reveal","open-tags"].forEach(mode => register(mode, {
+  register("choice-identify", {
     ensure:() => {
       if (!caseEditor.children.length) addCase();
       return true;
@@ -2299,9 +2420,35 @@ function registerActivityEditorModules() {
       cases.forEach(addCase);
       return true;
     },
-    read:() => ({cases:readCases()}),
-    validate:validateStandardActivity
-  }));
+    read:() => ({cases:readCases(),choiceMode:getChoiceIdentifyMode()}),
+    validate:validateStandardActivity,
+    encode:activity => buildChoiceIdentifyCompact(activity)
+  });
+
+  register("evidence-classification", {
+    ensure:() => {
+      if (!elementTypeTaskEditor.children.length) addModeATask();
+      if (!openClassificationTaskEditor.children.length) addOpenClassificationTask();
+      return true;
+    },
+    load:activity => {
+      const tasks=activity.tasks?.length ? activity.tasks : [newModeATask()];
+      tasks.forEach(addModeATask);
+      addOpenClassificationTask(activity.openClassification || newOpenClassificationTask());
+      return true;
+    },
+    read:() => ({
+      classificationFlow:getClassificationFlow(),
+      tasks:readModeATasks(),
+      openClassification:readOpenClassificationTask()
+    }),
+    validate:activity => normalizeClassificationFlow(activity.classificationFlow,activity.template) === "discussion"
+      ? validateOpenClassificationActivity(activity)
+      : validateElementTypeActivity(activity),
+    encode:activity => normalizeClassificationFlow(activity.classificationFlow,activity.template) === "discussion"
+      ? ({t:activity.title,s:activity.subtitle,m:"open-classification",o:buildOpenClassificationSnapshot(activity)})
+      : ({t:activity.title,s:activity.subtitle,m:"element-type",x:buildElementTypeSnapshot(activity)})
+  });
 
   register("element-type", {
     ensure:() => {
@@ -2316,6 +2463,29 @@ function registerActivityEditorModules() {
     read:() => ({tasks:readModeATasks()}),
     validate:validateElementTypeActivity,
     encode:activity => ({t:activity.title,s:activity.subtitle,m:"element-type",x:buildElementTypeSnapshot(activity)})
+  });
+
+  register("information-revision", {
+    ensure:() => {
+      if (!progressiveTaskEditor.children.length) addProgressiveTask();
+      if (!predictOptionsEditor.children.length) loadPredictRevealEditor(newPredictRevealActivityData());
+      return true;
+    },
+    load:activity => {
+      addProgressiveTask(activity.progressive || newProgressiveTask());
+      loadPredictRevealEditor(activity.predictReveal || newPredictRevealActivityData());
+      return true;
+    },
+    read:() => ({
+      informationRevisionFlow:getInformationRevisionFlow(),
+      progressive:readProgressiveTask(),
+      predictReveal:readPredictRevealEditor()
+    }),
+    validate:activity => informationRevisionRuntimeMode(activity) === "progressive-reveal"
+      ? validateProgressiveActivity(activity) : validatePredictRevealActivity(activity),
+    encode:activity => informationRevisionRuntimeMode(activity) === "progressive-reveal"
+      ? ({t:activity.title,s:activity.subtitle,m:"progressive-reveal",g:buildProgressiveSnapshot(activity)})
+      : ({t:activity.title,s:activity.subtitle,m:"predict-reveal",pr:buildPredictRevealSnapshot(activity)})
   });
 
   register("progressive-reveal", {
@@ -2345,21 +2515,37 @@ function registerActivityEditorModules() {
     validate:validateOpenClassificationActivity,
     encode:activity => ({t:activity.title,s:activity.subtitle,m:"open-classification",o:buildOpenClassificationSnapshot(activity)})
   });
-
-  register("scale-spectrum", {
-    ensure:() => { loadScaleEditor(readScaleEditor?.() || newScaleActivityData()); return true; },
-    load:activity => { loadScaleEditor(activity.scale || newScaleActivityData()); return true; },
-    read:() => ({scale:readScaleEditor()}),
-    validate:validateScaleActivity,
-    encode:activity => ({t:activity.title,s:activity.subtitle,m:"scale-spectrum",sc:buildScaleSnapshot(activity)})
-  });
-
   register("ranking", {
     ensure:() => { if (!rankingItemsEditor.children.length) loadRankingEditor(newRankingActivityData()); return true; },
     load:activity => { loadRankingEditor(activity.ranking || newRankingActivityData()); return true; },
     read:() => ({ranking:readRankingEditor()}),
     validate:validateRankingActivity,
     encode:activity => ({t:activity.title,s:activity.subtitle,m:"ranking",rk:buildRankingSnapshot(activity)})
+  });
+
+  register("text-exchange", {
+    ensure:() => {
+      // Edit the hidden flow independently without overwriting what was typed
+      // into the other editor. Only initialize when fields are actually empty.
+      if (!openTextPlaceholder.value) loadOpenTextEditor(newOpenTextActivityData());
+      if (!questionWallPlaceholder.value) loadQuestionWallEditor(newQuestionWallActivityData());
+      return true;
+    },
+    load:activity => {
+      loadOpenTextEditor(activity.openText || newOpenTextActivityData());
+      loadQuestionWallEditor(activity.questionWall || newQuestionWallActivityData());
+      return true;
+    },
+    read:() => ({
+      textExchangeFlow:getTextExchangeFlow(),
+      openText:readOpenTextEditor(),
+      questionWall:readQuestionWallEditor()
+    }),
+    validate:activity => textExchangeRuntimeMode(activity) === "question-wall"
+      ? validateQuestionWallActivity(activity) : validateOpenTextActivity(activity),
+    encode:activity => textExchangeRuntimeMode(activity) === "question-wall"
+      ? ({t:activity.title,s:activity.subtitle,m:"question-wall",qw:buildQuestionWallSnapshot(activity)})
+      : ({t:activity.title,s:activity.subtitle,m:"open-text",tx:buildOpenTextSnapshot(activity)})
   });
 
   register("open-text", {
@@ -2394,14 +2580,6 @@ function registerActivityEditorModules() {
     validate:validatePredictRevealActivity,
     encode:activity => ({t:activity.title,s:activity.subtitle,m:"predict-reveal",pr:buildPredictRevealSnapshot(activity)})
   });
-  register("stance-map", {
-    ensure:() => { loadStanceMapEditor(readStanceMapEditor?.() || newStanceMapActivityData()); return true; },
-    load:activity => { loadStanceMapEditor(activity.stanceMap || newStanceMapActivityData()); return true; },
-    read:() => ({stanceMap:readStanceMapEditor()}),
-    validate:validateStanceMapActivity,
-    encode:activity => ({t:activity.title,s:activity.subtitle,m:"stance-map",sm:buildStanceMapSnapshot(activity)})
-  });
-
   register("live-stance", {
     ensure:() => { loadLiveStanceEditor(readLiveStanceEditor?.() || newLiveStanceActivityData()); return true; },
     load:activity => { loadLiveStanceEditor(activity.liveStance || newLiveStanceActivityData()); return true; },
@@ -2509,6 +2687,36 @@ el("startActivitySessionBtn")?.addEventListener("click",async()=>{
   }
 });
 
+choiceIdentifyModeInputs.forEach(input => {
+  input.addEventListener("change", () => {
+    if (input.checked && getSelectedMode() === "choice-identify") applyModeUI("choice-identify");
+  });
+});
+
+classificationFlowInputs.forEach(input => {
+  input.addEventListener("change", () => {
+    if (!input.checked || getSelectedMode() !== "evidence-classification") return;
+    ensureEditorForMode("evidence-classification");
+    applyModeUI("evidence-classification");
+  });
+});
+
+informationRevisionFlowInputs.forEach(input => {
+  input.addEventListener("change", () => {
+    if (!input.checked || getSelectedMode() !== "information-revision") return;
+    ensureEditorForMode("information-revision");
+    applyModeUI("information-revision");
+  });
+});
+
+textExchangeFlowInputs.forEach(input => {
+  input.addEventListener("change", () => {
+    if (!input.checked || getSelectedMode() !== "text-exchange") return;
+    ensureEditorForMode("text-exchange");
+    applyModeUI("text-exchange");
+  });
+});
+
 modeInputs.forEach(input => {
   input.addEventListener("change", () => {
     if (!input.checked) return;
@@ -2595,7 +2803,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.27.0",
+    appVersion:"2.32.1",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),

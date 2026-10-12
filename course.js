@@ -34,7 +34,7 @@ function presentationStorageKey(sessionId) {
 
 function activityTemplateLabel(mode) {
   if (!mode) return "互動活動";
-  return window.ClassroomActivityModules?.modeLabel?.(mode) || "選擇與揭示";
+  return window.ClassroomActivityModules?.modeLabel?.(mode) || "選擇與辨識";
 }
 
 function setPresentationView(view) {
@@ -230,9 +230,6 @@ function renderPresentationResults(summary = presentationSummary) {
   const wordCloud = Array.isArray(summary.wordCloud) ? summary.wordCloud : [];
   const wordCloudSection = $("presentationWordCloudSection");
   const wordCloudList = $("presentationWordCloud");
-  const stanceMap = summary.stanceMap && typeof summary.stanceMap === "object" ? summary.stanceMap : null;
-  const stanceMapSection = $("presentationStanceMapSection");
-  const stanceMapEl = $("presentationStanceMap");
   const confidence = summary.confidence && typeof summary.confidence === "object" ? summary.confidence : null;
   const confidenceSection = $("presentationConfidenceSection");
   const confidenceList = $("presentationConfidenceDistribution");
@@ -308,28 +305,6 @@ function renderPresentationResults(summary = presentationSummary) {
     confidenceSection.classList.add("hidden");
   }
 
-  if (stanceMap && Array.isArray(stanceMap.points) && stanceMap.points.length) {
-    stanceMapEl.innerHTML=stanceMap.points.map((point,index)=>{
-      const x=Math.max(0,Math.min(100,Number(point.x)||0));
-      const y=Math.max(0,Math.min(100,Number(point.y)||0));
-      return `<span class="stance-cloud-point presentation-stance-point" style="left:${x}%;bottom:${y}%;--point-color:hsl(${(index*47)%360} 56% 53%)"></span>`;
-    }).join("");
-    if (stanceMap.average && Number.isFinite(Number(stanceMap.average.x)) && Number.isFinite(Number(stanceMap.average.y))) {
-      const ax=Math.max(0,Math.min(100,Number(stanceMap.average.x))), ay=Math.max(0,Math.min(100,Number(stanceMap.average.y)));
-      stanceMapEl.insertAdjacentHTML("beforeend",`<span class="presentation-stance-average" style="left:${ax}%;bottom:${ay}%" title="全班平均"></span>`);
-    }
-    const labels=stanceMap.labels || {};
-    $("presentationStanceXLeft").textContent=labels.xLeft || "左";
-    $("presentationStanceXRight").textContent=labels.xRight || "右";
-    $("presentationStanceYBottom").textContent=labels.yBottom || "下";
-    $("presentationStanceYTop").textContent=labels.yTop || "上";
-    $("presentationStanceMapTotal").textContent=`${stanceMap.points.length} 個匿名位置`;
-    stanceMapSection.classList.remove("hidden");
-  } else {
-    stanceMapEl.innerHTML="";
-    stanceMapSection.classList.add("hidden");
-  }
-
   if (liveStance && liveStanceBoard) {
     renderPresentationLiveStanceBoard(liveStanceBoard,liveStance);
     $("presentationLiveStanceTotal").textContent=`已表態 ${Number(liveStance.answered)||0} / ${Number(liveStance.total)||participantCount}`;
@@ -339,7 +314,7 @@ function renderPresentationResults(summary = presentationSummary) {
     liveStanceSection?.classList.add("hidden");
   }
 
-  if (distribution.length || secondary.length || textWall.length || wordCloud.length || (stanceMap && Array.isArray(stanceMap.points) && stanceMap.points.length) || (confidence && Array.isArray(confidence.distribution) && confidence.distribution.length) || liveStance) {
+  if (distribution.length || secondary.length || textWall.length || wordCloud.length || (confidence && Array.isArray(confidence.distribution) && confidence.distribution.length) || liveStance) {
     empty.classList.add("hidden");
   } else {
     empty.textContent = nodeType === "activity"

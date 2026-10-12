@@ -1,4 +1,4 @@
-/* Classroom Interactive V2.27.1 - Activity Module Registry
+/* Classroom Interactive V2.32.1 - Activity Module Registry
  * Centralizes activity metadata and context hooks so new activity types can be
  * registered without adding mode switch/if chains throughout the core files.
  */
@@ -7,7 +7,16 @@
 
   const definitions = new Map();
   const contexts = new Map();
-  const DEFAULT_MODE = "drag-reveal";
+  const DEFAULT_MODE = "choice-identify";
+  const LEGACY_MODE_ALIASES = Object.freeze({
+    "drag-reveal":"choice-identify",
+    "open-tags":"choice-identify"
+  });
+
+  function canonicalMode(mode) {
+    const key = String(mode || "");
+    return LEGACY_MODE_ALIASES[key] || key;
+  }
 
   function safeCount(value) {
     const number = Number(value);
@@ -27,6 +36,7 @@
       editorClass: definition.editorClass || "",
       editorSectionId: definition.editorSectionId || "",
       dataKey: definition.dataKey || "cases",
+      hidden: Boolean(definition.hidden),
       collection: definition.collection !== false,
       requiresCloud: Boolean(definition.requiresCloud),
       allowInCourse: definition.allowInCourse !== false,
@@ -59,23 +69,25 @@
   }
 
   function get(mode) {
-    return definitions.get(String(mode || "")) || definitions.get(DEFAULT_MODE);
+    return definitions.get(canonicalMode(mode)) || definitions.get(DEFAULT_MODE);
   }
 
   function has(mode) {
-    return definitions.has(String(mode || ""));
+    return definitions.has(canonicalMode(mode));
   }
 
   function normalizeMode(mode) {
-    return has(mode) ? String(mode) : DEFAULT_MODE;
+    const canonical = canonicalMode(mode);
+    return definitions.has(canonical) ? canonical : DEFAULT_MODE;
   }
 
-  function list() {
-    return [...definitions.values()];
+  function list({includeHidden=false}={}) {
+    const items=[...definitions.values()];
+    return includeHidden ? items : items.filter(item=>!item.hidden);
   }
 
   function modeLabel(mode) {
-    return get(mode)?.label || "選擇與揭示";
+    return get(mode)?.label || "選擇與辨識";
   }
 
   function libraryTaskCount(activity) {
@@ -110,9 +122,10 @@
 
   function registerHooks(context, mode, hooks) {
     if (!has(mode)) throw new Error(`Unknown activity module: ${mode}`);
+    const canonical = normalizeMode(mode);
     const map = contextMap(context);
-    const previous = map.get(mode) || {};
-    map.set(mode, {...previous, ...(hooks || {})});
+    const previous = map.get(canonical) || {};
+    map.set(canonical, {...previous, ...(hooks || {})});
   }
 
   function hooks(context, mode) {
@@ -129,35 +142,45 @@
   }
 
   function teacherControlIds() {
-    return list().map(item => item.teacherControlId).filter(Boolean);
+    return list({includeHidden:true}).map(item => item.teacherControlId).filter(Boolean);
   }
 
   // --- Built-in module metadata. Behavior hooks are registered by each context. ---
   define({
-    id:"drag-reveal",
-    label:"選擇與揭示",
-    shortLabel:"選擇與揭示",
+    id:"choice-identify",
+    label:"選擇與辨識",
+    shortLabel:"選擇與辨識",
     templateKicker:"選擇與分類",
-    templateTitle:"選擇與揭示",
+    templateTitle:"選擇與辨識",
     editorKind:"standard",
     dataKey:"cases",
-    completeText:"你已經完成所有關卡。現在回頭看看：哪些資訊或依據最影響你的判斷？"
+    completeText:"你已經完成所有任務。回頭看看：哪些資訊、特徵或依據最影響你的選擇？"
   });
 
   define({
-    id:"open-tags",
-    label:"特徵選擇",
-    shortLabel:"特徵選擇",
+    id:"evidence-classification",
+    label:"依據與分類",
+    shortLabel:"依據與分類",
     templateKicker:"選擇與分類",
-    templateTitle:"特徵選擇",
-    editorKind:"standard",
-    dataKey:"cases",
-    completeText:"你已經完成所有關卡。比較彼此的選擇與理由，看看同一份材料為什麼可能支持不同觀點。"
+    templateTitle:"依據與分類",
+    editorKind:"evidence-classification",
+    editorClass:"evidence-classification-mode",
+    dataKey:"classification",
+    libraryTaskCount:activity => activity?.classificationFlow === "discussion" ? 1 : (activity?.tasks?.length || 1),
+    studentTaskCount:activity => activity?.classificationFlow === "discussion" ? 1 : (activity?.tasks?.length || 1),
+    stageCount:activity => activity?.classificationFlow === "discussion" && activity?.openClassification?.allowRejudge !== false ? 2 : 1,
+    currentStudentTask:(activity,index) => activity?.classificationFlow === "discussion" ? activity?.openClassification : activity?.tasks?.[index],
+    hasStudentContent:activity => activity?.classificationFlow === "discussion"
+      ? Boolean(activity?.openClassification?.elementRefs?.length && activity?.openClassification?.typeRefs?.length)
+      : Boolean(activity?.tasks?.length),
+    previewSummary:summary => summary?.classificationFlow === "discussion" ? "初次＋討論＋再判斷" : `${Number(summary?.taskCount || 0)} 個分類任務`,
+    completeText:"你完成了依據與分類活動。重要的不只是最後選哪一類，而是能指出哪些材料資訊支持你的判斷。"
   });
 
   define({
     id:"element-type",
-    label:"依據與分類｜基礎分類",
+    hidden:true,
+    label:"依據與分類｜單次判斷",
     shortLabel:"依據與分類",
     templateKicker:"選擇與分類",
     templateTitle:"依據與分類｜基礎分類",
@@ -173,7 +196,8 @@
 
   define({
     id:"progressive-reveal",
-    label:"逐步揭露",
+    hidden:true,
+    label:"資訊揭露與修正｜逐步揭露",
     shortLabel:"逐步揭露",
     templateKicker:"推理與修正",
     templateTitle:"逐步揭露",
@@ -188,13 +212,14 @@
     studentTaskCount:() => 1,
     stageCount:activity => activity?.progressive?.clueRefs?.length || activity?.progressive?.clues?.length || 1,
     currentStudentTask:activity => activity?.progressive,
-    hasStudentContent:activity => Boolean(activity?.progressive?.clues?.length >= 2),
+    hasStudentContent:activity => Boolean((activity?.progressive?.clueRefs?.length || activity?.progressive?.clues?.length || 0) >= 2),
     previewSummary:summary => `${Number(summary?.taskCount || 0)} 項資訊`,
     completeText:"你完成了逐步判斷。回頭看看自己的答案在哪一項資訊後改變，並用材料內容說明理由。"
   });
 
   define({
     id:"open-classification",
+    hidden:true,
     label:"依據與分類｜討論後再判斷",
     shortLabel:"討論後再判斷",
     templateKicker:"選擇與分類",
@@ -219,7 +244,8 @@
 
   define({
     id:"predict-reveal",
-    label:"預測 → 揭曉 → 再判斷",
+    hidden:true,
+    label:"資訊揭露與修正｜預測揭曉",
     shortLabel:"預測揭曉",
     templateKicker:"推理與修正",
     templateTitle:"預測 → 揭曉 → 再判斷",
@@ -239,26 +265,36 @@
     completeText:"你已完成預測與再次判斷。比較前後答案，想想真正讓你維持或改變判斷的是哪項新資訊。"
   });
 
+  // V2.31: unified authoring module. Runtime and historical response keys remain
+  // the original progressive-reveal / predict-reveal formats for compatibility.
   define({
-    id:"stance-map",
-    label:"二維立場圖",
-    shortLabel:"二維立場圖",
-    templateKicker:"立場與即時互動",
-    templateTitle:"二維立場圖",
-    editorKind:"stance-map",
-    editorClass:"stance-map-mode",
-    editorSectionId:"stanceMapEditorSection",
-    dataKey:"stanceMap",
+    id:"information-revision",
+    label:"資訊揭露與修正",
+    shortLabel:"資訊揭露與修正",
+    templateKicker:"推理與修正",
+    templateTitle:"資訊揭露與修正",
+    editorKind:"information-revision",
+    editorClass:"information-revision-mode",
     collection:false,
-    teacherControlId:"stanceMapSessionControl",
-    libraryTaskCount:() => 1,
+    realtimeStudent:true,
+    dataKey:"progressive",
+    libraryTaskCount:activity => activity?.informationRevisionFlow === "progressive"
+      ? (activity?.progressive?.clueRefs?.length || activity?.progressive?.clues?.length || 0)
+      : 1,
     studentTaskCount:() => 1,
-    currentStudentTask:activity => activity?.stanceMap,
-    hasStudentContent:activity => Boolean(activity?.stanceMap?.question),
-    previewSummary:() => "1 題二維定位",
-    completeText:"你已完成二維立場定位。全班分布能幫助我們看見：相同結論背後，也可能存在不同的判斷維度。"
+    stageCount:activity => activity?.informationRevisionFlow === "progressive"
+      ? (activity?.progressive?.clueRefs?.length || activity?.progressive?.clues?.length || 1)
+      : 2,
+    currentStudentTask:activity => activity?.informationRevisionFlow === "progressive"
+      ? activity?.progressive : activity?.predictReveal,
+    hasStudentContent:activity => activity?.informationRevisionFlow === "progressive"
+      ? Boolean(activity?.progressive?.clues?.length >= 2)
+      : Boolean(activity?.predictReveal?.question && activity?.predictReveal?.options?.length >= 2),
+    previewSummary:summary => summary?.informationRevisionFlow === "progressive"
+      ? `${Number(summary?.taskCount || 0)} 項資訊 · 逐步揭露`
+      : "預測 → 揭曉 → 再判斷",
+    completeText:"你已完成資訊揭露與修正活動，請回顧哪些新資訊影響了自己的判斷。"
   });
-
 
   define({
     id:"live-stance",
@@ -308,28 +344,6 @@
     previewSummary:summary => `${Number(summary?.taskCount || 0)} 層情境 · 需雲端 Session`,
     completeText:"你完成了逐層思辨。這個活動不評分，也不要求你改變立場；重點是看見哪些新資訊、假設與價值影響了自己的判斷。"
   });
-
-
-  define({
-    id:"scale-spectrum",
-    label:"量表／立場光譜",
-    shortLabel:"量表／立場光譜",
-    templateKicker:"快速蒐集",
-    templateTitle:"量表／立場光譜",
-    editorKind:"scale-spectrum",
-    editorClass:"scale-spectrum-mode",
-    editorSectionId:"scaleEditorSection",
-    dataKey:"scale",
-    collection:false,
-    teacherControlId:"scaleSessionControl",
-    libraryTaskCount:() => 1,
-    studentTaskCount:() => 1,
-    currentStudentTask:activity => activity?.scale,
-    hasStudentContent:activity => Boolean(activity?.scale?.question),
-    previewSummary:summary => `${Number(summary?.taskCount || 1)} 題量表`,
-    completeText:"你已完成量表作答。比較全班分布時，也可以想想自己為什麼站在這個位置。"
-  });
-
   define({
     id:"ranking",
     label:"排序／優先順序",
@@ -352,7 +366,8 @@
 
   define({
     id:"open-text",
-    label:"開放文字／文字牆",
+    hidden:true,
+    label:"文字交流與提問｜短答蒐集",
     shortLabel:"開放文字",
     templateKicker:"快速蒐集",
     templateTitle:"開放文字／文字牆",
@@ -373,7 +388,8 @@
 
   define({
     id:"question-wall",
-    label:"匿名提問牆＋認同＋回應",
+    hidden:true,
+    label:"文字交流與提問｜匿名提問",
     shortLabel:"匿名提問牆",
     templateKicker:"同儕互動",
     templateTitle:"匿名提問牆＋認同＋回應",
@@ -391,6 +407,28 @@
     hasStudentContent:activity => Boolean(activity?.questionWall?.question),
     previewSummary:() => "匿名發問＋同儕認同＋回應",
     completeText:"你可以持續查看同學的匿名問題，對自己也想知道的問題按「＋1」，也能留下匿名同儕回應。"
+  });
+
+  // V2.32: one authoring entry, two existing runtimes. Keeping the two
+  // underlying definitions hidden preserves all existing Session / Course data.
+  define({
+    id:"text-exchange",
+    label:"文字交流與提問",
+    shortLabel:"文字交流與提問",
+    templateKicker:"文字表達與同儕互動",
+    templateTitle:"文字交流與提問",
+    editorKind:"text-exchange",
+    editorClass:"text-exchange-mode",
+    collection:false,
+    dataKey:"openText",
+    libraryTaskCount:() => 1,
+    studentTaskCount:() => 1,
+    currentStudentTask:activity => activity?.textExchangeFlow === "questions" ? activity?.questionWall : activity?.openText,
+    hasStudentContent:activity => activity?.textExchangeFlow === "questions"
+      ? Boolean(activity?.questionWall?.question) : Boolean(activity?.openText?.question),
+    previewSummary:summary => summary?.textExchangeFlow === "questions"
+      ? "匿名提問＋認同＋回應" : "文字牆＋詞雲",
+    completeText:"你已完成這次文字交流活動。"
   });
 
   define({

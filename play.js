@@ -27,7 +27,6 @@ let deliberationState = null;
 let deliberationLocalResponses = [];
 let sessionRealtime = null;
 let openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
-let scaleSelectedValue = 0;
 let rankingOrder = [];
 let openTextValue = "";
 let questionWallState = {posts:[]};
@@ -45,7 +44,6 @@ let predictInitialChoice = "";
 let predictFinalChoice = "";
 let predictPhase = 1;
 let predictPollTimer = null;
-let stancePoint = null;
 let confidenceSelectedValue = 0;
 let liveStanceChoice = "";
 let liveStanceChangeCount = 0;
@@ -194,12 +192,14 @@ function decodeElementType(raw) {
   };
 }
 
-function decodeStandardActivity(raw, mode = "drag-reveal") {
+function decodeStandardActivity(raw, legacyMode = "") {
   if (!Array.isArray(raw?.c)) return null;
+  const choiceMode = raw?.cm === "open" || legacyMode === "open-tags" || raw?.m === "open-tags" ? "open" : "reference";
   return {
     title: raw.t || "",
     subtitle: raw.s || "",
-    template: mode === "open-tags" ? "open-tags" : "drag-reveal",
+    template: "choice-identify",
+    choiceMode,
     cases: raw.c.map(c => ({
       title: c.t || "",
       intro: c.i || "",
@@ -215,20 +215,6 @@ function decodeStandardActivity(raw, mode = "drag-reveal") {
     }))
   };
 }
-
-function decodeScaleSpectrum(raw) {
-  if (!raw?.sc) return null;
-  return {
-    title:raw.t||"",subtitle:raw.s||"",template:"scale-spectrum",
-    scale:{
-      question:String(raw.sc.q||""),
-      pointCount:Math.max(3,Math.min(10,Math.round(Number(raw.sc.n)||5))),
-      leftLabel:String(raw.sc.l||"完全不同意"),
-      rightLabel:String(raw.sc.r||"非常同意")
-    }
-  };
-}
-
 function decodeRanking(raw) {
   if (!raw?.rk) return null;
   return {
@@ -282,10 +268,6 @@ function decodePredictReveal(raw) {
   if(!raw?.pr)return null;
   return {title:raw.t||"",subtitle:raw.s||"",template:"predict-reveal",predictReveal:{question:String(raw.pr.q||""),options:(Array.isArray(raw.pr.o)?raw.pr.o:[]).map((item,index)=>({id:String(item?.i||`option-${index+1}`),label:String(item?.l||`選項 ${index+1}`)})),revealTitle:String(raw.pr.rt||"結果揭曉"),revealContent:String(raw.pr.rc||""),rejudgePrompt:String(raw.pr.rp||"看完揭曉後，你現在怎麼判斷？")}};
 }
-function decodeStanceMap(raw) {
-  if(!raw?.sm)return null;
-  return {title:raw.t||"",subtitle:raw.s||"",template:"stance-map",stanceMap:{question:String(raw.sm.q||""),xLeft:String(raw.sm.xl||"不合理"),xRight:String(raw.sm.xr||"合理"),yBottom:String(raw.sm.yb||"影響小"),yTop:String(raw.sm.yt||"影響大")}};
-}
 function decodeLiveStance(raw) {
   if(!raw?.ls)return null;
   return {
@@ -318,7 +300,7 @@ async function decodeActivity(encoded) {
   }
 
   const raw = JSON.parse(new TextDecoder().decode(bytes));
-  const mode = ActivityModules?.normalizeMode?.(raw?.m) || "drag-reveal";
+  const mode = ActivityModules?.normalizeMode?.(raw?.m) || "choice-identify";
   let decoded = ActivityModules?.invoke?.("codec", mode, "decode", raw);
   if (!decoded && Array.isArray(raw?.c)) decoded=decodeStandardActivity(raw, mode);
   if (!decoded) decoded=raw;
@@ -469,13 +451,11 @@ function resetPanels() {
   el("progressiveInteraction").classList.add("hidden");
   el("openClassificationInteraction").classList.add("hidden");
   el("deliberationInteraction").classList.add("hidden");
-  el("scaleInteraction")?.classList.add("hidden");
   el("rankingInteraction")?.classList.add("hidden");
   el("openTextInteraction")?.classList.add("hidden");
   el("questionWallInteraction")?.classList.add("hidden");
   el("groupConsensusInteraction")?.classList.add("hidden");
   el("predictRevealInteraction")?.classList.add("hidden");
-  el("stanceMapInteraction")?.classList.add("hidden");
   el("liveStanceInteraction")?.classList.add("hidden");
   el("confidencePanel")?.classList.add("hidden");
   el("openClassificationWaitingPanel").classList.add("hidden");
@@ -563,41 +543,6 @@ function completeConfidenceStep({next=false}={}) {
   el("confidencePanel")?.classList.add("hidden");
   if(next)renderConfidencePanel();
 }
-
-function renderScaleTask() {
-  const task=activity.scale || {};
-  renderSimpleModuleHeader("量表",task.question);
-  el("scaleInteraction").classList.remove("hidden");
-  el("scaleStudentQuestion").textContent=task.question || "請選擇最符合你目前想法的位置";
-  el("scaleStudentLeftLabel").textContent=task.leftLabel || "低";
-  el("scaleStudentRightLabel").textContent=task.rightLabel || "高";
-  const grid=el("scaleChoiceGrid");grid.innerHTML="";
-  const count=Math.max(3,Math.min(10,Math.round(Number(task.pointCount)||5)));
-  if (!scaleSelectedValue || scaleSelectedValue>count) scaleSelectedValue=0;
-  for (let value=1;value<=count;value++) {
-    const button=document.createElement("button");
-    button.type="button";button.className="scale-choice";button.dataset.value=String(value);button.textContent=String(value);
-    button.classList.toggle("selected",scaleSelectedValue===value);
-    button.addEventListener("click",()=>{
-      scaleSelectedValue=value;
-      grid.querySelectorAll(".scale-choice").forEach(node=>node.classList.toggle("selected",Number(node.dataset.value)===value));
-      el("scaleStudentStatus").textContent=`已選 ${value} / ${count}`;
-    });
-    grid.appendChild(button);
-  }
-  el("scaleStudentStatus").textContent=scaleSelectedValue ? `已選 ${scaleSelectedValue} / ${count}` : "尚未選擇";
-}
-
-async function submitScaleResponse() {
-  const task=activity.scale || {};
-  const count=Math.max(3,Math.min(10,Math.round(Number(task.pointCount)||5)));
-  if (!scaleSelectedValue) { showToast("請先選擇一個刻度"); return; }
-  if(!ensureConfidenceSelection())return;
-  const payload=confidencePayload({value:scaleSelectedValue,pointCount:count,leftLabel:task.leftLabel||"",rightLabel:task.rightLabel||"",selectedTypeName:String(scaleSelectedValue)});
-  await recordSessionResponse("scale-spectrum",{selectedType:String(scaleSelectedValue),payload});
-  completeConfidenceStep();markCurrentTaskComplete();showComplete();
-}
-
 function renderRankingTask() {
   const task=activity.ranking || {};
   renderSimpleModuleHeader("排序",task.question);
@@ -907,13 +852,6 @@ async function syncPredictRevealState(refresh=false) {
   }catch(error){console.warn("預測揭曉同步失敗",error);}
 }
 function startPredictPolling(interval=1800){clearInterval(predictPollTimer);if(!isSessionPlay())return;predictPollTimer=setInterval(()=>syncPredictRevealState(false),interval);}
-function renderStanceMapTask() {
-  const task=activity.stanceMap||{};renderSimpleModuleHeader("二維立場",task.question);el("stanceMapInteraction").classList.remove("hidden");el("stanceStudentQuestion").textContent=task.question||"請在圖上標出你的立場";el("stanceXLeftLabel").textContent=task.xLeft||"左";el("stanceXRightLabel").textContent=task.xRight||"右";el("stanceYBottomLabel").textContent=task.yBottom||"低";el("stanceYTopLabel").textContent=task.yTop||"高";renderStancePoint();
-}
-function setStanceFromEvent(event){const map=el("stanceStudentMap");const rect=map.getBoundingClientRect();const x=Math.max(0,Math.min(100,((event.clientX-rect.left)/rect.width)*100));const y=Math.max(0,Math.min(100,(1-(event.clientY-rect.top)/rect.height)*100));stancePoint={x:Math.round(x),y:Math.round(y)};renderStancePoint();}
-function renderStancePoint(){const point=el("stancePoint");if(!stancePoint){point.classList.add("hidden");el("stanceStudentStatus").textContent="尚未定位";return;}point.classList.remove("hidden");point.style.left=`${stancePoint.x}%`;point.style.bottom=`${stancePoint.y}%`;el("stanceStudentStatus").textContent=`X ${stancePoint.x} · Y ${stancePoint.y}`;}
-async function submitStanceResponse(){if(!stancePoint){showToast("請先在圖上標出你的立場");return;}const task=activity.stanceMap||{};const payload=confidencePayload({x:stancePoint.x,y:stancePoint.y,xLeft:task.xLeft||"",xRight:task.xRight||"",yBottom:task.yBottom||"",yTop:task.yTop||""});if(!payload)return;await recordSessionResponse("stance-map",{selectedType:`${stancePoint.x},${stancePoint.y}`,payload});completeConfidenceStep();markCurrentTaskComplete();showComplete();}
-
 function liveStanceLabel(side) {
   const task=activity?.liveStance || {};
   if(side==="left") return task.leftLabel || "支持";
@@ -2354,6 +2292,10 @@ function renderResultType(containerId, type) {
   `;
 }
 
+function isOpenChoiceActivity() {
+  return activity?.template === "choice-identify" && activity?.choiceMode === "open";
+}
+
 function renderStandardCase() {
   const c = currentTask();
   selected = new Set();
@@ -2366,7 +2308,7 @@ function renderStandardCase() {
   intro.textContent = introText;
   intro.classList.toggle("hidden", !introText);
 
-  const isOpenMode = activity.template === "open-tags";
+  const isOpenMode = isOpenChoiceActivity();
   el("studentCasePrompt").textContent = c.prompt || (
     isOpenMode
       ? "選出你認為符合這份材料／情境的特徵或標籤，可以複選。"
@@ -2419,7 +2361,7 @@ function renderCards(cards) {
   const pool = el("cardPool");
   const answer = el("answerZone");
   pool.innerHTML = "";
-  const emptyText = activity?.template === "open-tags"
+  const emptyText = isOpenChoiceActivity()
     ? "把你認為符合這份材料的特徵或標籤放到這裡"
     : "把你選中的字卡放到這裡";
   answer.innerHTML = `<div id="emptyHint" class="empty-hint">${emptyText}</div>`;
@@ -2498,17 +2440,17 @@ function submitCase() {
   const chosen = [...selected];
 
   if (!chosen.length) {
-    showToast(activity.template === "open-tags"
-      ? "先選至少一個你認為符合的標籤"
-      : "先選幾張你認為最重要的字卡");
+    showToast(isOpenChoiceActivity()
+      ? "先選至少一個你認為符合的特徵或標籤"
+      : "先選幾個你認為最重要的項目");
     return;
   }
   if(!ensureConfidenceSelection())return;
 
-  if (activity.template === "open-tags") {
-    recordSessionResponse("open-tags", {
+  if (isOpenChoiceActivity()) {
+    recordSessionResponse("choice-identify", {
       selectedElements: chosen,
-      payload: confidencePayload({selectedLabels: chosen})
+      payload: confidencePayload({choiceMode:"open",selectedLabels: chosen})
     });
     completeConfidenceStep();
     showOpenDiscussion(c, chosen);
@@ -2524,9 +2466,10 @@ function submitCase() {
   el("feedbackPanel").classList.remove("hidden");
   el("lockBadge").textContent = "已作答";
 
-  recordSessionResponse("drag-reveal", {
+  recordSessionResponse("choice-identify", {
     selectedElements: chosen,
     payload: confidencePayload({
+      choiceMode:"reference",
       exact,
       correctChosen,
       missed,
@@ -2592,7 +2535,11 @@ function showComplete() {
 
   const completeText = el("completeText");
   const definition = ActivityModules?.get?.(activity?.template);
-  completeText.textContent = definition?.completeText || "你已完成活動。";
+  if (activity?.template === "choice-identify" && activity?.choiceMode === "open") {
+    completeText.textContent = "你已經完成所有任務。比較彼此的選擇與理由，看看同一份材料為什麼可能支持不同觀點。";
+  } else {
+    completeText.textContent = definition?.completeText || "你已完成活動。";
+  }
 }
 
 function resetCurrentCase() {
@@ -2611,10 +2558,9 @@ function restart() {
   openInitialResponse = null;
   openFinalResponse = null;
   openStats = {initial:[], final:[], initial_total:0, final_total:0, changed_count:0, unchanged_count:0};
-  scaleSelectedValue=0;
   rankingOrder=[];
   openTextValue="";
-  predictInitialChoice="";predictFinalChoice="";predictPhase=1;clearInterval(predictPollTimer);stancePoint=null;confidenceSelectedValue=0;
+  predictInitialChoice="";predictFinalChoice="";predictPhase=1;clearInterval(predictPollTimer);confidenceSelectedValue=0;
   clearInterval(openPollTimer);
   clearInterval(deliberationPollTimer);
   deliberationSelectedChoice="";
@@ -2657,7 +2603,6 @@ el("progressiveFinishBtn").addEventListener("click", showComplete);
 el("submitOpenClassificationBtn").addEventListener("click", submitOpenClassification);
 el("openPreviewRejudgeBtn").addEventListener("click", beginOpenPreviewRejudge);
 el("openClassificationFinishBtn").addEventListener("click", showComplete);
-el("submitScaleBtn")?.addEventListener("click",submitScaleResponse);
 el("submitRankingBtn")?.addEventListener("click",submitRankingResponse);
 el("submitOpenTextBtn")?.addEventListener("click",submitOpenTextResponse);
 el("questionWallStudentInput")?.addEventListener("input",updateQuestionWallCounter);
@@ -2669,13 +2614,6 @@ el("questionWallNewBtn")?.addEventListener("click",()=>{questionWallSortMode="ne
 el("submitPredictInitialBtn")?.addEventListener("click",submitPredictInitial);
 el("predictLocalRevealBtn")?.addEventListener("click",showPredictFinalPanel);
 el("submitPredictFinalBtn")?.addEventListener("click",submitPredictFinal);
-el("stanceStudentMap")?.addEventListener("click",setStanceFromEvent);
-let stanceDragging=false;
-el("stanceStudentMap")?.addEventListener("pointerdown",event=>{stanceDragging=true;event.currentTarget.setPointerCapture?.(event.pointerId);setStanceFromEvent(event);});
-el("stanceStudentMap")?.addEventListener("pointermove",event=>{if(stanceDragging)setStanceFromEvent(event);});
-el("stanceStudentMap")?.addEventListener("pointerup",()=>{stanceDragging=false;});
-el("stanceStudentMap")?.addEventListener("pointercancel",()=>{stanceDragging=false;});
-el("submitStanceBtn")?.addEventListener("click",submitStanceResponse);
 el("openTextStudentInput")?.addEventListener("input",event=>{openTextValue=event.target.value;updateOpenTextCounter();});
 el("submitDeliberationBtn")?.addEventListener("click",submitDeliberationAnswer);
 el("submitDeliberationPostNoteBtn")?.addEventListener("click",submitDeliberationPostNote);
@@ -2716,24 +2654,21 @@ function registerStudentActivityModules() {
   const registerCodec = (mode, decode) => ActivityModules?.registerHooks?.("codec", mode, {decode});
   const registerStudent = (mode, hooks) => ActivityModules?.registerHooks?.("student", mode, hooks);
 
-  registerCodec("drag-reveal", raw => decodeStandardActivity(raw,"drag-reveal"));
-  registerCodec("open-tags", raw => decodeStandardActivity(raw,"open-tags"));
+  registerCodec("choice-identify", raw => decodeStandardActivity(raw,raw?.m || ""));
   registerCodec("element-type", decodeElementType);
   registerCodec("progressive-reveal", decodeProgressiveReveal);
   registerCodec("open-classification", decodeOpenClassification);
-  registerCodec("scale-spectrum", decodeScaleSpectrum);
   registerCodec("ranking", decodeRanking);
   registerCodec("open-text", decodeOpenText);
   registerCodec("question-wall", decodeQuestionWall);
   registerCodec("group-consensus", decodeGroupConsensus);
   registerCodec("predict-reveal", decodePredictReveal);
-  registerCodec("stance-map", decodeStanceMap);
   registerCodec("live-stance", decodeLiveStance);
   registerCodec("layered-deliberation", decodeLayeredDeliberation);
 
-  ["drag-reveal","open-tags"].forEach(mode => registerStudent(mode, {
+  registerStudent("choice-identify", {
     render:() => { renderStandardCase(); return true; }
-  }));
+  });
 
   registerStudent("element-type", {
     render:() => { renderElementTypeTask(); return true; }
@@ -2750,14 +2685,11 @@ function registerStudentActivityModules() {
     syncRealtime:refresh => syncOpenClassificationState(refresh),
     startPolling:startOpenPolling
   });
-
-  registerStudent("scale-spectrum", {render:() => { renderScaleTask(); return true; }});
   registerStudent("ranking", {render:() => { renderRankingTask(); return true; }});
   registerStudent("open-text", {render:() => { renderOpenTextTask(); return true; }});
   registerStudent("question-wall", {render:() => { renderQuestionWallTask(); return true; },syncRealtime:refresh=>syncQuestionWallState(refresh),startPolling:startQuestionWallPolling});
   registerStudent("group-consensus", {render:() => { renderGroupConsensusTask(); return true; },syncRealtime:refresh=>syncGroupConsensusState(refresh),startPolling:startGroupConsensusPolling});
   registerStudent("predict-reveal", {render:() => { renderPredictRevealTask(); return true; },syncRealtime:refresh=>syncPredictRevealState(refresh),startPolling:startPredictPolling});
-  registerStudent("stance-map", {render:() => { renderStanceMapTask(); return true; }});
   registerStudent("live-stance", {
     render:() => { renderLiveStanceTask(); return true; },
     syncRealtime:refresh => syncLiveStanceState(refresh),

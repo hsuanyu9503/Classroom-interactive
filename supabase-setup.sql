@@ -1588,6 +1588,34 @@ begin
 
   v_stage_key := coalesce(nullif(trim(coalesce(p_stage_key,'')),''),'final');
 
+  -- V2.32.1：公開時機須由資料庫把關，不能只依賴學生端 UI。
+  if v_activity_mode = 'predict-reveal' then
+    if p_mode <> 'predict-reveal' or not (
+      (v_current_stage = 1 and v_stage_key = 'initial') or
+      (v_current_stage = 2 and v_stage_key = 'final')
+    ) then
+      raise exception 'predict reveal response stage is closed';
+    end if;
+  end if;
+
+  if v_activity_mode = 'progressive-reveal' then
+    if p_mode <> 'progressive-reveal' or v_stage_key !~ '^clue-[1-9][0-9]*$' then
+      raise exception 'invalid progressive reveal response stage';
+    end if;
+    if split_part(v_stage_key,'-',2)::integer <> v_current_stage then
+      raise exception 'progressive reveal response stage is closed';
+    end if;
+  end if;
+
+  if v_activity_mode = 'open-classification' then
+    if p_mode <> 'open-classification' or not (
+      (v_current_stage = 1 and v_stage_key = 'initial') or
+      (v_current_stage = 2 and v_stage_key = 'final')
+    ) then
+      raise exception 'open classification response stage is closed';
+    end if;
+  end if;
+
   if v_activity_mode = 'layered-deliberation' then
     if p_mode <> 'layered-deliberation' then
       raise exception 'invalid deliberation response mode';

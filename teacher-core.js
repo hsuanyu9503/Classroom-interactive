@@ -1,4 +1,4 @@
-/* V2.27.1 | Teacher Core: workflow + collapsible Course/Lesson/Node editors */
+/* V2.32.1 | Teacher Core: workflow + collapsible Course/Lesson/Node editors */
 /* =========================================================
    Classroom Interactive — Teacher Runtime
    Consolidated in V1.9.2
@@ -22,6 +22,7 @@
 
   const $ = (id) => document.getElementById(id);
   const ActivityModules = window.ClassroomActivityModules;
+  const RETIRED_ACTIVITY_MODES = new Set(["scale-spectrum", "stance-map"]);
   const uuid = () => globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const nowIso = () => new Date().toISOString();
 
@@ -53,7 +54,7 @@
         nodes: [
           {id:uuid(), type:"showcase", title:"作品有什麼不一樣？", activityRef:"", note:"一次呈現數張動畫／漫畫作品卡，引導學生自由觀察差異。"},
           {id:uuid(), type:"toolbox", title:"五大小說類型工具箱", activityRef:"", note:"依序介紹奇幻、偵探、武俠、歷史、冒險與各自要素。"},
-          {id:uuid(), type:"activity", title:"要素辨識練習", activityRef:"", note:"使用「依據與分類｜基礎分類」流程，讓學生先找依據，再完成分類判斷。"},
+          {id:uuid(), type:"activity", title:"要素辨識練習", activityRef:"", note:"使用「依據與分類｜單次判斷」流程，讓學生先找依據，再完成分類判斷。"},
           {id:uuid(), type:"summary", title:"小說分類三步驟", activityRef:"", note:"看故事 → 找重要要素 → 根據要素判斷類型，並留下下一節伏筆。"}
         ]
       },
@@ -243,7 +244,7 @@
   }
 
   function getActivities() {
-    return readArray(KEYS.activities);
+    return readArray(KEYS.activities).filter(activity => !RETIRED_ACTIVITY_MODES.has(String(activity?.template || activity?.mode || "")));
   }
 
   function escapeHtml(text) {
@@ -641,14 +642,28 @@
     activityItems.forEach(activity => {
       const option = document.createElement("option");
       option.value = activity.id;
-      option.textContent = activity.title || "未命名活動";
+      const rawMode=String(activity.template || activity.mode || "");
+      const normalizedMode=ActivityModules?.normalizeMode?.(rawMode);
+      const classificationFlow = rawMode === "open-classification" ? "discussion"
+        : rawMode === "element-type" ? "single"
+        : activity.classificationFlow;
+      const modeSuffix = normalizedMode === "choice-identify"
+        ? `｜${activity.choiceMode === "open" ? "開放選擇" : "有參考答案"}`
+        : normalizedMode === "evidence-classification" || ["element-type","open-classification"].includes(rawMode)
+          ? `｜${classificationFlow === "discussion" ? "討論後再判斷" : "單次判斷"}`
+          : normalizedMode === "information-revision" || ["progressive-reveal","predict-reveal"].includes(rawMode)
+            ? `｜${(rawMode === "progressive-reveal" || activity.informationRevisionFlow === "progressive") ? "逐步揭露" : "預測揭曉"}`
+            : normalizedMode === "text-exchange" || ["open-text","question-wall"].includes(rawMode)
+              ? `｜${rawMode === "question-wall" || activity.textExchangeFlow === "questions" ? "匿名提問" : "短答蒐集"}`
+              : "";
+      option.textContent = `${activity.title || "未命名活動"}${modeSuffix}`;
       option.selected = activity.id === selected;
       select.appendChild(option);
     });
     if (selected && !activityItems.some(activity => activity.id === selected)) {
       const option = document.createElement("option");
       option.value = selected;
-      option.textContent = "⚠ 引用的活動已不存在";
+      option.textContent = "⚠ 引用的活動已停用或不存在";
       option.selected = true;
       select.appendChild(option);
     }
@@ -1066,7 +1081,7 @@
       }
       activitySnapshots.push({
         id:snap.id,title:snap.title,subtitle:snap.subtitle,
-        template:snap.template,stageCount:snap.stageCount,encoded:snap.encoded
+        template:snap.template,choiceMode:snap.choiceMode || "",stageCount:snap.stageCount,encoded:snap.encoded
       });
     }
 
