@@ -1,5 +1,5 @@
 /* =============================================================
-   Classroom Interactive v2.33.0 — Visual System / UI Polish
+   Classroom Interactive v2.34.0 — Visual System / UI Polish
    Non-destructive presentation layer: keep all IDs, event flow,
    activity schemas and Supabase integration unchanged.
    ============================================================= */
@@ -383,3 +383,308 @@ body::before{
 .join-mode-notice,
 .student-page .student-hero .subtle { color: var(--ui-muted-readable); }
 .workspace-tab { color: #53647d; }
+
+
+/* =======================================================================
+   V2.34.0 — 彩色但有秩序的視覺層級 / Chinese typography refinement
+   Only presentation rules: no structural DOM, storage, or session changes.
+   Functional accent palette: course=indigo, works=amber, types=teal,
+   activities=violet, session=blue; students use all as supporting colors.
+   ======================================================================= */
+:root {
+  --ui-ink:#24324b;
+  --ui-muted-readable:#52637c;
+  --ui-purple:#5456c8;
+  --ui-teal:#117b73;
+  --ui-amber:#b16b19;
+  --ui-rose:#b84f68;
+  --ui-sky:#236fa5;
+  --ui-violet:#7650ae;
+  --ui-ring:0 0 0 3px rgba(84,86,200,.17);
+  --bg:#f5f7fc;
+  --line:#dfe5f0;
+  --primary:#5456c8;
+  --primary-dark:#4042a8;
+  --soft:#eef0ff;
+  --text:#24324b;
+  --muted:#52637c;
+}
+body {color:var(--ui-ink);background:#f5f7fc}
+body::before {height:4px;background:linear-gradient(90deg,#605bcc 0%,#4195c4 25%,#24a191 49%,#ecad53 74%,#d4778b 100%)}
+:where(h1,h2,h3,h4){line-height:1.38;overflow-wrap:break-word}
+:where(.teacher-page,.student-page,.join-page,.course-player-page,.deliberation-presentation-page) {
+  -webkit-font-smoothing:antialiased;
+}
+:where(.subtle,.field-help,.mode-selector-help,.activity-template-toolbar p,.mode-family-head small,
+  .mode-flow-body small,.join-mode-notice,.v15-list-item small,.lesson-card small,
+  .workflow-context-bar p,.student-card p,.course-node-content p,.course-work-copy p,
+  .course-type-card p,.tip-box p,.dp-control-status-row small){
+  line-height:1.7;
+  overflow-wrap:break-word;
+}
+:where(.subtle,.field-help,.optional-tag,.mode-selector-help,.activity-template-toolbar p,
+  .mode-family-head small,.mode-flow-body small,.v15-list-item small,.tip-box p){color:#52637c}
+:where(.field>span,.field>label){line-height:1.5;letter-spacing:.012em}
+:where(.field input,.field textarea,.field select){line-height:1.55}
+:where(.field-help,.optional-tag){font-size:12px}
+:where(.v15-editor-head h2,.v15-section-toolbar h3,.activity-template-toolbar h2,
+  .panel-heading h2,.mode-family-head strong,.student-hero h1,.join-card h1){
+  letter-spacing:-.015em;
+}
+:where(.panel-heading,.v15-editor-head,.activity-editor-section-head,.mode-family-head) > :first-child {min-width:0}
+:where(.panel-heading h2,.v15-editor-head h2,.activity-template-toolbar h2,
+  .activity-editor-section-head h3,.student-hero h1,.mode-family-head strong,
+  .mode-flow-body b){overflow-wrap:break-word}
+:where(.field, .mode-flow-body, .mode-family-head, .lesson-title-group, .student-card) {min-width:0}
+:where(input,textarea,select):not([type=checkbox]):not([type=radio]){border-color:#cdd9ea}
+:where(input,textarea,select):not([type=checkbox]):not([type=radio]):focus{
+  border-color:#5659c7;box-shadow:var(--ui-ring)
+}
+:where(button,a,input,textarea,select,[tabindex]):focus-visible{
+  outline:3px solid rgba(58,99,174,.6);outline-offset:2px
+}
+.section-kicker,.eyebrow{letter-spacing:.075em;font-weight:850}
+.status-chip{background:#e9edff;color:#454eac;border-color:#d6defb}
+.app-credit{color:#65768d;letter-spacing:.02em}
+
+/* A — Teacher workspace: rich header, purposeful navigation */
+.teacher-page{
+  background:
+    radial-gradient(ellipse 780px 470px at 97% 0%,rgba(117,112,216,.105),transparent 75%),
+    radial-gradient(ellipse 660px 480px at 1% 42%,rgba(48,168,145,.065),transparent 76%),
+    #f5f7fc;
+}
+.teacher-page .topbar{
+  border-color:#d9deee;
+  background:
+    radial-gradient(ellipse 220px 160px at 87% 12%,rgba(253,191,113,.23),transparent 80%),
+    linear-gradient(112deg,#fff 5%,#f5f3ff 58%,#edf8f6 100%);
+  box-shadow:0 14px 38px rgba(60,70,126,.075);
+}
+.teacher-page .topbar:before {width:6px;background:linear-gradient(180deg,#6662d0 0%,#36a2a0 54%,#e9a54d 100%)}
+.teacher-page .topbar h1{color:#27345d;letter-spacing:-.023em}
+.workspace-version{background:#e9e9ff;color:#4449aa;border-color:#d7d9f9}
+.teacher-page .topbar .subtle{color:#52637c}
+.workflow-switcher{background:#e9edf8;border-color:#dce2f0}
+.workflow-mode-btn{position:relative}
+.workflow-mode-btn[data-workflow="prepare"] .workflow-mode-icon{background:#e8e9ff;color:#5753b9}
+.workflow-mode-btn[data-workflow="teach"] .workflow-mode-icon{background:#e2f5f2;color:#13786d}
+.workflow-mode-btn.active[data-workflow="prepare"] {background:linear-gradient(115deg,#fff,#f8f6ff);color:#4a48a8;box-shadow:0 5px 17px rgba(79,78,176,.11)}
+.workflow-mode-btn.active[data-workflow="teach"] {background:linear-gradient(115deg,#fff,#effcf7);color:#126e66;box-shadow:0 5px 17px rgba(29,127,114,.09)}
+.workflow-mode-btn.active[data-workflow="prepare"] .workflow-mode-icon{background:#e8e9ff}
+.workflow-mode-btn.active[data-workflow="teach"] .workflow-mode-icon{background:#d9f2eb}
+.workflow-mode-btn small {color:#52637c}
+.workspace-tabs{background:#edf1f8;border-color:#dfe6f1}
+.workspace-tab{position:relative;line-height:1.4;color:#52637c;transition:background-color .18s ease,box-shadow .18s ease,color .18s ease}
+.workspace-tab[data-view="courses"].active{background:#eeedff;color:#4f49b3;box-shadow:inset 0 0 0 1px #d4d0fa}
+.workspace-tab[data-view="works"].active{background:#fff3de;color:#945609;box-shadow:inset 0 0 0 1px #f3d9a9}
+.workspace-tab[data-view="types"].active{background:#e5f7f1;color:#096d63;box-shadow:inset 0 0 0 1px #bde4d8}
+.workspace-tab[data-view="activities"].active{background:#f3eafd;color:#6f3c9a;box-shadow:inset 0 0 0 1px #e0cff4}
+.workspace-tab[data-view="sessions"].active{background:#e5f1ff;color:#205e93;box-shadow:inset 0 0 0 1px #c3daf7}
+.workspace-tab:hover:not(.active){background:rgba(255,255,255,.8)}
+.workflow-context-bar{
+  border-color:#dde4f2;
+  background:linear-gradient(110deg,#fff 50%,#f6f5ff);
+}
+.workflow-context-bar strong{color:#2b3955}
+.workflow-context-bar p{color:#52637c}
+.workflow-context-stat{background:#f0f0ff;border-color:#e1defb}
+.workflow-context-stat strong{color:#5252bd}
+.teacher-page[data-workflow="teach"] .workflow-context-bar{
+  background:linear-gradient(110deg,#fff 45%,#edfaf6);border-color:#cfe9e1
+}
+.teacher-page[data-workflow="teach"] .workflow-context-stat{background:#e6f6f1;border-color:#cae8de}
+/* Keep each library/editor pair recognisable, without recoloring destructive actions */
+.workspace-view[data-workspace-view="courses"]{--zone:#5b56c6;--zone-bg:#f0efff;--zone-border:#dad7fa}
+.workspace-view[data-workspace-view="works"]{--zone:#a96711;--zone-bg:#fff5e6;--zone-border:#f0ddb9}
+.workspace-view[data-workspace-view="types"]{--zone:#087c70;--zone-bg:#e8f7f2;--zone-border:#c8e9de}
+.workspace-view[data-workspace-view="activities"]{--zone:#794bae;--zone-bg:#f5edfc;--zone-border:#e6d5f4}
+.workspace-view[data-workspace-view="sessions"]{--zone:#236fa5;--zone-bg:#eaf4ff;--zone-border:#cfe3f4}
+.workspace-view .section-kicker{color:var(--zone,#5456c8)}
+.workspace-view .v15-editor:before{background:linear-gradient(90deg,var(--zone,#5456c8),#64b8ab 68%,#f2b564)}
+.workspace-view :is(.v15-list-item.active,.activity-list-item.active){background:var(--zone-bg,#f0efff);border-color:var(--zone-border,#dad7fa)}
+.workspace-view .v15-list-item.active:before{background:var(--zone,#5456c8)}
+.workspace-view :is(.panel-heading,.v15-editor-head) .section-kicker{color:var(--zone,#5456c8)}
+.workspace-view .tip-box{background:var(--zone-bg,#f4f6ff);border-color:var(--zone-border,#e1e7fa)}
+.workspace-view .tip-box strong{color:var(--zone,#5456c8)}
+.workspace-view .tip-box p{color:#52637c}
+.v15-sidebar,.v15-editor{border-color:#dce4f0;box-shadow:0 10px 28px rgba(51,67,116,.065)}
+.v15-list-item{background:#f8fafd}
+.v15-list-item small{color:#647187}
+.v15-section-toolbar{gap:14px}
+.v15-section-toolbar :is(h3,p){min-width:0}
+.lesson-card{background:#fff;border-color:#e2e8f3}
+.lesson-number{background:#eaeaff;color:#4d4baa}
+.lesson-node{background:#fbfcff}
+:where(.v15-savebar,.sticky-actions) .btn{white-space:normal;text-align:center;line-height:1.4}
+
+/* B — Activity picker has 5 intentional sub-palettes */
+.workspace-view[data-workspace-view="activities"] .activity-template-toolbar{
+  background:linear-gradient(110deg,#fff 40%,#f6f0ff 100%);border-color:#e4d8f2
+}
+.workspace-view[data-workspace-view="activities"] .activity-template-toolbar .section-kicker{color:#754aa9}
+.activity-module-picker{background:#fafbff;border-color:#e1e5f2}
+.activity-module-picker-summary{min-width:0;background:linear-gradient(115deg,#f9f7ff,#f2f8ff)}
+.activity-module-picker-summary strong{overflow-wrap:anywhere}
+.activity-module-picker-summary small{color:#546780;line-height:1.65}
+.mode-family-card{position:relative;overflow:hidden;border-color:var(--family-edge,#dce3ee);background:#fff}
+.mode-family-card::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--family,#5f64cd)}
+.mode-family-card.foundation-family{--family:#4c6eb7;--family-ink:#25578b;--family-soft:#eaf3ff;--family-edge:#cfdef4}
+.mode-family-card.quick-response-family{--family:#ca8b35;--family-ink:#925809;--family-soft:#fff4e4;--family-edge:#efdcba}
+.mode-family-card.peer-interaction-family{--family:#21927b;--family-ink:#086b60;--family-soft:#e7f8f1;--family-edge:#c6e9db}
+.mode-family-card.reasoning-family{--family:#8660bb;--family-ink:#6b449e;--family-soft:#f4ecfe;--family-edge:#e0cef4}
+.mode-family-card.stance-interaction-family{--family:#cd7085;--family-ink:#9d3e59;--family-soft:#fff0f2;--family-edge:#efd0d9}
+.mode-family-head{gap:12px}
+.mode-family-head strong{color:var(--family-ink,#405080)}
+.mode-family-head small{display:block;margin-top:5px;color:#52637c}
+.mode-family-badge{background:var(--family-soft,#eef1ff);color:var(--family-ink,#4c50a9);border:1px solid var(--family-edge,#dce3ee);white-space:nowrap}
+.mode-flow-body{border-color:#e1e7f1;background:#fff;line-height:1.6;transition:background-color .16s ease,border-color .16s ease}
+.mode-flow-body b{color:#293954;line-height:1.48}
+.mode-flow-body small{color:#52637c;line-height:1.68}
+.mode-flow-option>input:checked+.mode-flow-body{background:var(--family-soft,#f0efff);border-color:var(--family,#7066c8);box-shadow:0 0 0 2px color-mix(in srgb,var(--family,#7066c8) 18%,transparent)}
+.mode-flow-option>input:checked+.mode-flow-body b{color:var(--family-ink,#4543a5)}
+.mode-flow-option:hover .mode-flow-body{border-color:var(--family,#7066c8)}
+.mode-selector-count{background:#f0eafb;color:#67449d;border-color:#e2d4f1}
+
+/* C — Student: inviting color, legible answer layout */
+.student-page{
+  background:
+    radial-gradient(circle at 6% 5%,rgba(115,109,223,.12),transparent 29%),
+    radial-gradient(circle at 95% 18%,rgba(238,176,90,.10),transparent 31%),
+    radial-gradient(circle at 85% 85%,rgba(61,171,153,.065),transparent 38%),#f5f8fc;
+}
+.student-page .student-hero{
+  border-color:#d9e4ed;
+  background:radial-gradient(circle at 89% 18%,rgba(244,181,94,.18),transparent 29%),linear-gradient(115deg,#fff 18%,#f7f3ff 65%,#eaf7f4 100%);
+  box-shadow:0 12px 32px rgba(62,71,128,.075);
+}
+.student-page .student-hero::before{width:5px;background:linear-gradient(180deg,#6c5bc9,#45a39d 61%,#e9a251)}
+.student-page .student-hero h1{color:#28365a;letter-spacing:-.018em}
+.student-page .student-hero .eyebrow{color:#6652b2}
+.student-page .student-hero .subtle{color:#53647c;line-height:1.7}
+.student-page .student-session-badge{background:#f0eaff;color:#5c429f;border-color:#e1d5f8}
+.student-card{border-color:#dae4ee;box-shadow:0 12px 32px rgba(58,71,119,.075)}
+.mission-card:before{background:linear-gradient(90deg,#655aca 0%,#39a5b0 38%,#4bab86 70%,#ebb057 100%)}
+:where(.student-actions,.join-form) .btn-primary{background:#5754c6;border-color:#5754c6}
+:where(.student-actions,.join-form) .btn-primary:hover{background:#4643a9;border-color:#4643a9}
+.classification-step{background:#fbfcff}
+:where(.classification-step-head h3,.feedback-panel h3){line-height:1.45}
+:where(.student-type-choice,.classification-choice,.scale-choice,.ranking-student-item,.group-consensus-option){line-height:1.55}
+.student-type-choice small{color:#56677f;line-height:1.6}
+.question-wall-post{background:#fff;border-color:#dae7ec}
+.student-actions .btn{white-space:normal;overflow-wrap:break-word}
+.feedback-panel{background:linear-gradient(140deg,#fbfbff,#f0f8ff)}
+.reveal-panel{background:linear-gradient(125deg,#fffdf9,#f5f2ff)}
+.discussion-panel{background:linear-gradient(125deg,#fbfffd,#eef9f5)}
+
+/* D — Join and course: warm invitation and chapter emphasis */
+.join-page{
+  background:radial-gradient(circle at 16% 8%,#eae9ff,transparent 39%),radial-gradient(circle at 92% 90%,#dcf5ee,transparent 34%),#f5f7fc;
+}
+.join-card{border-color:#dce3ef;box-shadow:0 24px 58px rgba(50,60,121,.105)}
+.join-card::before{background:linear-gradient(90deg,#6859c8,#4396c3 32%,#33a489 62%,#f0b765 83%,#d8799a)}
+.join-icon{background:linear-gradient(130deg,#eeebff,#dff5f2 66%,#fff1d9);box-shadow:inset 0 0 0 1px #e4e4f0}
+.join-card .eyebrow{color:#6251b8}
+.join-card h1{letter-spacing:-.018em;line-height:1.42}
+.join-card>.subtle{color:#52637c}
+.join-mode-notice{background:#f3f8fc;border-color:#dce7ef;color:#53657b;line-height:1.65}
+.join-form .field span{color:#35475f}
+.course-player-page{background:radial-gradient(circle at 98% 0%,rgba(91,135,208,.10),transparent 25%),#f5f8fc}
+.course-player-header{background:linear-gradient(115deg,#fff 32%,#edf5ff 70%,#eaf8f4);border-color:#d9e4ef}
+.course-player-header::before{background:linear-gradient(180deg,#5a60c9,#37a29a,#f3b16b)}
+.course-cover-icon{background:linear-gradient(140deg,#efedff,#e8f7f6);border-color:#dbe4f6}
+.course-lesson-intro{background:linear-gradient(115deg,#fff,#f7f4ff)}
+.course-type-card:nth-child(3n+1){background:#f8f6ff}
+.course-type-card:nth-child(3n+2){background:#f1faf7}
+.course-type-card:nth-child(3n){background:#fff9ef}
+.course-content-node{background:#fff}
+
+/* E — Full class projection, color differentiates context/results */
+.deliberation-presentation-page{background:radial-gradient(circle at 95% 0%,rgba(84,112,197,.11),transparent 27%),#f5f8fc}
+.deliberation-presentation-hero{border-color:#dce4f2;background:linear-gradient(115deg,#fff 40%,#eef0ff 73%,#ecf8f5)}
+.deliberation-presentation-grid>.panel:first-child{border-color:#d9e1f2;background:linear-gradient(175deg,#fff,#fbfaff)}
+.deliberation-presentation-grid>.panel:nth-child(2){border-color:#d1e7e4;background:linear-gradient(175deg,#fff,#f6fcfa)}
+.deliberation-presentation-question{border-color:#e0d6ef;background:#f8f3ff}
+.deliberation-presentation-fixed{border-color:#cde7e0;background:#f1fbf7}
+:where(.deliberation-presentation-content,.deliberation-presentation-results) p{line-height:1.72;overflow-wrap:break-word}
+.dp-control-status-row small{color:#52637c}
+
+/* F — Comfortable typesetting and resilient small displays */
+@media(max-width:900px){
+  .v15-section-toolbar,.v15-editor-head{align-items:flex-start}
+  .mode-family-head{align-items:flex-start}
+}
+@media(max-width:760px){
+  .teacher-page .topbar{padding:21px 18px}
+  .workspace-tabs .workspace-tab{line-height:1.4;min-height:47px}
+  .workflow-context-bar{padding:16px}
+  .v15-editor-head{gap:12px}
+  .activity-template-toolbar{gap:12px}
+  .student-page .student-hero h1{font-size:clamp(24px,6vw,30px)}
+  .mode-family-head{gap:9px}
+}
+@media(max-width:480px){
+  .teacher-page .topbar h1{font-size:28px;line-height:1.38}
+  .workspace-brandline{flex-wrap:wrap}
+  .mode-family-head{flex-wrap:wrap}
+  .mode-family-badge{max-width:100%}
+  .workspace-tab{overflow-wrap:break-word}
+  .v15-head-actions{justify-content:flex-start}
+  .v15-section-toolbar{flex-wrap:wrap}
+  .student-page .student-hero{padding:20px 17px}
+  .mission-card{padding:18px}
+  .join-card{padding:25px 19px}
+  .join-card h1{font-size:25px}
+  .join-card .subtle{font-size:14px;line-height:1.7}
+  .join-form .field-help{line-height:1.65}
+}
+@media(prefers-reduced-motion:reduce){.mode-flow-body{transition:none}}
+
+/* V2.34.0 — final readability/detail pass */
+.workspace-view[data-workspace-view="courses"] .lesson-card{
+  border-color:#dfdff6;
+  background:linear-gradient(180deg,#f8f7ff 0,#fff 116px);
+}
+.workspace-view[data-workspace-view="courses"] .lesson-card-head{padding-bottom:5px}
+.workspace-view[data-workspace-view="works"] :is(.v15-editor-head,.v15-section-toolbar) .section-kicker{color:#96590c}
+.workspace-view[data-workspace-view="types"] :is(.v15-editor-head,.v15-section-toolbar) .section-kicker{color:#08766a}
+.workspace-view[data-workspace-view="activities"] .editor-panel{
+  border-color:#e2d7ee;
+  background:linear-gradient(180deg,#fbf8ff 0,#fff 200px);
+}
+.workspace-view[data-workspace-view="activities"] .activity-core-settings{
+  border-color:#e8dff3;
+  background:linear-gradient(140deg,#fffeff,#faf6ff);
+}
+/* Open module picker should not be obscured by the sticky bottom action bar.
+   When the picker is collapsed, the always-available Save bar returns. */
+@supports selector(:has(*)){
+  .workspace-view[data-workspace-view="activities"]:has(#activityModulePicker[open]) .sticky-actions{
+    position:static !important;
+    bottom:auto !important;
+  }
+  .teacher-page:has(.workspace-view[data-workspace-view="works"].active) .workflow-context-bar{
+    background:linear-gradient(112deg,#fff 50%,#fff5e7);
+    border-color:#f0e1c5;
+  }
+  .teacher-page:has(.workspace-view[data-workspace-view="types"].active) .workflow-context-bar{
+    background:linear-gradient(112deg,#fff 50%,#eafaF5);
+    border-color:#d2ebe2;
+  }
+  .teacher-page:has(.workspace-view[data-workspace-view="activities"].active) .workflow-context-bar{
+    background:linear-gradient(112deg,#fff 50%,#f5ecff);
+    border-color:#e6d9f3;
+  }
+  .teacher-page:has(.workspace-view[data-workspace-view="works"].active) .workflow-context-stat{
+    background:#fff3df;border-color:#f0dfc0;
+  }
+  .teacher-page:has(.workspace-view[data-workspace-view="types"].active) .workflow-context-stat{
+    background:#e7f7f0;border-color:#c7e8db;
+  }
+  .teacher-page:has(.workspace-view[data-workspace-view="activities"].active) .workflow-context-stat{
+    background:#f3eafd;border-color:#e3d4f3;
+  }
+  .teacher-page:has(.workspace-view[data-workspace-view="works"].active) .workflow-context-stat strong{color:#955d0e}
+  .teacher-page:has(.workspace-view[data-workspace-view="types"].active) .workflow-context-stat strong{color:#0f7669}
+  .teacher-page:has(.workspace-view[data-workspace-view="activities"].active) .workflow-context-stat strong{color:#7048a1}
+}
