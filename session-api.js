@@ -476,7 +476,8 @@
     courseId = "",
     currentNodeRef,
     activityMode = "",
-    stageCount = 1
+    stageCount = 1,
+    privateNodes = {}
   }) {
     if (!courseEncoded || !currentNodeRef) throw new Error("完整課程 Session 資料不完整");
 
@@ -484,7 +485,7 @@
     const teacherToken = randomToken();
 
     if (isCloudConfigured()) {
-      const result = await rpc("create_course_session", {
+      const result = await rpc("create_course_session_v2350", {
         p_code:code,
         p_teacher_token:teacherToken,
         p_title:title,
@@ -492,7 +493,8 @@
         p_course_id:courseId || "",
         p_current_node_ref:currentNodeRef,
         p_activity_mode:activityMode || "",
-        p_stage_count:Math.max(1,Number(stageCount)||1)
+        p_stage_count:Math.max(1,Number(stageCount)||1),
+        p_private_nodes:privateNodes || {}
       });
       const id = typeof result === "string" ? result : (result?.id || result?.session_id || result);
       const session = {
@@ -511,6 +513,9 @@
       return session;
     }
 
+    if (Object.keys(privateNodes || {}).length) {
+      throw new Error("逐層思辨的完整課程須使用 Supabase 雲端 Session。");
+    }
     const sessions = loadLocalSessions();
     const id = crypto?.randomUUID?.() || `local-course-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
     const session = {
@@ -662,6 +667,9 @@
     const session = sessions.find(item => item.id === context.sessionId);
     if (!session) throw new Error("本機 Session 已不存在");
     if (session.status !== "active") throw new Error("Session 已結束");
+    if (session.sessionKind === "course" && session.currentNodeRef !== context.currentNodeRef) {
+      throw new Error("課程已切換節點，請重新整理活動頁");
+    }
     // V2.32.1：本機 Session 與 Supabase 的階段提交規則一致。
     // 防止從舊分頁或自行送出的請求提前寫入後續階段答案。
     if (session.activityMode === "predict-reveal") {
@@ -720,6 +728,7 @@
           id:crypto?.randomUUID?.() || `lse-${Date.now()}-${session.liveStanceEvents.length+1}`,
           participantId:context.participantId,
           studentCode:context.studentCode,
+          nodeRef:context.currentNodeRef || "",
           side:next,
           previousSide:previous || "",
           payload:{...(payload || {})},
@@ -857,9 +866,13 @@
     for(let i=participants.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[participants[i],participants[j]]=[participants[j],participants[i]];}
     // 「每組約 N 人」而不是硬性上限：若照 ceil 分組會產生單人組，寧可讓部分小組多 1 人。
     const groupCount=Math.max(1,Math.min(Math.ceil(participants.length/size),Math.floor(participants.length/2)));
-    session.sessionGroups=Array.from({length:groupCount},(_,index)=>({id:crypto?.randomUUID?.()||`grp-${Date.now()}-${index}-${Math.random().toString(36).slice(2,8)}`,groupIndex:index+1,label:`第 ${index+1} 組`,createdAt:new Date().toISOString()}));
-    session.sessionGroupMembers=[];participants.forEach((participant,index)=>{const group=session.sessionGroups[index%groupCount];session.sessionGroupMembers.push({groupId:group.id,participantId:participant.id,createdAt:new Date().toISOString()});});
-    session.groupConsensusSubmissions=[];saveLocalSessions(sessions);return {group_count:groupCount,participant_count:participants.length};
+    const nodeRef=session.sessionKind === "course" ? (session.currentNodeRef || "") : "";
+    const groupRows=Array.from({length:groupCount},(_,index)=>({id:crypto?.randomUUID?.()||`grp-${Date.now()}-${index}-${Math.random().toString(36).slice(2,8)}`,nodeRef,groupIndex:index+1,label:`第 ${index+1} 組`,createdAt:new Date().toISOString()}));
+    session.sessionGroups=(session.sessionGroups||[]).filter(item=>(item.nodeRef||"")!==nodeRef).concat(groupRows);
+    session.sessionGroupMembers=(session.sessionGroupMembers||[]).filter(item=>(item.nodeRef||"")!==nodeRef);
+    participants.forEach((participant,index)=>{const group=groupRows[index%groupCount];session.sessionGroupMembers.push({groupId:group.id,nodeRef,participantId:participant.id,createdAt:new Date().toISOString()});});
+    session.groupConsensusSubmissions=(session.groupConsensusSubmissions||[]).filter(item=>(item.nodeRef||"")!==nodeRef);
+    saveLocalSessions(sessions);return {group_count:groupCount,participant_count:participants.length};
   }
 
   async function submitGroupConsensus({selectedType="",payload={},nodeRef=""}={}) {
@@ -871,8 +884,9 @@
     const sessions=loadLocalSessions();const session=sessions.find(item=>item.id===context.sessionId);if(!session||session.status!=="active")throw new Error("Session 已結束或不存在");
     if(session.activityMode!=="group-consensus"||Number(session.currentStage||1)<2)throw new Error("小組共識尚未開放");
     const participant=session.participants.find(item=>item.id===context.participantId&&item.participantToken===context.participantToken);if(!participant)throw new Error("學生加入憑證已失效");
-    const member=(session.sessionGroupMembers||[]).find(item=>item.participantId===participant.id);if(!member)throw new Error("你目前尚未被分組");
-    session.groupConsensusSubmissions=Array.isArray(session.groupConsensusSubmissions)?session.groupConsensusSubmissions:[];const ref=context.sessionKind==="course"?(nodeRef||context.currentNodeRef||""):"";
+    const ref=context.sessionKind === "course" ? (context.currentNodeRef || "") : "";
+    const member=(session.sessionGroupMembers||[]).find(item=>item.participantId===participant.id&&(item.nodeRef||"")===ref);if(!member)throw new Error("你目前尚未被分組");
+    session.groupConsensusSubmissions=Array.isArray(session.groupConsensusSubmissions)?session.groupConsensusSubmissions:[];
     let row=session.groupConsensusSubmissions.find(item=>item.groupId===member.groupId&&(item.nodeRef||"")===ref);
     if(row){row.selectedType=choice;row.payload={...(payload||{})};row.submittedBy=participant.id;row.updatedAt=new Date().toISOString();}
     else{row={id:crypto?.randomUUID?.()||`gcs-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,groupId:member.groupId,nodeRef:ref,selectedType:choice,payload:{...(payload||{})},submittedBy:participant.id,submittedAt:new Date().toISOString(),updatedAt:new Date().toISOString()};session.groupConsensusSubmissions.push(row);}
@@ -1013,11 +1027,11 @@
         stage_key:r.stageKey, mode:r.mode, selected_type:r.selectedType, selected_elements:r.selectedElements,
         payload:r.payload, submitted_at:r.submittedAt
       })),
-      live_stance_events:(session.liveStanceEvents || []).map(event => ({
+      live_stance_events:(session.liveStanceEvents || []).filter(item=>session.sessionKind!=="course"||(item.nodeRef||"")===(session.currentNodeRef||"")).map(event => ({
         id:event.id, participant_id:event.participantId, student_code:event.studentCode, side:event.side,
         previous_side:event.previousSide || "", payload:event.payload || {}, created_at:event.createdAt
       })),
-      live_stance_checkpoints:(session.liveStanceCheckpoints || []).map(item => ({
+      live_stance_checkpoints:(session.liveStanceCheckpoints || []).filter(item=>session.sessionKind!=="course"||(item.nodeRef||"")===(session.currentNodeRef||"")).map(item => ({
         id:item.id, label:item.label, snapshot:item.snapshot || {}, created_at:item.createdAt
       })),
       question_wall_posts:(session.questionWallPosts || [])
@@ -1028,11 +1042,11 @@
           replies:(session.questionWallReplies || []).filter(r=>r.postId===post.id).map(r=>({id:r.id,participant_id:r.participantId,student_code:r.studentCode,text:r.text,created_at:r.createdAt,updated_at:r.updatedAt||r.createdAt})),
           reply_count:(session.questionWallReplies || []).filter(r=>r.postId===post.id).length, created_at:post.createdAt
         })),
-      groups:(session.sessionGroups || []).map(group=>({
+      groups:(session.sessionGroups || []).filter(group=>session.sessionKind!=="course"||(group.nodeRef||"")===(session.currentNodeRef||"")).map(group=>({
         id:group.id,group_index:group.groupIndex,label:group.label,
         members:(session.sessionGroupMembers || []).filter(member=>member.groupId===group.id).map(member=>{const p=session.participants.find(item=>item.id===member.participantId);return {participant_id:member.participantId,student_code:p?.studentCode||""};})
       })),
-      group_submissions:(session.groupConsensusSubmissions || []).map(row=>{const submitter=session.participants.find(item=>item.id===row.submittedBy);return {id:row.id,group_id:row.groupId,node_ref:row.nodeRef||"",selected_type:row.selectedType,payload:row.payload||{},submitted_by:row.submittedBy,submitted_by_code:submitter?.studentCode||"",submitted_at:row.submittedAt,updated_at:row.updatedAt||row.submittedAt};}),
+      group_submissions:(session.groupConsensusSubmissions || []).filter(row=>session.sessionKind!=="course"||(row.nodeRef||"")===(session.currentNodeRef||"")).map(row=>{const submitter=session.participants.find(item=>item.id===row.submittedBy);return {id:row.id,group_id:row.groupId,node_ref:row.nodeRef||"",selected_type:row.selectedType,payload:row.payload||{},submitted_by:row.submittedBy,submitted_by_code:submitter?.studentCode||"",submitted_at:row.submittedAt,updated_at:row.updatedAt||row.submittedAt};}),
       progress:(session.progress || []).map(item => ({
         participant_id:item.participantId,
         student_code:item.studentCode,
@@ -1161,13 +1175,14 @@
     const session=sessions.find(item=>item.id===sessionMeta.id && item.teacherToken===sessionMeta.teacherToken);
     if(!session) throw new Error("找不到本機 Session");
     if(session.status!=="active") throw new Error("Session 已結束");
-    const rows=(session.responses || []).filter(item=>item.mode==="live-stance" && item.stageKey==="final");
+    const rows=(session.responses || []).filter(item=>item.mode==="live-stance" && item.stageKey==="final" && (session.sessionKind!=="course" || (item.nodeRef||"")===(session.currentNodeRef||"")));
     const counts={left:0,right:0,undecided:0};
     rows.forEach(row=>{const side=String(row.selectedType || "");if(side in counts)counts[side]++;});
     session.liveStanceCheckpoints=Array.isArray(session.liveStanceCheckpoints)?session.liveStanceCheckpoints:[];
     const checkpoint={
       id:crypto?.randomUUID?.() || `lsc-${Date.now()}-${session.liveStanceCheckpoints.length+1}`,
       label:cleanLabel || `節點 ${session.liveStanceCheckpoints.length+1}`,
+      nodeRef:session.currentNodeRef || "",
       snapshot:{...counts,answered:counts.left+counts.right+counts.undecided,total:(session.participants || []).length,round_state:session.roundState || "open"},
       createdAt:new Date().toISOString()
     };
@@ -1214,7 +1229,7 @@
     const totalStages = Math.max(1,Number(stageCount)||1);
 
     if (sessionMeta.mode === "cloud") {
-      const result = await rpc("set_course_session_node", {
+      const result = await rpc("set_course_session_node_v2350", {
         p_session_id:sessionMeta.id,
         p_teacher_token:sessionMeta.teacherToken,
         p_node_ref:nodeRef,
@@ -1262,6 +1277,7 @@
     const context = getParticipantContext();
     if (!context || context.sessionKind !== "course") return {skipped:true};
     const cleanNode = String(nodeRef || context.currentNodeRef || "").trim();
+    if (cleanNode !== context.currentNodeRef) throw new Error("課程已切換節點，請重新整理");
     if (!cleanNode) throw new Error("找不到目前課程節點");
 
     if (context.mode === "cloud") {
@@ -1370,8 +1386,10 @@
     const participant = session.participants.find(item => item.id === context.participantId && item.participantToken === context.participantToken);
     if (!participant) throw new Error("學生加入憑證已失效");
     const ownResponses = session.responses
-      .filter(r => r.participantId === participant.id && Boolean(ActivityModules?.get?.(r.mode)?.realtimeStudent))
+      .filter(r => r.participantId === participant.id && Boolean(ActivityModules?.get?.(r.mode)?.realtimeStudent)
+        && (session.sessionKind !== "course" || (r.nodeRef||"") === (session.currentNodeRef||"")))
       .map(r => ({
+        node_ref:r.nodeRef || "",
         stage_key:r.stageKey,
         mode:r.mode,
         selected_type:r.selectedType,
@@ -1380,7 +1398,7 @@
         submitted_at:r.submittedAt
       }));
 
-    const openResponses = session.responses.filter(r => r.mode === "open-classification");
+    const openResponses = session.responses.filter(r => r.mode === "open-classification" && (session.sessionKind !== "course" || (r.nodeRef||"") === (session.currentNodeRef||"")));
     const distribution = stageKey => {
       const counts = new Map();
       openResponses.filter(r => r.stageKey === stageKey).forEach(r => {
@@ -1425,7 +1443,7 @@
           created_at:post.createdAt
         })),
       group_consensus:session.activityMode==="group-consensus" ? (()=>{
-        const member=(session.sessionGroupMembers||[]).find(item=>item.participantId===participant.id);if(!member)return {group:null,submission:null};const group=(session.sessionGroups||[]).find(item=>item.id===member.groupId);const members=(session.sessionGroupMembers||[]).filter(item=>item.groupId===member.groupId).map(item=>{const p=session.participants.find(x=>x.id===item.participantId);return {participant_id:item.participantId,student_code:p?.studentCode||""};});const submission=(session.groupConsensusSubmissions||[]).find(item=>item.groupId===member.groupId&&(session.sessionKind!=="course"||(item.nodeRef||"")===(session.currentNodeRef||"")));return {group:group?{id:group.id,label:group.label,group_index:group.groupIndex,members,member_count:members.length}:null,submission:submission?{id:submission.id,selected_type:submission.selectedType,payload:submission.payload||{},updated_at:submission.updatedAt||submission.submittedAt}:null};
+        const member=(session.sessionGroupMembers||[]).find(item=>item.participantId===participant.id&&(session.sessionKind!=="course"||(item.nodeRef||"")===(session.currentNodeRef||"")));if(!member)return {group:null,submission:null};const group=(session.sessionGroups||[]).find(item=>item.id===member.groupId);const members=(session.sessionGroupMembers||[]).filter(item=>item.groupId===member.groupId).map(item=>{const p=session.participants.find(x=>x.id===item.participantId);return {participant_id:item.participantId,student_code:p?.studentCode||""};});const submission=(session.groupConsensusSubmissions||[]).find(item=>item.groupId===member.groupId&&(session.sessionKind!=="course"||(item.nodeRef||"")===(session.currentNodeRef||"")));return {group:group?{id:group.id,label:group.label,group_index:group.groupIndex,members,member_count:members.length}:null,submission:submission?{id:submission.id,selected_type:submission.selectedType,payload:submission.payload||{},updated_at:submission.updatedAt||submission.submittedAt}:null};
       })() : null,
       open_stats:{
         initial:distribution("initial"),

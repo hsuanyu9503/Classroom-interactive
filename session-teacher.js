@@ -864,10 +864,24 @@
       if (kind === "course") {
         const courseId = $("sessionCourseSelect").value;
         if (!courseId) throw new Error("請先選擇一門完整課程");
-        const snapshot = await window.ClassroomCourseAPI.buildSnapshot(courseId);
-        const blocked = (snapshot.resources?.activities || []).find(item => ActivityModules?.get?.(item.template)?.allowInCourse === false);
-        if (blocked) {
-          throw new Error(`${activityModeLabel(blocked.template)}為了避免未公開資訊外洩，請使用「單一活動 Session」上課；暫不放入完整 Course Session。`);
+        const snapshot = await window.ClassroomCourseAPI.buildSnapshot(courseId,{forSession:true});
+        // 對同一活動在不同節點的引用，仍以 node.id 區分作答與私有情境。
+        const privateNodes = {};
+        for (const step of flattenCourseSnapshot(snapshot)) {
+          if (step.node.type !== "activity") continue;
+          const ref = step.node.content?.activityRef;
+          const shell = (snapshot.resources?.activities || []).find(item => item.id === ref);
+          if (!["layered-deliberation","predict-reveal","progressive-reveal"].includes(shell?.template)) continue;
+          if (!window.ClassroomSessionAPI.isCloudConfigured()) {
+            throw new Error("含多階段資訊揭露的 Course 必須使用 Supabase 雲端 Session，避免提前公開教師尚未揭曉的內容。");
+          }
+          const privateActivity = await window.ClassroomActivityAPI.buildSessionSnapshot(ref);
+          if(shell.template==="layered-deliberation") {
+            if (!privateActivity?.deliberationData || !privateActivity?.shellEncoded) throw new Error("逐層思辨缺少私有情境資料");
+            privateNodes[step.node.id] = { ...privateActivity.deliberationData,kind:"layered-deliberation" };
+          } else {
+            privateNodes[step.node.id] = await window.ClassroomCourseAPI.privateStageDataForCourse(privateActivity.encoded,shell.template);
+          }
         }
         const encoded = await window.ClassroomCourseAPI.encodeSnapshot(snapshot);
         const steps = flattenCourseSnapshot(snapshot);
@@ -881,7 +895,8 @@
           courseId:snapshot.course.id,
           currentNodeRef:first.node.id,
           activityMode:runtime.activityMode,
-          stageCount:runtime.stageCount
+          stageCount:runtime.stageCount,
+          privateNodes
         });
         session.courseSnapshot = snapshot;
         activeSession = session;
@@ -1332,6 +1347,13 @@
     }
 
     const runtime = courseNodeRuntimeMeta(course,step.node);
+    const currentActivity=(course.resources?.activities||[]).find(item=>item.id===step.node.content?.activityRef);
+    activeSession.moduleData=currentActivity?.moduleData || null;
+    const groupSizeControl=$("groupConsensusTeacherGroupSize");
+    if (groupSizeControl && groupSizeControl.dataset.courseNodeRef !== step.node.id) {
+      groupSizeControl.dataset.courseNodeRef=step.node.id;
+      delete groupSizeControl.dataset.initialized;
+    }
     if (activeSession.activityMode !== runtime.activityMode || activeSession.stageCount !== runtime.stageCount) {
       activeSession.activityMode = runtime.activityMode;
       activeSession.stageCount = runtime.stageCount;
@@ -2388,9 +2410,9 @@
       list.appendChild(card);
     });
   }
-  function sessionResponsesForMode(snapshot,mode){return (snapshot?.responses||[]).filter(response=>response.mode===mode && (activeSession?.sessionKind!=="course" || !response.node_ref || response.node_ref===activeSession.currentNodeRef));}
+  function sessionResponsesForMode(snapshot,mode){return (snapshot?.responses||[]).filter(response=>response.mode===mode && (activeSession?.sessionKind!=="course" || response.node_ref===activeSession.currentNodeRef));}
   function groupConsensusEntriesFromSnapshot(snapshot,kind="individual") {
-    const source=kind==="group"?(snapshot?.group_submissions||[]):sessionResponsesForMode(snapshot,"group-consensus").filter(row=>row.stage_key==="individual");
+    const source=kind==="group"?(snapshot?.group_submissions||[]).filter(row=>activeSession?.sessionKind!=="course"||row.node_ref===activeSession.currentNodeRef):sessionResponsesForMode(snapshot,"group-consensus").filter(row=>row.stage_key==="individual");
     const grouped=new Map();
     const configured=Array.isArray(activeSession?.moduleData?.options)?activeSession.moduleData.options:[];
     configured.forEach((option,index)=>grouped.set(String(option.id),{id:String(option.id),label:String(option.label||`選項 ${index+1}`),count:0,order:index}));

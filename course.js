@@ -533,6 +533,12 @@ function renderActivityNode(node,container) {
     return;
   }
 
+  if (!courseSessionMode && activity.template === "layered-deliberation" && !presentationMode) {
+    // 此快照只有公開的活動外殼。預覽不得偷偷補入完整未揭露情境。
+    container.innerHTML = `<div class="course-inline-error">🔒 ${escapeHtml(activity.title || "逐層思辨")} 的分層資訊只會在教師啟動雲端 Course Session 後，依公布進度提供給學生。</div>`;
+    return;
+  }
+
   if (presentationMode) {
     const stage = document.createElement("div");
     stage.className = "presentation-activity-stage";
@@ -551,7 +557,7 @@ function renderActivityNode(node,container) {
   frame.className = "course-activity-frame";
   frame.title = activity.title || "課堂活動";
   frame.dataset.activityId = activity.id;
-  frame.src = `play.html#data=${encodeURIComponent(activity.encoded)}&embedded=1${courseSessionMode ? "&session=1" : ""}`;
+  frame.src = `play.html#data=${encodeURIComponent(activity.encoded)}&embedded=1&activityId=${encodeURIComponent(activity.id)}&nodeRef=${encodeURIComponent(node.id)}${courseSessionMode ? "&session=1" : ""}`;
   frame.setAttribute("loading","eager");
   container.appendChild(frame);
 }
@@ -567,6 +573,32 @@ function renderLessonIntro(step) {
   $("courseLessonTitle").textContent = lesson.title || "";
   $("courseLessonGoal").textContent = lesson.goal || "";
   box.classList.remove("hidden");
+}
+
+function courseActivityRuntime(node) {
+  const activity = (courseSnapshot?.resources?.activities || []).find(item => item.id === node?.content?.activityRef);
+  return activity?.template || "";
+}
+
+// 即時型互動沒有單一送出即結束的時間點，學生可自行回報已參與。
+function isContinuousCourseActivity(node) {
+  return ["question-wall","live-stance","group-consensus"].includes(courseActivityRuntime(node));
+}
+
+function updateCourseNodeProgressView() {
+  const step = flatSteps[currentStepIndex];
+  if (!step || !courseSessionMode || presentationMode) return;
+  const isActivity = step.node.type === "activity";
+  const completed = completedCourseNodes.has(step.node.id);
+  const continuous = isActivity && isContinuousCourseActivity(step.node);
+  const button = $("courseNextBtn");
+  const note = $("courseActivityWait");
+  $("courseNodeStatus").textContent = completed ? "已完成 · 等待老師" : isActivity ? "進行活動" : "學習中";
+  button.disabled = completed || (isActivity && !continuous);
+  button.textContent = completed ? "✓ 已完成，等待老師" : isActivity ? "✓ 我已參與本次互動" : "✓ 我完成這一步";
+  note.textContent = completed ? "已完成這一步，等待老師切換到下一個節點…" : continuous
+    ? "本活動可以持續互動；完成參與後可自行回報，老師也能隨時帶大家前往下一個節點。"
+    : isActivity ? "完成活動後會自動回報老師。" : "完成閱讀／觀察後，按右側按鈕回報老師。";
 }
 
 function renderCurrentStep() {
@@ -616,7 +648,7 @@ function renderCurrentStep() {
   } else if (courseSessionMode) {
     previous.classList.add("hidden");
     next.classList.remove("hidden");
-    if (isActivity) {
+    if (isActivity && !isContinuousCourseActivity(node)) {
       next.textContent = completed ? "✓ 活動已完成" : "完成活動後自動回報";
       next.disabled = true;
     } else {
@@ -627,6 +659,7 @@ function renderCurrentStep() {
       ? "已完成這一步，等待老師切換到下一個節點…"
       : (isActivity ? "完成活動後會自動回報老師。" : "完成閱讀／觀察後，按右側按鈕回報老師。");
     wait.classList.remove("hidden");
+    updateCourseNodeProgressView();
   } else {
     previous.classList.remove("hidden");
     next.classList.remove("hidden");
@@ -647,9 +680,13 @@ async function markCurrentCourseNodeComplete() {
   const step = flatSteps[currentStepIndex];
   if (!courseSessionMode || !step || completedCourseNodes.has(step.node.id)) return;
   try {
-    await window.ClassroomSessionAPI?.submitCourseProgress?.(step.node.id,"completed");
+    const submitProgress = window.ClassroomSessionAPI?.submitCourseProgress;
+    if (typeof submitProgress !== "function") throw new Error("課程進度服務尚未就緒");
+    const result = await submitProgress(step.node.id,"completed");
+    if (result?.skipped) throw new Error("課程進度尚未完成提交");
     completedCourseNodes.add(step.node.id);
-    renderCurrentStep();
+    // 只更新進度狀態，不卸載正在使用的 iframe。重建會清空活動回饋與尚未同步的操作。
+    updateCourseNodeProgressView();
   } catch (error) {
     console.error("課程進度回報失敗",error);
     $("courseActivityWait").textContent = "進度暫時無法回傳，請稍後再試。";
@@ -661,7 +698,7 @@ async function goNext() {
   if (!step) return;
 
   if (courseSessionMode) {
-    if (step.node.type !== "activity") await markCurrentCourseNodeComplete();
+    if (step.node.type !== "activity" || isContinuousCourseActivity(step.node)) await markCurrentCourseNodeComplete();
     return;
   }
 
@@ -713,12 +750,15 @@ async function syncCourseSessionState(initial = false) {
 
     const targetIndex = flatSteps.findIndex(step => step.node.id === state.current_node_ref);
     const revisionChanged = Number(state.revision || 0) !== Number(lastCourseRevision || 0);
-    if (targetIndex >= 0 && (targetIndex !== currentStepIndex || revisionChanged || initial)) {
+    // revision 可能只代表老師揭露下一階段，不等於換節點；此時絕不可卸載學生 iframe。
+    if (targetIndex >= 0 && (targetIndex !== currentStepIndex || initial)) {
       currentStepIndex = targetIndex;
       lastCourseRevision = Number(state.revision || 0);
       renderCurrentStep();
     } else {
-      renderCurrentStep();
+      if(revisionChanged) lastCourseRevision=Number(state.revision || 0);
+      // 同一節點僅更新進度，揭露與立場等由 iframe 自己的 Session Poll 控制。
+      updateCourseNodeProgressView();
     }
   } catch (error) {
     console.warn("同步完整課程進度失敗",error);
@@ -860,7 +900,7 @@ async function loadCourse() {
 }
 
 window.addEventListener("message",event => {
-  if (event.data?.type !== "classroom:activity-complete") return;
+  if (event.data?.type !== "classroom:activity-complete" || event.origin !== window.location.origin) return;
 
   const step = flatSteps[currentStepIndex];
   if (!step || step.node.type !== "activity") return;

@@ -308,6 +308,12 @@ async function decodeActivity(encoded) {
   return decoded;
 }
 
+function courseIframeNodeIsCurrent() {
+  if (!isEmbeddedCourseActivity()) return true;
+  const context = window.ClassroomSessionAPI?.getParticipantContext?.();
+  return context?.sessionKind !== "course" || context?.currentNodeRef === new URLSearchParams(window.location.hash.replace(/^#/, "")).get("nodeRef");
+}
+
 function isSessionPlay() {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   return params.get("session") === "1";
@@ -392,6 +398,7 @@ async function recordSessionResponse(mode, {
 } = {}) {
   if (!isSessionPlay()) return true;
   try {
+    if (!courseIframeNodeIsCurrent()) throw new Error("老師已切換課程節點，請返回課程畫面");
     if (typeof window.ClassroomSessionAPI?.submitResponse !== "function") {
       throw new Error("課堂連線尚未準備好");
     }
@@ -684,6 +691,7 @@ function renderQuestionWallTask() {
   if(isSessionPlay()) syncQuestionWallState(true);
 }
 async function submitQuestionWallPost() {
+  if (!courseIframeNodeIsCurrent()) { showToast("課程已切換節點，請返回課程畫面"); return; }
   if(questionWallBusy)return;
   const input=el("questionWallStudentInput"),text=input?.value.trim()||"";
   if(!text){showToast("請先寫下想提出的問題");return;}
@@ -703,6 +711,7 @@ async function submitQuestionWallPost() {
   finally{questionWallBusy=false;}
 }
 async function toggleQuestionWallVote(postId) {
+  if (!courseIframeNodeIsCurrent()) { showToast("課程已切換節點，請返回課程畫面"); return; }
   if(questionWallBusy||!postId)return;questionWallBusy=true;renderQuestionWallList();
   try {
     if(isSessionPlay()) await window.ClassroomSessionAPI.toggleQuestionWallVote(postId);
@@ -712,6 +721,7 @@ async function toggleQuestionWallVote(postId) {
   finally{questionWallBusy=false;renderQuestionWallList();}
 }
 async function submitQuestionWallReply(postId,text) {
+  if (!courseIframeNodeIsCurrent()) { showToast("課程已切換節點，請返回課程畫面"); return; }
   if(questionWallBusy||!postId)return;
   const clean=String(text||"").trim();if(!clean){showToast("請先寫下回應");return;}
   const task=questionWallTask(),limit=Math.max(30,Math.min(300,Math.round(Number(task.replyMaxLength)||140)));
@@ -800,6 +810,7 @@ function renderGroupConsensusState(){
 }
 function updateGroupConsensusReasonCounter(){const task=activity.groupConsensus||{},limit=task.reasonMaxLength||220,value=el("groupConsensusReasonInput")?.value||"";groupConsensusReason=value;el("groupConsensusReasonCounter").textContent=`${value.length} / ${limit}`;}
 async function submitGroupConsensusAction(){
+  if (!courseIframeNodeIsCurrent()) { showToast("課程已切換節點，請返回課程畫面"); return; }
   const task=activity.groupConsensus||{};if(groupConsensusBusy)return;if(!groupConsensusChoice){showToast("請先選擇一個答案");return;}
   const stage=Math.max(1,Number(groupConsensusState?.current_stage)||1);groupConsensusBusy=true;el("submitGroupConsensusBtn").disabled=true;
   try{
@@ -854,6 +865,11 @@ async function syncPredictRevealState(refresh=false) {
     }
     if(final?.selected_type && predictOptions().some(option=>option.id===final.selected_type)) predictFinalChoice=final.selected_type;
     const stage=Math.max(1,Number(state?.current_stage)||1);
+    if(state?.course_released?.kind==="predict-reveal" && stage>=2 && activity?.predictReveal){
+      activity.predictReveal.revealTitle=state.course_released.revealTitle||"結果揭曉";
+      activity.predictReveal.revealContent=state.course_released.revealContent||"";
+      activity.predictReveal.rejudgePrompt=state.course_released.rejudgePrompt||"看完揭曉後，你現在怎麼判斷？";
+    }
     if(stage>=2&&predictPhase<2)showPredictFinalPanel();
   }catch(error){console.warn("預測揭曉同步失敗",error);}
 }
@@ -916,6 +932,7 @@ function renderLiveStanceTask() {
 }
 
 async function chooseLiveStance(side) {
+  if (!courseIframeNodeIsCurrent()) { showToast("課程已切換節點，請返回課程畫面"); return; }
   if(liveStanceBusy)return;
   const task=activity?.liveStance || {};
   if(side==="undecided" && task.allowUndecided===false)return;
@@ -1699,6 +1716,15 @@ async function syncProgressiveStageFromSession(initial=false) {
       stopStudentRealtime();
       showToast("老師已結束這個課堂 Session");
       return;
+    }
+    if(state?.course_released?.kind==="progressive-reveal" && activity?.progressive){
+      const clues=state.course_released.clues||[];
+      clues.forEach((clue,index)=>{
+        const current=activity.progressive.clues[index];
+        if(current && String(current.i||index+1)===String(clue.i||index+1))current.t=clue.t||"";
+      });
+      const idx=Number(state.course_released.referenceTypeIndex);
+      if(Number.isInteger(idx)&&idx>=0){activity.progressive.referenceTypeId=activity.progressive.types?.[idx]?.i||"";}
     }
     hydrateProgressiveHistory(state.responses || []);
     const target = Math.max(0, Math.min((state.current_stage || 1) - 1, activity.progressive.clues.length - 1));
@@ -2633,7 +2659,7 @@ function notifyCoursePlayerComplete() {
   if (!isEmbeddedCourseActivity() || window.parent === window) return;
   window.parent.postMessage({
     type:"classroom:activity-complete",
-    activityId:activity?.id || "",
+    activityId:new URLSearchParams(window.location.hash.replace(/^#/, "")).get("activityId") || activity?.id || "",
     template:activity?.template || ""
   }, "*");
 }

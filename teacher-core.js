@@ -1047,7 +1047,36 @@
     return snapshot;
   }
 
-  async function buildCourseSnapshot(courseId=currentCourseId) {
+  async function readCompactActivity(encoded) {
+    const prefix=String(encoded || "").slice(0,2);
+    let bytes=courseBase64UrlToBytes(String(encoded || "").slice(2));
+    if(prefix==="z.") {
+      if(typeof DecompressionStream!=="function") throw new Error("此瀏覽器無法安全解碼多階段活動");
+      bytes=new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+    } else if(prefix!=="u.") throw new Error("活動編碼格式無效");
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  async function secureCourseStageActivity(encoded,template) {
+    const raw=await readCompactActivity(encoded);
+    const privateData={kind:template};
+    if(template==="progressive-reveal") {
+      privateData.clues=(raw.g?.l || []).map(item => ({i:item.i,t:item.t}));
+      privateData.referenceTypeIndex=raw.g?.ry ?? -1;
+      if(!raw.g || !privateData.clues.length) throw new Error("逐步揭露資訊不完整");
+      raw.g.l=raw.g.l.map(item => ({...item,t:""}));
+      raw.g.ry=-1;
+    } else if(template==="predict-reveal") {
+      if(!raw.pr) throw new Error("預測揭曉資訊不完整");
+      privateData.revealTitle=raw.pr.rt||"";
+      privateData.revealContent=raw.pr.rc||"";
+      privateData.rejudgePrompt=raw.pr.rp||"";
+      raw.pr.rt="";raw.pr.rc="";raw.pr.rp="";
+    }
+    return {encoded:`u.${courseBytesToBase64Url(new TextEncoder().encode(JSON.stringify(raw)))}`,privateData};
+  }
+
+  async function buildCourseSnapshot(courseId=currentCourseId,{forSession=false}={}) {
     if (courseId === currentCourseId) saveCurrentCourse(false);
     const course = courses.find(item => item.id === courseId);
     const resolved = resolveCourse(course);
@@ -1076,12 +1105,15 @@
     for (const id of activityIds) {
       const snap = await window.ClassroomActivityAPI?.buildSessionSnapshot?.(id);
       if (!snap) throw new Error("活動模組尚未載入");
-      if (ActivityModules?.get?.(snap.template)?.allowInCourse === false) {
-        throw new Error(`${ActivityModules.modeLabel(snap.template)}包含需要隔離的未公開資訊，請以「單一活動 Session」上課，不可放入完整 Course Snapshot。`);
-      }
+      const privateStage = forSession && ["progressive-reveal","predict-reveal"].includes(snap.template)
+        ? await secureCourseStageActivity(snap.encoded,snap.template) : null;
       activitySnapshots.push({
         id:snap.id,title:snap.title,subtitle:snap.subtitle,
-        template:snap.template,choiceMode:snap.choiceMode || "",stageCount:snap.stageCount,encoded:snap.encoded
+        template:snap.template,choiceMode:snap.choiceMode || "",stageCount:snap.stageCount,
+        // 逐層思辨的完整情境絕不可出現在學生收到的 Course 編碼內。
+        // 私有資料於建立 Session 時另行送往 Supabase，僅依教師公布的層次回傳。
+        encoded:forSession && snap.template === "layered-deliberation" ? snap.shellEncoded : (privateStage?.encoded || snap.encoded),
+        moduleData:snap.moduleData || null
       });
     }
 
@@ -1115,6 +1147,10 @@
         activities:activitySnapshots
       }
     };
+  }
+
+  async function privateStageDataForCourse(encoded,template) {
+    return (await secureCourseStageActivity(encoded,template)).privateData;
   }
 
   async function buildCourseShareUrl(courseId=currentCourseId) {
@@ -1184,6 +1220,7 @@
       lessonCount:course.lessonRefs?.length || 0
     })),
     buildSnapshot:buildCourseSnapshot,
+    privateStageDataForCourse,
     encodeSnapshot:encodeCourseSnapshot,
     decodeSnapshot:decodeCourseSnapshot,
     buildShareUrl:buildCourseShareUrl,
