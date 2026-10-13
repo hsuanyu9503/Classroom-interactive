@@ -21,7 +21,7 @@
     <div>
       <div class="workspace-brandline">
         <p id="workflowEyebrow" class="eyebrow">CLASSROOM INTERACTIVE</p>
-        <span class="workspace-version">V2.34.7</span>
+        <span class="workspace-version">V2.34.8</span>
       </div>
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
@@ -361,7 +361,8 @@
         </div>
 
         <div class="mode-selector" role="radiogroup" aria-label="活動模組">
-          <div class="mode-family-card foundation-family">
+          <div class="mode-family-column mode-family-column-left">
+            <div class="mode-family-card foundation-family">
             <div class="mode-family-head">
               <div>
                 <strong>🎯 選擇與分類</strong>
@@ -387,26 +388,7 @@
             </div>
           </div>
 
-          <div class="mode-family-card quick-response-family">
-            <div class="mode-family-head">
-              <div>
-                <strong>✨ 快速蒐集</strong>
-                <small>快速掌握全班態度、優先順序或開放觀點，適合暖身、形成性評量與討論前蒐集。</small>
-              </div>
-              <span class="mode-family-badge">1 種模組</span>
-            </div>
-            <div class="mode-flow-grid">
-              <label class="mode-flow-option">
-                <input type="radio" name="activityMode" value="ranking" />
-                <span class="mode-flow-body">
-                  <b>↕️ 排序／優先順序</b>
-                  <small>拖曳排序 → 比較第一順位與平均排名。</small>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div class="mode-family-card peer-interaction-family">
+            <div class="mode-family-card peer-interaction-family">
             <div class="mode-family-head">
               <div>
                 <strong>🤝 同儕互動</strong>
@@ -432,7 +414,47 @@
             </div>
           </div>
 
-          <div class="mode-family-card reasoning-family">
+            <div class="mode-family-card stance-interaction-family">
+            <div class="mode-family-head">
+              <div>
+                <strong>🗺️ 立場與即時互動</strong>
+                <small>呈現立場的即時變化，適合需要看見班級移動、換邊與拉鋸過程的討論。</small>
+              </div>
+              <span class="mode-family-badge">1 種模組</span>
+            </div>
+            <div class="mode-flow-grid">
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="live-stance" />
+                <span class="mode-flow-body">
+                  <b>🪢 即時立場拉鋸</b>
+                  <small>隨時換邊 → 即時拉鋸 → 可鎖定、記錄節點與檢視變化。</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          </div>
+          <div class="mode-family-column mode-family-column-right">
+            <div class="mode-family-card quick-response-family">
+            <div class="mode-family-head">
+              <div>
+                <strong>✨ 快速蒐集</strong>
+                <small>快速掌握全班態度、優先順序或開放觀點，適合暖身、形成性評量與討論前蒐集。</small>
+              </div>
+              <span class="mode-family-badge">1 種模組</span>
+            </div>
+            <div class="mode-flow-grid">
+              <label class="mode-flow-option">
+                <input type="radio" name="activityMode" value="ranking" />
+                <span class="mode-flow-body">
+                  <b>↕️ 排序／優先順序</b>
+                  <small>拖曳排序 → 比較第一順位與平均排名。</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+            <div class="mode-family-card reasoning-family">
             <div class="mode-family-head">
               <div>
                 <strong>🧠 推理與修正</strong>
@@ -458,23 +480,6 @@
             </div>
           </div>
 
-          <div class="mode-family-card stance-interaction-family">
-            <div class="mode-family-head">
-              <div>
-                <strong>🗺️ 立場與即時互動</strong>
-                <small>呈現立場的即時變化，適合需要看見班級移動、換邊與拉鋸過程的討論。</small>
-              </div>
-              <span class="mode-family-badge">1 種模組</span>
-            </div>
-            <div class="mode-flow-grid">
-              <label class="mode-flow-option">
-                <input type="radio" name="activityMode" value="live-stance" />
-                <span class="mode-flow-body">
-                  <b>🪢 即時立場拉鋸</b>
-                  <small>隨時換邊 → 即時拉鋸 → 可鎖定、記錄節點與檢視變化。</small>
-                </span>
-              </label>
-            </div>
           </div>
         </div>
         </div>

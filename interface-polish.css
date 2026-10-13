@@ -1493,3 +1493,63 @@ body::before {height:4px;background:linear-gradient(90deg,#605bcc 0%,#4195c4 25%
     overflow-wrap:anywhere;
   }
 }
+
+
+/* V2.34.8 — Activity module families: independent column flow.
+   Each category grows only as tall as its own content, instead of leaving
+   an empty block alongside the expanded category. */
+.workspace-view[data-workspace-view="activities"] .mode-selector{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:start;
+  gap:14px;
+}
+.workspace-view[data-workspace-view="activities"] .mode-family-column{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  gap:14px;
+}
+.workspace-view[data-workspace-view="activities"] .mode-family-column > .mode-family-card{
+  height:auto;
+  min-width:0;
+  align-self:stretch;
+}
+.workspace-view[data-workspace-view="activities"] .mode-family-card .mode-family-head{
+  min-height:0;
+}
+.workspace-view[data-workspace-view="activities"] .mode-family-card .mode-flow-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;
+  margin-top:0;
+}
+/* A two-module category always uses the same two-card layout as
+   '選擇與分類'.  One-module categories use their full available width. */
+.workspace-view[data-workspace-view="activities"] .mode-family-card .mode-flow-option{
+  grid-column:auto;
+}
+.workspace-view[data-workspace-view="activities"] :is(.quick-response-family,.stance-interaction-family) .mode-flow-option{
+  grid-column:1/-1;
+}
+@media (max-width:1199px){
+  .workspace-view[data-workspace-view="activities"] .mode-selector{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .workspace-view[data-workspace-view="activities"] .mode-family-column{
+    display:contents;
+  }
+  /* Preserve the original visual order when the two columns become one. */
+  .workspace-view[data-workspace-view="activities"] .foundation-family{order:1}
+  .workspace-view[data-workspace-view="activities"] .quick-response-family{order:2}
+  .workspace-view[data-workspace-view="activities"] .peer-interaction-family{order:3}
+  .workspace-view[data-workspace-view="activities"] .reasoning-family{order:4}
+  .workspace-view[data-workspace-view="activities"] .stance-interaction-family{order:5}
+  .workspace-view[data-workspace-view="activities"] .mode-family-card{width:100%}
+}
+@media (max-width:640px){
+  .workspace-view[data-workspace-view="activities"] .mode-family-card .mode-flow-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+}
