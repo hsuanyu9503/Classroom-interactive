@@ -35,10 +35,10 @@
         </div>
         <div id="studentProgressWrap" class="progress-wrap">
           <div class="progress-meta">
-            <span id="caseCounter">1 / 1</span>
+            <span class="student-progress-label">目前進度 <strong id="caseCounter">1 / 1</strong></span>
             <span id="progressText">0%</span>
           </div>
-          <div class="progress-track">
+          <div class="progress-track" aria-hidden="true">
             <div id="progressBar" class="progress-bar"></div>
           </div>
         </div>
@@ -219,7 +219,7 @@
               <span class="step-number">短答</span>
               <div><h3 id="openTextStudentQuestion">寫下你的想法</h3><p>用自己的話回答即可，不需要追求標準答案。</p></div>
             </div>
-            <label class="field open-text-student-field"><textarea id="openTextStudentInput" rows="6"></textarea><small id="openTextCharCount">0 / 240</small></label>
+            <label class="field open-text-student-field"><textarea id="openTextStudentInput" rows="6" aria-label="你的短答內容"></textarea><small id="openTextCharCount">0 / 240</small></label>
             <div class="classification-step-footer"><span>送出後老師會在文字牆看到這則回覆。</span><button id="submitOpenTextBtn" class="btn btn-primary" type="button">提交文字</button></div>
           </section>
         </div>
@@ -232,7 +232,7 @@
               <span class="step-number">提問</span>
               <div><h3 id="questionWallStudentQuestion">你最想追問什麼？</h3><p>你的名字不會顯示給同學。送出後可以看看大家還在意哪些問題，也能回應同學。</p></div>
             </div>
-            <label class="field open-text-student-field"><textarea id="questionWallStudentInput" rows="4"></textarea><small id="questionWallCharCount">0 / 180</small></label>
+            <label class="field open-text-student-field"><textarea id="questionWallStudentInput" rows="4" aria-label="你的匿名提問"></textarea><small id="questionWallCharCount">0 / 180</small></label>
             <div class="classification-step-footer"><span id="questionWallSubmitStatus">尚未提出問題</span><button id="submitQuestionWallBtn" class="btn btn-primary" type="button">匿名送出問題</button></div>
           </section>
           <section class="wave-student-card question-wall-browse-card">

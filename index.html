@@ -12,6 +12,7 @@
   <script src="session-api.js" defer></script>
   <script src="teacher-core.js" defer></script>
   <script src="activity-editor.js" defer></script>
+  <script src="editor-guidance.js" defer></script>
   <script src="session-teacher.js" defer></script>
   <script src="release-center.js" defer></script>
 </head>
@@ -20,7 +21,7 @@
     <div>
       <div class="workspace-brandline">
         <p id="workflowEyebrow" class="eyebrow">CLASSROOM INTERACTIVE</p>
-        <span class="workspace-version">V2.34.0</span>
+        <span class="workspace-version">V2.34.7</span>
       </div>
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
@@ -106,6 +107,12 @@
           <textarea id="courseDescription" rows="3" placeholder="簡短記錄這堂課的核心概念或教師備課重點。"></textarea>
         </label>
 
+        <details class="settings-disclosure" id="courseAdvancedDisclosure">
+          <summary class="settings-disclosure-summary">
+            <span class="settings-disclosure-copy"><span class="settings-disclosure-eyebrow">進階設定</span><strong>課程導覽與進度顯示</strong><small>調整學生端的課程進度提示；Course Session 仍由教師同步控制。</small></span>
+            <span class="settings-disclosure-hint">展開設定 <span aria-hidden="true">⌄</span></span>
+          </summary>
+          <div class="settings-disclosure-body">
         <div class="course-v2-settings">
           <label class="toggle-field v2-disabled-setting">
             <input id="courseAllowStudentNavigation" type="checkbox" checked disabled />
@@ -116,6 +123,9 @@
             <span>學生端顯示整體課程進度</span>
           </label>
         </div>
+
+          </div>
+        </details>
 
         <div class="v15-section-toolbar">
           <div>
@@ -255,10 +265,18 @@
           <textarea id="workIntro" rows="4" placeholder="提供理解材料所需的背景，但不要直接透露活動要學生判斷的答案。"></textarea>
         </label>
 
-        <label class="field">
-          <span>教師備註 <span class="optional-tag">學生不會看到</span></span>
-          <textarea id="workTeacherNote" rows="3" placeholder="記錄課堂提問、可能爭點、補充背景等。"></textarea>
-        </label>
+        <details class="settings-disclosure" id="workTeacherNoteDisclosure">
+          <summary class="settings-disclosure-summary">
+            <span class="settings-disclosure-copy"><span class="settings-disclosure-eyebrow">教師專用 · 選填</span><strong>備課補充筆記</strong><small>不顯示給學生；可以記錄教學提問、爭點與提醒。</small></span>
+            <span class="settings-disclosure-hint">編輯筆記 <span aria-hidden="true">⌄</span></span>
+          </summary>
+          <div class="settings-disclosure-body">
+            <label class="field">
+              <span>教師備註 <span class="optional-tag">學生不會看到</span></span>
+              <textarea id="workTeacherNote" rows="3" placeholder="記錄課堂提問、可能爭點、補充背景等。"></textarea>
+            </label>
+          </div>
+        </details>
 
         <section class="element-builder">
           <div class="v15-section-toolbar inner-toolbar">
@@ -462,6 +480,21 @@
         </div>
       </details>
 
+      <section id="activityReadiness" class="activity-readiness" data-state="checking" aria-label="活動備課檢查">
+        <div class="activity-readiness-copy">
+          <span class="activity-readiness-kicker">備課檢查 · 目前活動</span>
+          <strong id="activityReadinessTitle">正在檢查設定…</strong>
+          <p id="activityReadinessMessage" aria-live="polite">未完成的活動也可以隨時儲存為草稿。</p>
+        </div>
+        <button id="activityReadinessGo" class="btn btn-secondary activity-readiness-go" type="button" hidden>前往修正 <span aria-hidden="true">↗</span></button>
+      </section>
+      <div class="activity-guidance-legend" aria-label="欄位標示說明">
+        <span><i class="guidance-key guidance-key-required">必填</i> 發佈或上課前須完成</span>
+        <span><i class="guidance-key guidance-key-student">學生可見</i> 會出現在學生畫面或活動揭露內容</span>
+        <span><i class="guidance-key guidance-key-private">教師專用</i> 不會傳送給學生</span>
+        <small>儲存草稿不受必填限制，備課檢查會隨編輯更新。</small>
+      </div>
+
       <section class="activity-core-settings" aria-label="活動基本設定">
         <div class="activity-editor-section-head">
           <div>
@@ -473,18 +506,26 @@
 
       <div class="form-grid two-col">
         <label class="field">
-          <span>活動名稱</span>
+          <span>活動名稱 <span class="guidance-key guidance-key-recommend">建議填寫</span></span>
           <input id="activityTitle" type="text" placeholder="例如：證據判斷挑戰" />
         </label>
 
         <label class="field">
-          <span>活動說明</span>
+          <span>活動說明 <span class="guidance-key guidance-key-student">學生可見</span></span>
           <input id="activitySubtitle" type="text" placeholder="例如：找出關鍵依據，再說明你的判斷" />
         </label>
       </div>
 
 
 
+      </section>
+
+      <details class="settings-disclosure confidence-disclosure" id="activityConfidenceDisclosure">
+        <summary class="settings-disclosure-summary">
+          <span class="settings-disclosure-copy"><span class="settings-disclosure-eyebrow">選用功能</span><strong>信心程度</strong><small>選填。可在個人作答後加上信心刻度與自訂標籤。</small></span>
+          <span class="settings-disclosure-hint"><span class="settings-disclosure-state status-off">未啟用</span><span class="settings-disclosure-state status-on">已啟用</span><span aria-hidden="true">⌄</span></span>
+        </summary>
+        <div class="settings-disclosure-body">
       <section id="confidenceEditorCard" class="confidence-editor-card">
         <div class="confidence-editor-head">
           <div><span class="section-kicker">OPTIONAL FOLLOW-UP</span><h3>信心程度</h3><p class="field-help">可附加在多數個人作答活動後，讓學生同時標記「我有多確定」。</p></div>
@@ -496,7 +537,8 @@
           <label class="field"><span>高信心標籤</span><input id="confidenceHighLabel" type="text" maxlength="30" value="非常確定" /></label>
         </div>
       </section>
-      </section>
+        </div>
+      </details>
 
       <section id="choiceIdentifyModePanel" class="choice-identify-mode-panel">
         <div class="choice-identify-mode-head">
@@ -577,6 +619,12 @@
           </label>
         </div>
       </section>
+
+      <div class="activity-content-intro" aria-label="活動內容設定">
+        <span class="settings-disclosure-eyebrow">活動內容</span>
+        <strong>編輯這個活動的題目與互動流程</strong>
+        <small>先選擇上方模式，再填寫目前模式的活動內容。次要設定可以展開後調整。</small>
+      </div>
 
       <div id="standardTaskToolbar" class="editor-toolbar">
         <div>
@@ -667,10 +715,18 @@
         </div>
         <div class="wave-editor-card">
           <label class="field wave-wide"><span>提問</span><textarea id="openTextQuestion" rows="3" placeholder="例如：你認為這個案例最大的問題是什麼？"></textarea></label>
-          <div class="form-grid two-col">
-            <label class="field"><span>輸入提示</span><input id="openTextPlaceholder" type="text" maxlength="80" placeholder="請用一兩句話寫下你的想法" /></label>
-            <label class="field"><span>字數上限</span><input id="openTextMaxLength" type="number" min="30" max="1000" value="240" /></label>
-          </div>
+          <details class="settings-disclosure settings-disclosure-nested" id="openTextAdvancedDisclosure">
+            <summary class="settings-disclosure-summary">
+              <span class="settings-disclosure-copy"><strong>輸入提示與字數上限</strong><small>選用調整：保留原本的預設值也可以直接開始活動。</small></span>
+              <span class="settings-disclosure-hint">進階設定 <span aria-hidden="true">⌄</span></span>
+            </summary>
+            <div class="settings-disclosure-body">
+              <div class="form-grid two-col">
+                <label class="field"><span>輸入提示</span><input id="openTextPlaceholder" type="text" maxlength="80" placeholder="請用一兩句話寫下你的想法" /></label>
+                <label class="field"><span>字數上限</span><input id="openTextMaxLength" type="number" min="30" max="1000" value="240" /></label>
+              </div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -687,11 +743,21 @@
           <label class="field wave-wide"><span>提問提示</span><textarea id="questionWallQuestion" rows="3" placeholder="例如：看完這個案例後，你最想追問什麼？"></textarea></label>
           <div class="form-grid two-col">
             <label class="field"><span>輸入提示</span><input id="questionWallPlaceholder" type="text" maxlength="80" placeholder="寫下你還想知道的問題" /></label>
+          </div>
+          <details class="settings-disclosure settings-disclosure-nested" id="questionWallAdvancedDisclosure">
+            <summary class="settings-disclosure-summary">
+              <span class="settings-disclosure-copy"><strong>提問數量與同儕回應規則</strong><small>設定字數、每人可提問數量，以及是否開放匿名回應。</small></span>
+              <span class="settings-disclosure-hint">進階設定 <span aria-hidden="true">⌄</span></span>
+            </summary>
+            <div class="settings-disclosure-body">
+              <div class="form-grid two-col">
             <label class="field"><span>單則字數上限</span><input id="questionWallMaxLength" type="number" min="30" max="500" value="180" /></label>
             <label class="field"><span>每人最多提問</span><input id="questionWallMaxPosts" type="number" min="1" max="5" value="3" /></label>
             <label class="toggle-line"><input id="questionWallAllowReplies" type="checkbox" checked /><span>允許同儕匿名回應</span></label>
             <label class="field"><span>回應字數上限</span><input id="questionWallReplyMaxLength" type="number" min="30" max="300" value="140" /></label>
-          </div>
+              </div>
+            </div>
+          </details>
           <p class="field-help">每位學生對同一則問題最多只能按一次 ＋1，並最多留下 1 則回應；再次送出會更新自己的回應。學生不能替自己的問題按 ＋1 或留下回應。</p>
         </div>
       </section>
@@ -712,12 +778,20 @@
             <button id="addGroupConsensusOptionBtn" class="btn btn-secondary" type="button">＋ 新增選項</button>
           </div>
           <div id="groupConsensusOptionsEditor" class="ranking-items-editor"></div>
+          <details class="settings-disclosure settings-disclosure-nested" id="groupConsensusAdvancedDisclosure">
+            <summary class="settings-disclosure-summary">
+              <span class="settings-disclosure-copy"><strong>分組人數與共識理由</strong><small>調整每組人數、理由提示、字數上限與必填規則。</small></span>
+              <span class="settings-disclosure-hint">進階設定 <span aria-hidden="true">⌄</span></span>
+            </summary>
+            <div class="settings-disclosure-body">
           <div class="form-grid two-col group-consensus-settings">
             <label class="field"><span>建議每組人數</span><input id="groupConsensusGroupSize" type="number" min="2" max="6" value="4" /><small>實際分組由老師上課時依加入人數建立，可再調整。</small></label>
             <label class="field"><span>共識理由提示</span><input id="groupConsensusReasonPrompt" type="text" maxlength="120" value="請寫下你們形成這個共識的主要理由" /></label>
             <label class="field"><span>理由字數上限</span><input id="groupConsensusReasonMaxLength" type="number" min="30" max="500" value="220" /></label>
             <label class="toggle-line"><input id="groupConsensusReasonRequired" type="checkbox" checked /><span>小組提交時必須填寫共識理由</span></label>
           </div>
+            </div>
+          </details>
           <p class="field-help">V2.26 先提供單選共識題；「分組／組員／共同提交」底層是 Session 共用能力，後續排序與分類模組可直接沿用。</p>
         </div>
       </section>
@@ -830,6 +904,12 @@
           </div>
         </section>
         <div id="deliberationLayersEditor" class="deliberation-layers-editor"></div>
+        <details class="settings-disclosure settings-disclosure-nested" id="deliberationReflectionDisclosure">
+          <summary class="settings-disclosure-summary">
+            <span class="settings-disclosure-copy"><span class="settings-disclosure-eyebrow">延伸與回顧</span><strong>活動結束後的個人反思</strong><small>編輯四個反思題目；收合不影響原有設定與學生作答。</small></span>
+            <span class="settings-disclosure-hint">編輯反思 <span aria-hidden="true">⌄</span></span>
+          </summary>
+          <div class="settings-disclosure-body">
         <section class="mode-a-config-block deliberation-reflection-editor">
           <div class="mode-a-config-head">
             <div>
@@ -845,6 +925,8 @@
           </div>
           <p class="field-help">反思答案預設只回傳教師端，不會自動投影。</p>
         </section>
+          </div>
+        </details>
       </section>
 
       <div class="sticky-actions">
