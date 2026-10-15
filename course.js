@@ -51,7 +51,6 @@ function setPresentationView(view) {
 }
 
 const presentationLiveStanceMetricAnimations=new WeakMap();
-const presentationLiveStanceMotion=new WeakMap();
 
 function animatePresentationLiveStanceMetric(element,target,{suffix="",empty=false,duration=320}={}) {
   if(!element)return;
@@ -95,45 +94,32 @@ function ensurePresentationLiveStanceBoard(container,liveStance) {
   const structureKey=allowUndecided?"with-undecided":"without-undecided";
   if(container.dataset.liveStanceStructure===structureKey && container.querySelector("[data-live-stance-role='knot']"))return false;
   container.dataset.liveStanceStructure=structureKey;
-  container.style.setProperty("--tug-position","50%");
+  setPresentationLiveStanceVisualPosition(container,50);
   container.innerHTML=`
     <div class="live-stance-tug-score left"><span data-live-stance-role="left-label"></span><strong data-live-stance-role="left-count">0</strong><small data-live-stance-role="left-pct">—</small></div>
-    <div class="live-stance-tug-arena" aria-label="左右立場拉鋸"><span class="live-stance-center-flag">中心</span><div class="live-stance-rope" aria-hidden="true"></div><div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div></div>
+    <div class="live-stance-tug-arena" aria-label="左右立場拉鋸"><span class="live-stance-center-flag">中心</span><div class="live-stance-rope" aria-hidden="true"></div><span class="live-stance-tension-wave" aria-hidden="true"></span><div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div></div>
     <div class="live-stance-tug-score right"><span data-live-stance-role="right-label"></span><strong data-live-stance-role="right-count">0</strong><small data-live-stance-role="right-pct">—</small></div>
     ${allowUndecided?`<div class="live-stance-undecided-count"><span data-live-stance-role="undecided-label"></span><strong data-live-stance-role="undecided-count">0</strong></div>`:""}
   `;
   return true;
 }
 
+function setPresentationLiveStanceVisualPosition(container,position) {
+  if(window.LiveStanceMotion?.reset){
+    window.LiveStanceMotion.reset(container,position);
+  }else{
+    const absolute=Math.max(4,Math.min(96,Number(position)||50));
+    container.style.setProperty("--tug-position",`${absolute.toFixed(3)}%`);
+    container.style.setProperty("--tug-split",`${((absolute-4)/92*100).toFixed(3)}%`);
+  }
+}
+
 function animatePresentationLiveStancePosition(container,target) {
-  const numericTarget=Number(target);
-  const clamped=Math.max(4,Math.min(96,Number.isFinite(numericTarget)?numericTarget:50));
-  if(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches){
-    container.style.setProperty("--tug-position",`${clamped}%`);
-    return;
+  if(window.LiveStanceMotion?.move){
+    window.LiveStanceMotion.move(container,target,{active:container.dataset.liveStanceEmpty!=="true"});
+  }else{
+    setPresentationLiveStanceVisualPosition(container,target);
   }
-  let motion=presentationLiveStanceMotion.get(container);
-  if(!motion){
-    const current=parseFloat(container.style.getPropertyValue("--tug-position"))||50;
-    motion={current,target:clamped,last:performance.now(),raf:0};
-    presentationLiveStanceMotion.set(container,motion);
-  }
-  motion.target=clamped;
-  if(motion.raf)return;
-  const tick=now=>{
-    const dt=Math.min(48,Math.max(8,now-motion.last||16));
-    motion.last=now;
-    const alpha=1-Math.exp(-dt/150);
-    motion.current+=(motion.target-motion.current)*alpha;
-    if(Math.abs(motion.target-motion.current)<0.04)motion.current=motion.target;
-    container.style.setProperty("--tug-position",`${motion.current.toFixed(3)}%`);
-    if(motion.current!==motion.target){
-      motion.raf=requestAnimationFrame(tick);
-    }else{
-      motion.raf=0;
-    }
-  };
-  motion.raf=requestAnimationFrame(tick);
 }
 
 function renderPresentationLiveStanceBoard(container,liveStance) {
@@ -144,8 +130,10 @@ function renderPresentationLiveStanceBoard(container,liveStance) {
   const decided=left+right;
   const leftPct=decided?Math.round(left/decided*100):50;
   const rightPct=decided?100-leftPct:50;
-  const target=decided?right/decided*100:50;
+  const target=decided?4+92*(left/decided):50;
   const fresh=ensurePresentationLiveStanceBoard(container,liveStance);
+  container.dataset.liveStanceEmpty=decided?"false":"true";
+  container.dataset.liveStanceLeader=decided && left!==right ? (left>right ? "blue" : "red") : "tie";
   container.querySelector("[data-live-stance-role='left-label']").textContent=liveStance.leftLabel||"左側立場";
   container.querySelector("[data-live-stance-role='right-label']").textContent=liveStance.rightLabel||"右側立場";
   const undecidedLabel=container.querySelector("[data-live-stance-role='undecided-label']");

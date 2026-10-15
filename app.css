@@ -4475,7 +4475,7 @@ select:focus{
 .live-stance-student-status{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:14px;padding:12px 14px;border-radius:14px;background:var(--panel-soft,#f8fafc);}.live-stance-student-status span{color:var(--muted,#667085);font-size:13px;text-align:right;}
 .sync-badge.locked{background:#eef1f5;color:#596273;border-color:#d6dbe3;}
 .live-stance-control-meta{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:14px;color:var(--muted,#667085);}.live-stance-control-meta>span{font-weight:800;color:var(--ink,#1f2937);}
-.live-stance-tug-board{--tug-position:50%;display:grid;grid-template-columns:minmax(120px,.8fr) minmax(220px,2fr) minmax(120px,.8fr);gap:14px;align-items:center;padding:20px;border:1px solid var(--line,#dfe3ea);border-radius:22px;background:linear-gradient(180deg,#fff,#f9fafb);position:relative;overflow:hidden;}
+.live-stance-tug-board{--tug-position:50%;--tug-split:50%;display:grid;grid-template-columns:minmax(120px,.8fr) minmax(220px,2fr) minmax(120px,.8fr);gap:14px;align-items:center;padding:20px;border:1px solid var(--line,#dfe3ea);border-radius:22px;background:linear-gradient(180deg,#fff,#f9fafb);position:relative;overflow:hidden;}
 .live-stance-tug-score{min-width:0;display:grid;gap:4px;align-content:center;text-align:center;padding:14px;border-radius:18px;background:#fff;box-shadow:0 8px 22px rgba(16,24,40,.06);}.live-stance-tug-score.left{border:1px solid #bfdbfe;background:#eff6ff}.live-stance-tug-score.right{border:1px solid #fecdd3;background:#fff1f2}.live-stance-tug-score span{font-size:14px;font-weight:800;overflow-wrap:anywhere}.live-stance-tug-score strong{font-size:34px;line-height:1}.live-stance-tug-score small{font-weight:800;color:var(--muted,#667085)}
 .live-stance-tug-arena{position:relative;height:96px;min-width:0;display:flex;align-items:center;}.live-stance-rope{position:absolute;left:4%;right:4%;top:50%;height:8px;transform:translateY(-50%);border-radius:999px;background:repeating-linear-gradient(90deg,#c08a4a 0 13px,#e2b06f 13px 26px);box-shadow:0 2px 5px rgba(91,57,24,.22)}
 .live-stance-center-flag{position:absolute;left:50%;top:5px;transform:translateX(-50%);font-size:11px;color:#98a2b3}.live-stance-center-flag::after{content:"";display:block;width:1px;height:65px;background:#d0d5dd;margin:3px auto 0;}
@@ -5441,28 +5441,41 @@ select:focus{
 .live-stance-tug-arena{
   isolation:isolate;
 }
+/* Rope colour lengths match the live share. The visual split and centre marker
+   are updated from the same animated position in both teacher and Course views. */
 .live-stance-rope{
   left:4%;
   right:4%;
   height:12px;
-  border:1px solid rgba(15,23,42,.08);
-  background:linear-gradient(90deg,
-    var(--stance-left) 0%,
-    var(--stance-left-soft) 48.8%,
-    #d9dee8 48.8%,
-    #d9dee8 51.2%,
-    var(--stance-right-soft) 51.2%,
-    var(--stance-right) 100%);
+  overflow:hidden;
+  border:1px solid rgba(15,23,42,.1);
+  background:#d9dee8;
   box-shadow:0 4px 12px rgba(15,23,42,.14),inset 0 2px 2px rgba(255,255,255,.38),inset 0 -2px 3px rgba(15,23,42,.08);
 }
+.live-stance-rope::before,
 .live-stance-rope::after{
   content:"";
   position:absolute;
-  inset:1px 4px auto;
-  height:3px;
-  border-radius:999px;
-  background:linear-gradient(90deg,rgba(255,255,255,.42),rgba(255,255,255,.2));
+  top:0;
+  bottom:0;
   pointer-events:none;
+}
+.live-stance-rope::before{
+  left:0;
+  width:var(--tug-split,50%);
+  background:linear-gradient(90deg,var(--stance-left),var(--stance-left-soft));
+  border-radius:999px 0 0 999px;
+}
+.live-stance-rope::after{
+  right:0;
+  width:calc(100% - var(--tug-split,50%));
+  background:linear-gradient(90deg,var(--stance-right-soft),var(--stance-right));
+  border-radius:0 999px 999px 0;
+}
+/* All undecided / no submissions: neutral rope, not a misleading 50/50 vote. */
+.live-stance-tug-board[data-live-stance-empty="true"] .live-stance-rope::before,
+.live-stance-tug-board[data-live-stance-empty="true"] .live-stance-rope::after{
+  opacity:0;
 }
 .live-stance-tug-arena::before,
 .live-stance-tug-arena::after{
@@ -6159,4 +6172,83 @@ input:focus,textarea:focus,select:focus{
 @media (max-width:640px){
   .choice-identify-mode-panel{padding:14px;margin:14px 0;}
   .choice-identify-mode-options{grid-template-columns:1fr;gap:9px;}
+}
+
+/* =========================================================
+   V2.35.3 — Elastic tug-of-war feedback (teacher / Course)
+   Only responds to actual share changes; no perpetual shaking.
+   ========================================================= */
+.live-stance-tug-board{
+  --tug-energy:0;
+  --tug-tilt:0deg;
+}
+/* A slight woven texture moves only while the two groups change strength. */
+.live-stance-rope::before{
+  background-image:
+    repeating-linear-gradient(115deg,rgba(255,255,255,.24) 0 3px,transparent 3px 9px),
+    linear-gradient(90deg,var(--stance-left),var(--stance-left-soft));
+  background-size:24px 100%,100% 100%;
+}
+.live-stance-rope::after{
+  background-image:
+    repeating-linear-gradient(115deg,rgba(255,255,255,.24) 0 3px,transparent 3px 9px),
+    linear-gradient(90deg,var(--stance-right-soft),var(--stance-right));
+  background-size:24px 100%,100% 100%;
+}
+.live-stance-tug-board.is-pulling .live-stance-rope{
+  box-shadow:0 5px 15px rgba(15,23,42,.2),inset 0 2px 3px rgba(255,255,255,.48);
+  filter:saturate(1.12);
+}
+.live-stance-tug-board.is-pulling .live-stance-rope::before,
+.live-stance-tug-board.is-pulling .live-stance-rope::after{
+  animation:live-stance-rope-weave .34s linear infinite;
+}
+@keyframes live-stance-rope-weave{
+  from{background-position:0 0,0 0}
+  to{background-position:24px 0,0 0}
+}
+/* The pressure halo follows the SAME animated split as the knot and rope. */
+.live-stance-tension-wave{
+  position:absolute;
+  left:var(--tug-position,50%);
+  top:50%;
+  width:76px;
+  height:76px;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(255,198,93,.3) 0%,rgba(169,143,244,.14) 38%,transparent 73%);
+  opacity:var(--tug-energy,0);
+  filter:blur(4px);
+  pointer-events:none;
+  z-index:1;
+  transition:opacity .13s ease;
+}
+.live-stance-knot{
+  transform:translate(-50%,-50%) rotate(var(--tug-tilt,0deg));
+}
+.live-stance-tug-board.is-pulling .live-stance-knot{
+  box-shadow:0 9px 25px rgba(15,23,42,.23),0 0 0 5px rgba(251,191,36,.16);
+}
+.live-stance-tug-board.is-swinging .live-stance-knot{
+  box-shadow:0 10px 28px rgba(15,23,42,.24),0 0 0 7px rgba(251,191,36,.19);
+}
+.live-stance-tug-board.is-pulling[data-live-stance-leader="blue"] .live-stance-tug-score.left{
+  box-shadow:0 0 0 2px rgba(59,130,246,.15),0 9px 25px rgba(59,130,246,.15);
+}
+.live-stance-tug-board.is-pulling[data-live-stance-leader="red"] .live-stance-tug-score.right{
+  box-shadow:0 0 0 2px rgba(239,71,111,.15),0 9px 25px rgba(239,71,111,.15);
+}
+.live-stance-tug-board.large .live-stance-tension-wave{
+  width:105px;
+  height:105px;
+}
+@media(max-width:760px){
+  .live-stance-tension-wave{width:60px;height:60px}
+  .live-stance-tug-board.large .live-stance-tension-wave{width:72px;height:72px}
+}
+@media(prefers-reduced-motion:reduce){
+  .live-stance-tug-board.is-pulling .live-stance-rope::before,
+  .live-stance-tug-board.is-pulling .live-stance-rope::after{animation:none}
+  .live-stance-tension-wave{display:none}
+  .live-stance-knot{transform:translate(-50%,-50%);transition:none}
 }

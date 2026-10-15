@@ -1941,7 +1941,6 @@
   }
 
   const liveStanceMetricAnimations=new WeakMap();
-  const liveStanceBoardMotion=new WeakMap();
 
   function animateLiveStanceMetric(element,target,{suffix="",empty=false,duration=320}={}) {
     if(!element)return;
@@ -1984,7 +1983,7 @@
     const structureKey=summary.allowUndecided ? "with-undecided" : "without-undecided";
     if(container.dataset.liveStanceStructure===structureKey && container.querySelector("[data-live-stance-role='knot']"))return false;
     container.dataset.liveStanceStructure=structureKey;
-    container.style.setProperty("--tug-position","50%");
+    setLiveStanceVisualPosition(container,50);
     container.innerHTML=`
       <div class="live-stance-tug-score left">
         <span data-live-stance-role="left-label"></span>
@@ -1994,6 +1993,7 @@
       <div class="live-stance-tug-arena" aria-label="左右立場拉鋸">
         <span class="live-stance-center-flag">中心</span>
         <div class="live-stance-rope" aria-hidden="true"></div>
+        <span class="live-stance-tension-wave" aria-hidden="true"></span>
         <div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div>
       </div>
       <div class="live-stance-tug-score right">
@@ -2006,35 +2006,22 @@
     return true;
   }
 
+  function setLiveStanceVisualPosition(container,position) {
+    if(window.LiveStanceMotion?.reset){
+      window.LiveStanceMotion.reset(container,position);
+    }else{
+      const absolute=Math.max(4,Math.min(96,Number(position)||50));
+      container.style.setProperty("--tug-position",`${absolute.toFixed(3)}%`);
+      container.style.setProperty("--tug-split",`${((absolute-4)/92*100).toFixed(3)}%`);
+    }
+  }
+
   function animateLiveStancePosition(container,target) {
-    const numericTarget=Number(target);
-    const clamped=Math.max(4,Math.min(96,Number.isFinite(numericTarget)?numericTarget:50));
-    if(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches){
-      container.style.setProperty("--tug-position",`${clamped}%`);
-      return;
+    if(window.LiveStanceMotion?.move){
+      window.LiveStanceMotion.move(container,target,{active:container.dataset.liveStanceEmpty!=="true"});
+    }else{
+      setLiveStanceVisualPosition(container,target);
     }
-    let motion=liveStanceBoardMotion.get(container);
-    if(!motion){
-      const current=parseFloat(container.style.getPropertyValue("--tug-position")) || 50;
-      motion={current,target:clamped,last:performance.now(),raf:0};
-      liveStanceBoardMotion.set(container,motion);
-    }
-    motion.target=clamped;
-    if(motion.raf)return;
-    const tick=now=>{
-      const dt=Math.min(48,Math.max(8,now-motion.last||16));
-      motion.last=now;
-      const alpha=1-Math.exp(-dt/150);
-      motion.current += (motion.target-motion.current)*alpha;
-      if(Math.abs(motion.target-motion.current)<0.04)motion.current=motion.target;
-      container.style.setProperty("--tug-position",`${motion.current.toFixed(3)}%`);
-      if(motion.current!==motion.target){
-        motion.raf=requestAnimationFrame(tick);
-      }else{
-        motion.raf=0;
-      }
-    };
-    motion.raf=requestAnimationFrame(tick);
   }
 
   function renderLiveStanceBoard(container,summary,{large=false}={}) {
@@ -2045,8 +2032,10 @@
     const decided=Math.max(0,left+right);
     const leftPct=decided ? Math.round(left/decided*100) : 50;
     const rightPct=decided ? 100-leftPct : 50;
-    const knot=decided ? right/decided*100 : 50;
+    const knot=decided ? 4+92*(left/decided) : 50;
     const fresh=ensureLiveStanceBoardStructure(container,summary);
+    container.dataset.liveStanceEmpty=decided ? "false" : "true";
+    container.dataset.liveStanceLeader=decided && left!==right ? (left>right ? "blue" : "red") : "tie";
     container.classList.toggle("large",Boolean(large));
     container.querySelector("[data-live-stance-role='left-label']").textContent=summary.leftLabel || "左側立場";
     container.querySelector("[data-live-stance-role='right-label']").textContent=summary.rightLabel || "右側立場";
