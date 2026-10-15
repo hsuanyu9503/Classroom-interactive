@@ -6252,3 +6252,39 @@ input:focus,textarea:focus,select:focus{
   .live-stance-tension-wave{display:none}
   .live-stance-knot{transform:translate(-50%,-50%);transition:none}
 }
+
+/* =========================================================
+   V2.35.4 — smoother stance motion, single JS position driver
+   ========================================================= */
+/* Position and rotation are both driven by the same RAF timeline.
+   Do not layer CSS transitions on top of the spring: that introduces lag. */
+.live-stance-knot {
+  transition:box-shadow .25s ease;
+}
+/* Make motion texture subdued instead of rapid flickering. */
+.live-stance-rope::before,
+.live-stance-rope::after {
+  background-image:
+    repeating-linear-gradient(115deg,rgba(255,255,255,.15) 0 3px,transparent 3px 10px),
+    linear-gradient(90deg,var(--stance-left),var(--stance-left-soft));
+}
+.live-stance-rope::after {
+  background-image:
+    repeating-linear-gradient(115deg,rgba(255,255,255,.15) 0 3px,transparent 3px 10px),
+    linear-gradient(90deg,var(--stance-right-soft),var(--stance-right));
+}
+.live-stance-tug-board.is-pulling .live-stance-rope::before,
+.live-stance-tug-board.is-pulling .live-stance-rope::after {
+  animation-duration:.85s;
+}
+.live-stance-tug-board.is-pulling .live-stance-rope {
+  filter:saturate(1.05);
+}
+.live-stance-tension-wave {
+  transition:opacity .20s ease;
+}
+
+.live-stance-rope { transition:box-shadow .25s ease, filter .25s ease; }
+@media(prefers-reduced-motion:reduce){
+  .live-stance-rope { transition:none; }
+}
