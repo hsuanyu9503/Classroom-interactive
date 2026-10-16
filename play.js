@@ -972,7 +972,11 @@ async function chooseLiveStance(side) {
     liveStanceChangeCount=nextChangeCount;
     showToast(`目前立場：${liveStanceLabel(side)}`);
   } catch(error) {
-    showToast(error.message || "立場同步失敗");
+    const detail=String(error?.message || "");
+    const legacyIndexConflict=/duplicate key|unique constraint|23505|student_responses_session_id_participant_id_task_index_stage_key/i.test(detail);
+    showToast(legacyIndexConflict && isEmbeddedCourseActivity()
+      ? "本節點立場尚未送出，請老師檢查 Course 資料庫索引升級（V2.35.6）。"
+      : (detail || "立場同步失敗"));
     await syncLiveStanceState(false);
   } finally {
     liveStanceBusy=false;

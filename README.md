@@ -1,11 +1,9 @@
-# Classroom Interactive V2.35.5 — 輕量部署版
+# Classroom Interactive V2.35.6 Lite
 
-本版本專供 GitHub Pages 上傳。完整保留 V2.35.5 的 HTML、CSS、JavaScript 與 favicon，所有網站執行檔內容均未修改。
+Course 同一堂課連續兩組拉鋸的修正版。此壓縮檔僅保留 GitHub Pages 網站執行檔。
 
-## 使用方式
-1. 解壓縮後，將檔案（不是 ZIP 本身）上傳至 GitHub Pages 網站根目錄。
-2. 請保留各檔案名稱及相對位置，並以 `index.html` 作為入口。
-3. 如果你原本已完成 V2.35.0 的 Supabase SQL 升級，這次不用再執行 SQL。
-4. 如需新建資料庫、升級 SQL、測試程式與測試截圖，請使用同版本的完整開發封存檔。
+**部署時請先執行獨立的** `upgrade-v2.35.6-course-repeat-nodes.sql` **於 Supabase SQL Editor。** 若你還沒執行 V2.35.0 的 Course 全模組 SQL，應先執行那份升級檔。
 
-註：本次屬封裝輕量化，不涉及程式縮寫（minify）或功能改動；GitHub Pages 的實際網路傳輸體積仍受伺服器壓縮設定影響。
+本次修復舊版四欄唯一限制阻擋第二個 Course 節點作答的問題，學生提交衝突時會顯示提示；教師端拉鋸統計只顯示目前節點。未修改原有紅藍純色線條、動畫、活動模式及資料內容。
+
+測試：17 項 Session、12 項 Course、三方重複拉鋸模擬。尚未連接你的正式 Supabase。

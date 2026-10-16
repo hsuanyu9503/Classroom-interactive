@@ -1910,7 +1910,7 @@
     return (snapshot?.responses || []).filter(response=>
       response.mode===mode &&
       response.stage_key==="final" &&
-      (activeSession?.sessionKind!=="course" || !response.node_ref || response.node_ref===activeSession.currentNodeRef)
+      (activeSession?.sessionKind!=="course" || response.node_ref===activeSession.currentNodeRef)
     );
   }
 
