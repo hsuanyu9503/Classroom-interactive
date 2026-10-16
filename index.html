@@ -14,6 +14,7 @@
   <script src="activity-editor.js" defer></script>
   <script src="editor-guidance.js" defer></script>
   <script src="live-stance-motion.js" defer></script>
+  <script src="deliberation-history.js" defer></script>
   <script src="session-teacher.js" defer></script>
   <script src="release-center.js" defer></script>
 </head>
@@ -22,7 +23,7 @@
     <div>
       <div class="workspace-brandline">
         <p id="workflowEyebrow" class="eyebrow">CLASSROOM INTERACTIVE</p>
-        <span class="workspace-version">V2.35.6</span>
+        <span class="workspace-version">V2.35.7</span>
       </div>
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
@@ -1396,6 +1397,7 @@
                 <button id="deliberationLockBtn" class="btn btn-secondary" type="button">🔒 結束作答</button>
                 <button id="deliberationPublishBtn" class="btn btn-primary" type="button">公布結果</button>
                 <button id="openDeliberationPresentationBtn" class="btn btn-secondary" type="button">🖥️ 開啟投影</button>
+                <button id="openDeliberationHistoryProjectionBtn" class="btn btn-secondary" type="button">📈 投影選擇歷程</button>
                 <button id="deliberationNextBtn" class="btn btn-primary" type="button">下一層 →</button>
               </div>
             </div>
@@ -1418,6 +1420,11 @@
               <div id="deliberationTeacherReasons" class="deliberation-reason-list"></div>
             </div>
           </div>
+          <details id="deliberationHistoryDetails" class="deliberation-history-details">
+            <summary>📈 全班選擇歷程 <small>逐層比較每位學生的選擇與變化</small></summary>
+            <div class="dh-teacher-toolbar"><label for="deliberationHistoryIdentityMode">學生名稱</label><select id="deliberationHistoryIdentityMode"><option value="anonymous">匿名編號</option><option value="named">教師具名</option></select><small>投影畫面一律匿名；未公布的本層答案只在教師端顯示。</small></div>
+            <div id="deliberationHistoryTeacher" class="deliberation-history-view"></div>
+          </details>
         </section>
 
         <details class="session-participants-section session-participants-details">

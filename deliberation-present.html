@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="app.css" />
   <link rel="stylesheet" href="interface-polish.css" />
   <script src="activity-modules.js" defer></script>
+  <script src="deliberation-history.js" defer></script>
   <script src="deliberation-present.js" defer></script>
 </head>
 <body class="deliberation-presentation-page">
@@ -55,6 +56,11 @@
       </article>
     </section>
 
+    <section id="dpHistoryPanel" class="panel dp-history-panel hidden" aria-label="全班選擇歷程">
+      <div class="dp-history-heading"><div><span class="summary-label">CHOICE JOURNEY</span><h2>全班選擇歷程</h2><p>橫向比較每一層判斷；↻ 代表學生改變選擇。</p></div><span class="dp-history-privacy">匿名投影 · 僅顯示已公布的選擇</span></div>
+      <div id="dpHistoryContent" class="deliberation-history-view"></div>
+    </section>
+
     <section class="deliberation-presentation-control-dock" aria-label="投影課堂控制">
       <div class="dp-control-status-row">
         <span id="dpControlStatus" class="dp-control-status offline">⚪ 僅投影模式</span>
@@ -74,6 +80,7 @@
           <button id="dpViewOverviewBtn" class="btn btn-secondary active" type="button">總覽</button>
           <button id="dpViewContentBtn" class="btn btn-secondary" type="button">情境</button>
           <button id="dpViewResultsBtn" class="btn btn-secondary" type="button">統計</button>
+          <button id="dpViewHistoryBtn" class="btn btn-secondary" type="button">📈 選擇歷程</button>
           <button id="dpFullscreenBtn" class="btn btn-secondary" type="button">⛶ 全螢幕</button>
         </div>
       </div>

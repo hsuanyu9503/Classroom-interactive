@@ -9,7 +9,7 @@
   let latestState=null;
   let lastTeacherSeen=0;
   let pendingRequestId="";
-  let projectionView="overview";
+  let projectionView=params.get("view")==="history"?"history":"overview";
 
   function normalizeOptions(options) {
     const fallback=Object.entries(labels).map(([id,label])=>({id,label}));
@@ -69,16 +69,15 @@
 
   function setProjectionView(view) {
     const published=Boolean(latestState?.published);
-    projectionView=view==="content"
-      ? "content"
-      : view==="results" && published
-        ? "results"
-        : "overview";
+    projectionView=view==="history"?"history":view==="content"?"content":view==="results"&&published?"results":"overview";
     document.body.classList.toggle("dp-view-content",projectionView==="content");
     document.body.classList.toggle("dp-view-results",projectionView==="results");
+    document.body.classList.toggle("dp-view-history",projectionView==="history");
+    $("dpHistoryPanel")?.classList.toggle("hidden",projectionView!=="history");
     $("dpViewOverviewBtn")?.classList.toggle("active",projectionView==="overview");
     $("dpViewContentBtn")?.classList.toggle("active",projectionView==="content");
     $("dpViewResultsBtn")?.classList.toggle("active",projectionView==="results");
+    $("dpViewHistoryBtn")?.classList.toggle("active",projectionView==="history");
   }
 
   function teacherConnected() {
@@ -175,6 +174,9 @@
         const div=document.createElement("div");div.className="deliberation-reason-item";div.textContent=text;reasons.appendChild(div);
       });
     }
+    if (window.ClassroomDeliberationHistory) {
+      window.ClassroomDeliberationHistory.render($("dpHistoryContent"),state.history);
+    }
     if (!state.published && projectionView==="results") projectionView="overview";
     setProjectionView(projectionView);
     updateControlUi();
@@ -192,6 +194,10 @@
       if (data.schema==="classroom-deliberation-presentation") {
         lastTeacherSeen=Date.now();
         render(data);
+        return;
+      }
+      if (data.schema==="classroom-deliberation-presentation-view") {
+        setProjectionView(data.view);
         return;
       }
       if (data.schema==="classroom-deliberation-presentation-control-status") {
@@ -234,13 +240,14 @@
   $("dpViewOverviewBtn")?.addEventListener("click",()=>setProjectionView("overview"));
   $("dpViewContentBtn")?.addEventListener("click",()=>setProjectionView("content"));
   $("dpViewResultsBtn")?.addEventListener("click",()=>setProjectionView("results"));
+  $("dpViewHistoryBtn")?.addEventListener("click",()=>setProjectionView("history"));
   $("dpFullscreenBtn")?.addEventListener("click",toggleFullscreen);
   document.addEventListener("fullscreenchange",()=>{
     const btn=$("dpFullscreenBtn");
     if (btn) btn.textContent=document.fullscreenElement ? "退出全螢幕" : "⛶ 全螢幕";
   });
 
-  setProjectionView("overview");
+  setProjectionView(projectionView);
   updateControlUi();
 
   window.addEventListener("storage",event=>{

@@ -274,6 +274,7 @@
     const counts=Object.fromEntries(options.map(option=>[option.id,0]));
     current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
     const published=(snapshot?.round_state || "")==="published";
+    const history=window.ClassroomDeliberationHistory?.build(snapshot,{projection:true})||null;
     return {
       schema:"classroom-deliberation-presentation",
       version:1,
@@ -289,6 +290,7 @@
       participantCount:Number(snapshot?.participant_count)||0,
       submittedCount:new Set(current.map(r=>r.participant_id)).size,
       published,
+      history,
       controls:{
         canPrevious:stage>1,
         canOpen:(snapshot?.round_state || "open")!=="open",
@@ -308,17 +310,20 @@
     try { ensureDeliberationPresentationChannel()?.postMessage(state); } catch {}
   }
 
-  function openDeliberationPresentation() {
+  function openDeliberationPresentation(startView="overview") {
     if (!activeSession || activeSession.activityMode!=="layered-deliberation") return;
     ensureDeliberationPresentationChannel();
     try {
       let url;
       try { url=new URL("deliberation-present.html",window.location.href); }
       catch { url=new URL("deliberation-present.html",document.baseURI); }
-      url.hash=`session=${encodeURIComponent(activeSession.id)}`;
+      url.hash=`session=${encodeURIComponent(activeSession.id)}&view=${encodeURIComponent(startView)}`;
       deliberationPresentationWindow=window.open(url.toString(),`deliberation-${activeSession.id}`);
       if (!deliberationPresentationWindow) throw new Error("瀏覽器封鎖了投影視窗");
       if (latestTeacherSnapshot) setTimeout(()=>publishDeliberationPresentation(latestTeacherSnapshot),150);
+      if (startView==="history") {
+        try { ensureDeliberationPresentationChannel()?.postMessage({schema:"classroom-deliberation-presentation-view",view:"history"}); } catch {}
+      }
     } catch (error) {
       showSessionToast(error.message || "無法開啟逐層思辨投影");
     }
@@ -1538,7 +1543,7 @@
 
   function renderDeliberationControl(snapshot) {
     const panel=$("deliberationSessionControl");
-    if (!panel || activeSession?.activityMode !== "layered-deliberation" || activeSession.status === "closed") {
+    if (!panel || activeSession?.activityMode !== "layered-deliberation") {
       panel?.classList.add("hidden");
       return;
     }
@@ -1568,10 +1573,11 @@
     $("deliberationSubmissionText").textContent=`本層已提交 ${unique} / ${snapshot.participant_count || 0}`;
     $("deliberationRoundStateText").textContent=state==="open" ? "🟢 開放作答" : state==="locked" ? "🔒 已結束作答" : "📊 已公布結果";
 
-    $("deliberationOpenBtn").disabled=state==="open";
-    $("deliberationLockBtn").disabled=state!=="open";
-    $("deliberationPublishBtn").disabled=state==="published";
-    $("deliberationNextBtn").disabled=state!=="published" || stage>=total;
+    const closed=activeSession.status==="closed";
+    $("deliberationOpenBtn").disabled=closed || state==="open";
+    $("deliberationLockBtn").disabled=closed || state!=="open";
+    $("deliberationPublishBtn").disabled=closed || state==="published";
+    $("deliberationNextBtn").disabled=closed || state!=="published" || stage>=total;
     $("deliberationNextBtn").textContent=stage>=total ? "已到最後一層" : "下一層 →";
 
     renderDeliberationDistribution(
@@ -1584,6 +1590,11 @@
         totalParticipants:snapshot.participant_count || 0
       }
     );
+    const historyContainer=$("deliberationHistoryTeacher");
+    if (historyContainer && window.ClassroomDeliberationHistory) {
+      const named=$("deliberationHistoryIdentityMode")?.value==="named";
+      window.ClassroomDeliberationHistory.render(historyContainer,window.ClassroomDeliberationHistory.build(snapshot,{named}));
+    }
     const reasons=$("deliberationTeacherReasons");
     reasons.innerHTML="";
     const reasonItems=current.filter(r=>String(r.payload?.reason || "").trim());
@@ -3078,7 +3089,9 @@
   $("deliberationOpenBtn")?.addEventListener("click",()=>setDeliberationRound("open"));
   $("deliberationLockBtn")?.addEventListener("click",()=>setDeliberationRound("locked"));
   $("deliberationPublishBtn")?.addEventListener("click",()=>setDeliberationRound("published"));
-  $("openDeliberationPresentationBtn")?.addEventListener("click",openDeliberationPresentation);
+  $("openDeliberationPresentationBtn")?.addEventListener("click",()=>openDeliberationPresentation());
+  $("openDeliberationHistoryProjectionBtn")?.addEventListener("click",()=>openDeliberationPresentation("history"));
+  $("deliberationHistoryIdentityMode")?.addEventListener("change",()=>{if(latestTeacherSnapshot)renderDeliberationControl(latestTeacherSnapshot);});
   $("deliberationNextBtn")?.addEventListener("click",nextDeliberationLayer);
   $("studentInspectSelect")?.addEventListener("change",event=>{
     inspectedParticipantId=String(event.target.value || "");
