@@ -4477,7 +4477,7 @@ select:focus{
 .live-stance-control-meta{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:14px;color:var(--muted,#667085);}.live-stance-control-meta>span{font-weight:800;color:var(--ink,#1f2937);}
 .live-stance-tug-board{--tug-position:50%;--tug-split:50%;display:grid;grid-template-columns:minmax(120px,.8fr) minmax(220px,2fr) minmax(120px,.8fr);gap:14px;align-items:center;padding:20px;border:1px solid var(--line,#dfe3ea);border-radius:22px;background:linear-gradient(180deg,#fff,#f9fafb);position:relative;overflow:hidden;}
 .live-stance-tug-score{min-width:0;display:grid;gap:4px;align-content:center;text-align:center;padding:14px;border-radius:18px;background:#fff;box-shadow:0 8px 22px rgba(16,24,40,.06);}.live-stance-tug-score.left{border:1px solid #bfdbfe;background:#eff6ff}.live-stance-tug-score.right{border:1px solid #fecdd3;background:#fff1f2}.live-stance-tug-score span{font-size:14px;font-weight:800;overflow-wrap:anywhere}.live-stance-tug-score strong{font-size:34px;line-height:1}.live-stance-tug-score small{font-weight:800;color:var(--muted,#667085)}
-.live-stance-tug-arena{position:relative;height:96px;min-width:0;display:flex;align-items:center;}.live-stance-rope{position:absolute;left:4%;right:4%;top:50%;height:8px;transform:translateY(-50%);border-radius:999px;background:repeating-linear-gradient(90deg,#c08a4a 0 13px,#e2b06f 13px 26px);box-shadow:0 2px 5px rgba(91,57,24,.22)}
+.live-stance-tug-arena{position:relative;height:96px;min-width:0;display:flex;align-items:center;}.live-stance-rope{position:absolute;left:4%;right:4%;top:50%;height:8px;transform:translateY(-50%);border-radius:999px;background:#d9dee8;box-shadow:0 2px 5px rgba(15,23,42,.14)}
 .live-stance-center-flag{position:absolute;left:50%;top:5px;transform:translateX(-50%);font-size:11px;color:#98a2b3}.live-stance-center-flag::after{content:"";display:block;width:1px;height:65px;background:#d0d5dd;margin:3px auto 0;}
 .live-stance-knot{position:absolute;left:var(--tug-position);top:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#fff;border:5px solid #f59e0b;box-shadow:0 7px 18px rgba(245,158,11,.25);transition:left .52s cubic-bezier(.2,.8,.2,1);z-index:2}.live-stance-knot span{font-size:10px;color:#f59e0b;}
 .live-stance-undecided-count{grid-column:1/-1;justify-self:center;display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:999px;background:#eef1f5;color:#4b5563;font-size:13px}.live-stance-undecided-count strong{font-size:16px;}
@@ -5441,7 +5441,7 @@ select:focus{
 .live-stance-tug-arena{
   isolation:isolate;
 }
-/* Rope colour lengths match the live share. The visual split and centre marker
+/* Solid colour lengths match the live share. The visual split and centre marker
    are updated from the same animated position in both teacher and Course views. */
 .live-stance-rope{
   left:4%;
@@ -5463,13 +5463,13 @@ select:focus{
 .live-stance-rope::before{
   left:0;
   width:var(--tug-split,50%);
-  background:linear-gradient(90deg,var(--stance-left),var(--stance-left-soft));
+  background:var(--stance-left);
   border-radius:999px 0 0 999px;
 }
 .live-stance-rope::after{
   right:0;
   width:calc(100% - var(--tug-split,50%));
-  background:linear-gradient(90deg,var(--stance-right-soft),var(--stance-right));
+  background:var(--stance-right);
   border-radius:0 999px 999px 0;
 }
 /* All undecided / no submissions: neutral rope, not a misleading 50/50 vote. */
@@ -6182,30 +6182,10 @@ input:focus,textarea:focus,select:focus{
   --tug-energy:0;
   --tug-tilt:0deg;
 }
-/* A slight woven texture moves only while the two groups change strength. */
-.live-stance-rope::before{
-  background-image:
-    repeating-linear-gradient(115deg,rgba(255,255,255,.24) 0 3px,transparent 3px 9px),
-    linear-gradient(90deg,var(--stance-left),var(--stance-left-soft));
-  background-size:24px 100%,100% 100%;
-}
-.live-stance-rope::after{
-  background-image:
-    repeating-linear-gradient(115deg,rgba(255,255,255,.24) 0 3px,transparent 3px 9px),
-    linear-gradient(90deg,var(--stance-right-soft),var(--stance-right));
-  background-size:24px 100%,100% 100%;
-}
+/* The red/blue segments are intentionally solid and pattern-free. */
 .live-stance-tug-board.is-pulling .live-stance-rope{
   box-shadow:0 5px 15px rgba(15,23,42,.2),inset 0 2px 3px rgba(255,255,255,.48);
   filter:saturate(1.12);
-}
-.live-stance-tug-board.is-pulling .live-stance-rope::before,
-.live-stance-tug-board.is-pulling .live-stance-rope::after{
-  animation:live-stance-rope-weave .34s linear infinite;
-}
-@keyframes live-stance-rope-weave{
-  from{background-position:0 0,0 0}
-  to{background-position:24px 0,0 0}
 }
 /* The pressure halo follows the SAME animated split as the knot and rope. */
 .live-stance-tension-wave{
@@ -6261,22 +6241,7 @@ input:focus,textarea:focus,select:focus{
 .live-stance-knot {
   transition:box-shadow .25s ease;
 }
-/* Make motion texture subdued instead of rapid flickering. */
-.live-stance-rope::before,
-.live-stance-rope::after {
-  background-image:
-    repeating-linear-gradient(115deg,rgba(255,255,255,.15) 0 3px,transparent 3px 10px),
-    linear-gradient(90deg,var(--stance-left),var(--stance-left-soft));
-}
-.live-stance-rope::after {
-  background-image:
-    repeating-linear-gradient(115deg,rgba(255,255,255,.15) 0 3px,transparent 3px 10px),
-    linear-gradient(90deg,var(--stance-right-soft),var(--stance-right));
-}
-.live-stance-tug-board.is-pulling .live-stance-rope::before,
-.live-stance-tug-board.is-pulling .live-stance-rope::after {
-  animation-duration:.85s;
-}
+/* V2.35.5: keep the clean lines smooth; motion only changes their widths. */
 .live-stance-tug-board.is-pulling .live-stance-rope {
   filter:saturate(1.05);
 }
@@ -6287,4 +6252,17 @@ input:focus,textarea:focus,select:focus{
 .live-stance-rope { transition:box-shadow .25s ease, filter .25s ease; }
 @media(prefers-reduced-motion:reduce){
   .live-stance-rope { transition:none; }
+}
+
+/* V2.35.5 — Red/blue tug lines are plain colours with no rope texture.
+   Both teacher and Course share these selectors and the existing RAF driver. */
+.live-stance-rope::before {
+  background:var(--stance-left);
+  background-image:none;
+  animation:none;
+}
+.live-stance-rope::after {
+  background:var(--stance-right);
+  background-image:none;
+  animation:none;
 }
