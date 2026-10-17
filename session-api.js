@@ -5,6 +5,7 @@
   const TEACHER_HISTORY_KEY = "interactive-classroom-session-history";
   const PARTICIPANT_CONTEXT_KEY = "interactive-classroom-participant-context";
 
+  const nodeLifecycleCache = new Map();
   const textEncoder = new TextEncoder();
   const textDecoder = new TextDecoder();
 
@@ -670,6 +671,9 @@
     if (session.sessionKind === "course" && session.currentNodeRef !== context.currentNodeRef) {
       throw new Error("課程已切換節點，請重新整理活動頁");
     }
+    if (session.sessionKind==="course" && localCourseNodeState(session,session.currentNodeRef)?.lifecycle==="settled") {
+      throw new Error("這個活動已結算，不能再次提交");
+    }
     // V2.32.1：本機 Session 與 Supabase 的階段提交規則一致。
     // 防止從舊分頁或自行送出的請求提前寫入後續階段答案。
     if (session.activityMode === "predict-reveal") {
@@ -1001,6 +1005,7 @@
           snapshot.live_stance_checkpoints = [];
         }
       }
+      if (snapshot.session_kind==="course") snapshot.course_node_states=await getCourseNodeStates({...sessionMeta,sessionKind:"course"});
       return snapshot;
     }
 
@@ -1014,6 +1019,7 @@
       session_kind:session.sessionKind || "activity",
       course_id:session.courseId || "",
       course_encoded:session.courseEncoded || "",
+      course_node_states:session.sessionKind==="course" ? await getCourseNodeStates(sessionMeta) : [],
       current_node_ref:session.currentNodeRef || "",
       revision:session.revision || 1,
       activity_mode:session.activityMode,
@@ -1084,6 +1090,7 @@
     const sessions = loadLocalSessions();
     const session = sessions.find(item => item.id === sessionMeta.id && item.teacherToken === sessionMeta.teacherToken);
     if (!session) throw new Error("找不到本機 Session");
+    if (session.sessionKind==="course" && localCourseNodeState(session,session.currentNodeRef)?.lifecycle==="settled") throw new Error("活動已結算");
     session.currentStage = Math.max(1, Math.min(target, session.stageCount || 1));
     sessionMeta.currentStage = session.currentStage;
     saveLocalSessions(sessions);
@@ -1149,6 +1156,7 @@
     if(!session) throw new Error("找不到本機 Session");
     if(session.status!=="active") throw new Error("Session 已結束");
     if(session.activityMode!=="live-stance") throw new Error("目前不是即時立場拉鋸 Session");
+    if (session.sessionKind==="course" && localCourseNodeState(session,session.currentNodeRef)?.lifecycle==="settled") throw new Error("活動已結算");
     session.roundState=target;
     sessionMeta.roundState=target;
     saveLocalSessions(sessions);
@@ -1221,56 +1229,113 @@
     return next;
   }
 
-  async function setCourseNode(sessionMeta, nodeRef, {
-    activityMode = "",
-    stageCount = 1
-  } = {}) {
-    if (!sessionMeta?.id || !nodeRef) throw new Error("Course Session 節點資料不完整");
-    const totalStages = Math.max(1,Number(stageCount)||1);
+  // V2.35.9: retain stage and lifecycle for every Course node, even when it is not on screen.
+  function localCourseNodeState(session,ref) {
+    const known = session.courseNodeStates?.[ref];
+    if (known) return known;
+    if (session.currentNodeRef===ref) return {
+      node_ref:ref,activity_mode:session.activityMode||"",current_stage:session.currentStage||1,
+      stage_count:session.stageCount||1,round_state:session.roundState||"open",lifecycle:"active"
+    };
+    return null;
+  }
 
-    if (sessionMeta.mode === "cloud") {
-      const result = await rpc("set_course_session_node_v2350", {
-        p_session_id:sessionMeta.id,
-        p_teacher_token:sessionMeta.teacherToken,
-        p_node_ref:nodeRef,
-        p_activity_mode:activityMode || "",
-        p_stage_count:totalStages
+  async function getCourseNodeStates(sessionMeta) {
+    if (!sessionMeta?.id || !sessionMeta?.teacherToken || sessionMeta.sessionKind!=="course") return [];
+    if (sessionMeta.mode==="cloud") {
+      const result=await rpc("get_course_node_runtime_v2359",{
+        p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken
       });
-      const data = typeof result === "string" ? JSON.parse(result) : result;
-      sessionMeta.currentNodeRef = data?.current_node_ref || nodeRef;
-      sessionMeta.revision = data?.revision || (sessionMeta.revision || 1) + 1;
-      sessionMeta.currentStage = data?.current_stage || 1;
-      sessionMeta.stageCount = data?.stage_count || totalStages;
-      sessionMeta.activityMode = data?.activity_mode || activityMode || "";
+      return typeof result==="string" ? JSON.parse(result) : (result||[]);
+    }
+    const session=loadLocalSessions().find(item=>item.id===sessionMeta.id && item.teacherToken===sessionMeta.teacherToken);
+    if (!session) throw new Error("找不到本機 Course Session");
+    const states={...(session.courseNodeStates||{})};
+    if (session.currentNodeRef) {
+      states[session.currentNodeRef]={...(states[session.currentNodeRef]||{}),
+        node_ref:session.currentNodeRef,activity_mode:session.activityMode,
+        current_stage:session.currentStage,stage_count:session.stageCount,
+        round_state:session.roundState||"open",
+        lifecycle:states[session.currentNodeRef]?.lifecycle==="settled"?"settled":"active"};
+    }
+    return Object.values(states);
+  }
+
+  async function settleCourseNode(sessionMeta,nodeRef) {
+    if (sessionMeta?.sessionKind!=="course" || !sessionMeta?.teacherToken) throw new Error("需要完整課程教師控制權");
+    if (sessionMeta.currentNodeRef!==nodeRef) throw new Error("請先切換到要結算的活動");
+    if (sessionMeta.mode==="cloud") {
+      const result=await rpc("settle_course_node_v2359",{
+        p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken,p_node_ref:nodeRef
+      });
+      publishRealtime(sessionMeta.id,"course-node-settled");
+      return typeof result==="string" ? JSON.parse(result) : result;
+    }
+    const sessions=loadLocalSessions();
+    const session=sessions.find(item=>item.id===sessionMeta.id && item.teacherToken===sessionMeta.teacherToken);
+    if (!session || session.status!=="active") throw new Error("找不到進行中的課程");
+    session.courseNodeStates||={};
+    session.courseNodeStates[nodeRef]={node_ref:nodeRef,activity_mode:session.activityMode,
+      current_stage:session.currentStage,stage_count:session.stageCount,
+      round_state:session.roundState||"open",lifecycle:"settled",settled_at:new Date().toISOString()};
+    session.revision=(session.revision||1)+1;
+    sessionMeta.revision=session.revision;
+    saveLocalSessions(sessions);
+    return {node_ref:nodeRef,lifecycle:"settled"};
+  }
+
+  async function setCourseNode(sessionMeta, nodeRef, {activityMode="",stageCount=1}={}) {
+    if (!sessionMeta?.id || !nodeRef) throw new Error("Course Session 節點資料不完整");
+    const totalStages=Math.max(1,Number(stageCount)||1);
+    if (sessionMeta.mode==="cloud") {
+      const result=await rpc("set_course_session_node_v2350",{
+        p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken,
+        p_node_ref:nodeRef,p_activity_mode:activityMode||"",p_stage_count:totalStages
+      });
+      const data=typeof result==="string" ? JSON.parse(result) : result;
+      sessionMeta.currentNodeRef=data.current_node_ref||nodeRef;
+      sessionMeta.revision=data.revision||((sessionMeta.revision||1)+1);
+      sessionMeta.currentStage=data.current_stage||1;
+      sessionMeta.stageCount=data.stage_count||totalStages;
+      sessionMeta.activityMode=data.activity_mode??activityMode??"";
+      sessionMeta.roundState=data.round_state||"open";
       rememberTeacherSession(sessionMeta);
       publishRealtime(sessionMeta.id,"node");
       return data;
     }
-
-    const sessions = loadLocalSessions();
-    const session = sessions.find(item => item.id === sessionMeta.id && item.teacherToken === sessionMeta.teacherToken);
-    if (!session || (session.sessionKind || "activity") !== "course") throw new Error("找不到完整課程 Session");
-    session.currentNodeRef = nodeRef;
-    session.revision = (session.revision || 1) + 1;
-    session.currentStage = 1;
-    session.stageCount = totalStages;
-    session.activityMode = activityMode || "";
-    session.roundState = ActivityModules?.get?.(activityMode)?.initialRoundState || "";
-    sessionMeta.currentNodeRef = nodeRef;
-    sessionMeta.revision = session.revision;
-    sessionMeta.currentStage = 1;
-    sessionMeta.stageCount = totalStages;
-    sessionMeta.activityMode = activityMode || "";
-    sessionMeta.roundState = session.roundState;
+    const sessions=loadLocalSessions();
+    const session=sessions.find(item=>item.id===sessionMeta.id && item.teacherToken===sessionMeta.teacherToken);
+    if (!session || session.sessionKind!=="course" || session.status!=="active") throw new Error("找不到完整課程 Session");
+    session.courseNodeStates||={};
+    if (session.currentNodeRef) {
+      const prev=session.courseNodeStates[session.currentNodeRef];
+      session.courseNodeStates[session.currentNodeRef]={node_ref:session.currentNodeRef,
+        activity_mode:session.activityMode||"",current_stage:session.currentStage||1,
+        stage_count:session.stageCount||1,round_state:session.roundState||"open",
+        lifecycle:prev?.lifecycle==="settled"?"settled":"paused",
+        settled_at:prev?.settled_at||null};
+    }
+    const target=session.courseNodeStates[nodeRef]||{
+      node_ref:nodeRef,activity_mode:activityMode||"",current_stage:1,
+      stage_count:totalStages,round_state:"open",lifecycle:"active"
+    };
+    if (target.lifecycle!=="settled") target.lifecycle="active";
+    session.courseNodeStates[nodeRef]=target;
+    session.currentNodeRef=nodeRef;
+    session.revision=(session.revision||1)+1;
+    session.activityMode=target.activity_mode;
+    session.currentStage=target.current_stage;
+    session.stageCount=target.stage_count;
+    session.roundState=target.round_state;
+    Object.assign(sessionMeta,{
+      currentNodeRef:nodeRef,revision:session.revision,activityMode:session.activityMode,
+      currentStage:session.currentStage,stageCount:session.stageCount,roundState:session.roundState
+    });
     saveLocalSessions(sessions);
     rememberTeacherSession(sessionMeta);
-    return {
-      current_node_ref:nodeRef,
-      revision:session.revision,
-      current_stage:1,
-      stage_count:totalStages,
-      activity_mode:activityMode || ""
-    };
+    return {current_node_ref:nodeRef,revision:session.revision,activity_mode:session.activityMode,
+      current_stage:session.currentStage,stage_count:session.stageCount,
+      round_state:session.roundState,lifecycle:target.lifecycle};
   }
 
   async function submitCourseProgress(nodeRef, status = "completed") {
@@ -1298,6 +1363,7 @@
     const participant = session.participants.find(item => item.id === context.participantId && item.participantToken === context.participantToken);
     if (!participant) throw new Error("學生加入憑證已失效");
 
+    if (session.sessionKind==="course" && localCourseNodeState(session,session.currentNodeRef)?.lifecycle==="settled") throw new Error("這個活動已結算");
     session.progress ||= [];
     const key = `${context.participantId}:${cleanNode}`;
     const now = new Date().toISOString();
@@ -1379,7 +1445,19 @@
         p_session_id:context.sessionId,
         p_participant_token:context.participantToken
       }, context.cloudConfig);
-      return typeof result === "string" ? JSON.parse(result) : result;
+      const state=typeof result==="string" ? JSON.parse(result) : result;
+      if (state?.session_kind==="course") {
+        const key=`${context.sessionId}:${state.current_node_ref||""}:${state.revision||1}`;
+        if (!nodeLifecycleCache.has(key)) {
+          const lifecycle=await rpc("get_course_node_lifecycle_v2359",{
+            p_session_id:context.sessionId,p_participant_token:context.participantToken
+          },context.cloudConfig);
+          const data=typeof lifecycle==="string"?JSON.parse(lifecycle):lifecycle;
+          nodeLifecycleCache.clear();nodeLifecycleCache.set(key,data?.lifecycle==="settled");
+        }
+        state.node_settled=nodeLifecycleCache.get(key)===true;
+      }
+      return state;
     }
     const session = loadLocalSessions().find(item => item.id === context.sessionId);
     if (!session) throw new Error("本機 Session 已不存在");
@@ -1423,6 +1501,7 @@
     return {
       session_kind:session.sessionKind || "activity",
       current_node_ref:session.currentNodeRef || "",
+      node_settled:session.sessionKind==="course" && localCourseNodeState(session,session.currentNodeRef)?.lifecycle==="settled",
       revision:session.revision || 1,
       current_stage:session.currentStage || 1,
       stage_count:session.stageCount || 1,
@@ -1493,7 +1572,7 @@
   window.ClassroomSessionAPI = {
     getConfig, saveConfig, clearConfig, isCloudConfigured, testCloudConfig,
     createSession, createCourseSession, joinSession, submitResponse, submitQuestionWallPost, toggleQuestionWallVote, submitQuestionWallReply, deleteQuestionWallReply, deleteQuestionWallPost, assignSessionGroups, submitGroupConsensus, teacherSnapshot, setStage, setDeliberationState, setLiveStanceState, createLiveStanceCheckpoint, deleteLiveStanceCheckpoint, setDeliberationReasonVisibility,
-    setCourseNode, submitCourseProgress, closeSession, deleteSession, studentState, buildJoinUrl,
+    setCourseNode, getCourseNodeStates, settleCourseNode, submitCourseProgress, closeSession, deleteSession, studentState, buildJoinUrl,
     createTeacherHandoff, claimTeacherHandoff, validateTeacherHandoffPackage,
     loadTeacherHistory, updateTeacherHistory, removeTeacherHistory,
     getParticipantContext, updateParticipantContext, configFromUrlFragment,

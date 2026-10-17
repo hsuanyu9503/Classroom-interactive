@@ -270,7 +270,7 @@
     const layers=Array.isArray(data.l)?data.l:[];
     const layer=layers[stage-1] || {};
     const current=(snapshot?.responses || []).filter(r=>r.mode==="layered-deliberation" && r.stage_key===`layer-${stage}`);
-    const options=normalizeTeacherDeliberationOptions(data.o);
+    const options=normalizeTeacherDeliberationOptions(layer.o || data.o);
     const counts=Object.fromEntries(options.map(option=>[option.id,0]));
     current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
     const published=(snapshot?.round_state || "")==="published";
@@ -1334,6 +1334,130 @@
     });
   }
 
+  // V2.35.9 — two teacher-selected Course activity slots; student sees only the current node.
+  function parallelPreferenceKey() {
+    return `classroom-parallel-activity-pair:${activeSession?.id || ""}`;
+  }
+
+  function parallelActivityPair(steps) {
+    const eligible=steps.filter(step=>step.node.type==="activity").map(step=>step.node.id);
+    let preference={};
+    try { preference=JSON.parse(localStorage.getItem(parallelPreferenceKey())||"{}"); } catch {}
+    const a=eligible.includes(preference.a)?preference.a:(eligible[0]||"");
+    const b=eligible.includes(preference.b)&&preference.b!==a?preference.b:(eligible.find(id=>id!==a)||"");
+    return {a,b};
+  }
+
+  function saveParallelPair(a,b) {
+    if (!a || !b || a===b) throw new Error("請選擇兩個不同的活動節點");
+    localStorage.setItem(parallelPreferenceKey(),JSON.stringify({a,b}));
+  }
+
+  function parallelNodeStatus(nodeRef,snapshot) {
+    const row=(snapshot?.course_node_states||[]).find(n=>n.node_ref===nodeRef);
+    if (!row && nodeRef===activeSession?.currentNodeRef) {
+      return {lifecycle:"active",current_stage:activeSession.currentStage||1,
+        stage_count:activeSession.stageCount||1,round_state:activeSession.roundState||"open"};
+    }
+    return row||null;
+  }
+
+  function parallelStatusLabel(status) {
+    if (!status) return "尚未開始";
+    const life=status.lifecycle==="settled"?"已結算":status.lifecycle==="paused"?"已暫停":"進行中";
+    const stages=Number(status.stage_count||1)>1
+      ? ` · 第 ${Number(status.current_stage||1)}／${Number(status.stage_count||1)} 階段` : "";
+    return `${life}${stages}`;
+  }
+
+  function renderParallelActivityPanel(course,steps,snapshot) {
+    const panel=$("courseParallelControl");
+    if (!panel) return;
+    const activities=steps.filter(step=>step.node.type==="activity");
+    const pair=parallelActivityPair(steps);
+    const ready=activities.length>=2;
+    for(const slot of ["a","b"]) {
+      const select=$(slot==="a"?"courseParallelA":"courseParallelB");
+      const nodeRef=pair[slot];
+      const choices=activities.map((step,i)=>({id:step.node.id,
+        label:`${step.lesson.shortTitle||step.lesson.title||`第${step.lessonIndex+1}節`}｜${step.node.title||`活動 ${i+1}`}`}));
+      const signature=choices.map(c=>c.id+"="+c.label).join("|");
+      if (select.dataset.signature!==signature) {
+        select.replaceChildren();
+        choices.forEach(choice=>select.add(new Option(choice.label,choice.id)));
+        select.dataset.signature=signature;
+      }
+      select.value=nodeRef;
+      select.disabled=!ready||activeSession.status==="closed";
+      const status=parallelNodeStatus(nodeRef,snapshot);
+      $(slot==="a"?"courseParallelAState":"courseParallelBState").textContent=parallelStatusLabel(status);
+      const go=$(slot==="a"?"courseParallelGoA":"courseParallelGoB");
+      go.disabled=!ready||!nodeRef||nodeRef===activeSession.currentNodeRef||activeSession.status==="closed";
+      go.textContent=nodeRef===activeSession.currentNodeRef?"目前正在這裡":`切換至 ${slot.toUpperCase()}`;
+    }
+    const currentStatus=parallelNodeStatus(activeSession.currentNodeRef,snapshot);
+    const isSettled=currentStatus?.lifecycle==="settled";
+    const activeRef=activeSession.currentNodeRef;
+    const currentName=steps.find(st=>st.node.id===activeRef)?.node.title||"目前節點";
+    $("courseParallelCurrentState").textContent=!ready?"請先在課程內建立至少兩個活動節點。":
+      `${currentName}｜${parallelStatusLabel(currentStatus)}`;
+    $("courseParallelSettle").disabled=!ready||!pair.a&&!pair.b||
+      ![pair.a,pair.b].includes(activeRef)||isSettled||activeSession.status==="closed";
+    $("courseParallelSettle").textContent=isSettled?"✓ 本活動已結算":"結算目前活動";
+    // Read-only review of a settled node is allowed; changing its answers or stages isn't.
+    const controls=["previousStageBtn","nextStageBtn","openPreviousPhaseBtn","openNextPhaseBtn",
+      "predictBackBtn","predictRevealBtn","deliberationOpenBtn","deliberationLockBtn",
+      "deliberationPublishBtn","deliberationNextBtn","groupConsensusAssignBtn",
+      "groupConsensusIndividualBtn","groupConsensusGroupBtn","liveStanceOpenBtn",
+      "liveStanceLockBtn","liveStanceCheckpointBtn"];
+    if (isSettled) controls.forEach(id=>{if($(id)) $(id).disabled=true;});
+  }
+
+  async function changeParallelPairSelection() {
+    const a=$("courseParallelA")?.value||"";
+    const b=$("courseParallelB")?.value||"";
+    try {
+      saveParallelPair(a,b);
+      if (latestTeacherSnapshot && activeCourseSnapshot)
+        renderParallelActivityPanel(activeCourseSnapshot,flattenCourseSnapshot(activeCourseSnapshot),latestTeacherSnapshot);
+    } catch(error) {
+      showSessionToast(error.message);
+      if (latestTeacherSnapshot && activeCourseSnapshot)
+        renderParallelActivityPanel(activeCourseSnapshot,flattenCourseSnapshot(activeCourseSnapshot),latestTeacherSnapshot);
+    }
+  }
+
+  async function switchParallelSlot(slot) {
+    if (!activeSession || activeSession.sessionKind!=="course") return;
+    const steps=flattenCourseSnapshot(await ensureActiveCourseSnapshot());
+    const pair=parallelActivityPair(steps);
+    const target=pair[slot];
+    if (!target || !pair.a || !pair.b || pair.a===pair.b) {
+      showSessionToast("請先設定兩個不同的活動節點");return;
+    }
+    await switchCourseNodeTo(target);
+  }
+
+  async function settleCurrentParallelNode() {
+    if (!activeSession || activeSession.sessionKind!=="course" || activeSession.status!=="active") return;
+    const pair=parallelActivityPair(flattenCourseSnapshot(await ensureActiveCourseSnapshot()));
+    const nodeRef=activeSession.currentNodeRef;
+    if (![pair.a,pair.b].includes(nodeRef)) return showSessionToast("目前節點不是平行活動 A 或 B");
+    const status=parallelNodeStatus(nodeRef,latestTeacherSnapshot);
+    if(status?.lifecycle==="settled") return showSessionToast("這項活動已結算");
+    if(!confirm("確定結算目前活動？結算後這個節點無法再修改答案或階段，但另一個活動可以繼續進行。"))return;
+    const btn=$("courseParallelSettle");
+    btn.disabled=true;
+    try {
+      await window.ClassroomSessionAPI.settleCourseNode(activeSession,nodeRef);
+      await refreshActiveSession();
+      showSessionToast("已結算目前活動；另一個活動的進度不受影響");
+    } catch(error) {
+      showSessionToast(error.message||"活動結算失敗");
+      await refreshActiveSession(true);
+    }
+  }
+
   async function renderCourseControl(snapshot) {
     const panel = $("courseSessionControl");
     if (!panel || activeSession?.sessionKind !== "course") {
@@ -1390,6 +1514,7 @@
     updatePresentationControls();
 
     updateActivityModeControls();
+    renderParallelActivityPanel(course,steps,snapshot);
   }
 
   function nodeTypeLabel(type) {
@@ -1399,21 +1524,26 @@
     return "教學內容";
   }
 
-  async function changeCourseNode(delta) {
-    if (!activeSession || activeSession.sessionKind !== "course" || activeSession.status === "closed") return;
+  async function switchCourseNodeTo(targetRef) {
+    if (!activeSession || activeSession.sessionKind!=="course" || activeSession.status==="closed") return;
     try {
-      const course = await ensureActiveCourseSnapshot();
-      const steps = flattenCourseSnapshot(course);
-      const currentIndex = steps.findIndex(step=>step.node.id === activeSession.currentNodeRef);
-      const targetIndex = Math.max(0,Math.min((currentIndex < 0 ? 0 : currentIndex)+delta,steps.length-1));
-      if (targetIndex === currentIndex || !steps[targetIndex]) return;
-      const target = steps[targetIndex];
-      const runtime = courseNodeRuntimeMeta(course,target.node);
-      await window.ClassroomSessionAPI.setCourseNode(activeSession,target.node.id,runtime);
+      const course=await ensureActiveCourseSnapshot();
+      const step=flattenCourseSnapshot(course).find(item=>item.node.id===targetRef);
+      if (!step || step.node.id===activeSession.currentNodeRef) return;
+      const runtime=courseNodeRuntimeMeta(course,step.node);
+      await window.ClassroomSessionAPI.setCourseNode(activeSession,step.node.id,runtime);
       await refreshActiveSession();
     } catch (error) {
-      showSessionToast(error.message || "切換課程節點失敗");
+      showSessionToast(error.message||"切換課程節點失敗");
     }
+  }
+
+  async function changeCourseNode(delta) {
+    if (!activeSession || activeSession.sessionKind!=="course")return;
+    const steps=flattenCourseSnapshot(await ensureActiveCourseSnapshot());
+    const i=steps.findIndex(step=>step.node.id===activeSession.currentNodeRef);
+    const target=Math.max(0,Math.min((i<0?0:i)+delta,steps.length-1));
+    if(target!==i && steps[target]) await switchCourseNodeTo(steps[target].node.id);
   }
 
   async function openCoursePresentation() {
@@ -1512,7 +1642,8 @@
     if (!items.length) return "";
     return items.map(r=>{
       const stage=Number(r.stage_key.split("-")[1]);
-      const label=deliberationOptionLabel(r.selected_type,options) || "未命名選項";
+      const optionsForStage=options?.l?.[stage-1]?.o || options?.o || options;
+      const label=deliberationOptionLabel(r.selected_type,optionsForStage) || "未命名選項";
       return `<span class="history-mini-pill">第 ${stage} 層 ${escapeHtml(label)}</span>`;
     }).join("");
   }
@@ -1584,7 +1715,7 @@
       $("deliberationTeacherDistribution"),
       current,
       data.chart === "pie" ? "pie" : "bar",
-      data.o,
+      layer.o || data.o,
       {
         key:`deliberation:${activeSession?.id || "session"}:${stage}`,
         totalParticipants:snapshot.participant_count || 0
@@ -1690,7 +1821,7 @@
           layer.c || "",
           layer.q || "",
           original?.selected_type || "",
-          deliberationOptionLabel(original?.selected_type,data.o),
+          deliberationOptionLabel(original?.selected_type,layer.o || data.o),
           original?.payload?.reason || "",
           original?.payload?.needToKnow || "",
           original ? (original.is_hidden ? "已隱藏" : "公開") : "",
@@ -2645,8 +2776,9 @@
     section.className="summary-section";
     section.innerHTML=`<div class="summary-section-head"><strong>逐層判斷分布</strong><span>${totalStages} 層</span></div><div class="summary-node-list"></div>`;
     const list=section.querySelector(".summary-node-list");
-    const options=deliberationOptionsFromSnapshot(snapshot);
+    const data=snapshot?.deliberation_data || {};
     for (let stage=1;stage<=totalStages;stage++) {
+      const options=normalizeTeacherDeliberationOptions(data.l?.[stage-1]?.o || data.o);
       const current=responses.filter(r=>r.stage_key===`layer-${stage}`);
       const row=document.createElement("div");
       row.className="summary-node-row";
@@ -3020,7 +3152,7 @@
       publishSpecialPresentation:publishDeliberationPresentation,
       renderSummary:renderDeliberationSessionSummary,
       suppressGenericSummaryDistribution:() => true,
-      participantHistory:(participantId,responses,snapshot) => buildDeliberationParticipantHistory(participantId,responses,snapshot?.deliberation_data?.o),
+      participantHistory:(participantId,responses,snapshot) => buildDeliberationParticipantHistory(participantId,responses,snapshot?.deliberation_data),
       selectedTypeLabel:(response,snapshot) => deliberationOptionLabel(response?.selected_type,snapshot?.deliberation_data?.o) || "未命名選項"
     });
   }
@@ -3079,6 +3211,11 @@
   $("closeSessionBtn")?.addEventListener("click",closeActiveSession);
   $("previousCourseNodeBtn")?.addEventListener("click",()=>changeCourseNode(-1));
   $("nextCourseNodeBtn")?.addEventListener("click",()=>changeCourseNode(1));
+  $("courseParallelA")?.addEventListener("change",changeParallelPairSelection);
+  $("courseParallelB")?.addEventListener("change",changeParallelPairSelection);
+  $("courseParallelGoA")?.addEventListener("click",()=>switchParallelSlot("a"));
+  $("courseParallelGoB")?.addEventListener("click",()=>switchParallelSlot("b"));
+  $("courseParallelSettle")?.addEventListener("click",settleCurrentParallelNode);
   $("openCoursePresentationBtn")?.addEventListener("click",openCoursePresentation);
   $("presentationContentBtn")?.addEventListener("click",()=>setPresentationView("content"));
   $("presentationResultsBtn")?.addEventListener("click",()=>setPresentationView("results"));

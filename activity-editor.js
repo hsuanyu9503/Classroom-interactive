@@ -1428,6 +1428,45 @@ function setDeliberationLayerCount(value,{confirmTrim=true}={}) {
   return true;
 }
 
+// V2.35.8 — 個別情境的選項與理由規則；舊資料預設沿用共用設定。
+function readLayerOptions(card) {
+  return [...card.querySelectorAll(".deliberation-layer-option-row")].map(row=>({
+    id:row.dataset.optionId,
+    label:row.querySelector(".deliberation-layer-option-label").value.trim()
+  }));
+}
+function refreshLayerOptionRows(card) {
+  const rows=[...card.querySelectorAll(".deliberation-layer-option-row")];
+  rows.forEach((row,index)=>{
+    row.querySelector(".deliberation-option-order").textContent=`選項 ${index+1}`;
+    row.querySelector(".deliberation-layer-option-remove").disabled=rows.length<=2;
+  });
+  card.querySelector(".deliberation-layer-add-option").disabled=rows.length>=10;
+}
+function addLayerOption(card,option=null) {
+  const editor=card.querySelector(".deliberation-layer-options-editor");
+  if(editor.children.length>=10) return;
+  const used=new Set([...editor.children].map(row=>row.dataset.optionId));
+  const id=String(option?.id || option?.i || [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find(code=>!used.has(code)) || `O${used.size+1}`);
+  const label=String(option?.label ?? option?.l ?? "");
+  const row=document.createElement("div");
+  row.className="deliberation-option-row deliberation-layer-option-row";
+  row.dataset.optionId=id;
+  row.innerHTML=`<span class="deliberation-option-order"></span><input class="deliberation-layer-option-label" type="text" maxlength="80" placeholder="本層選項文字" value="${escapeHtml(label)}"><button type="button" class="btn btn-danger-soft deliberation-layer-option-remove">移除</button>`;
+  row.querySelector(".deliberation-layer-option-remove").addEventListener("click",()=>{
+    if(editor.children.length<=2) return;
+    row.remove();refreshLayerOptionRows(card);
+  });
+  editor.append(row);refreshLayerOptionRows(card);
+}
+function updateLayerOptionMode(card) {
+  const custom=card.querySelector(".deliberation-layer-custom-options").checked;
+  card.querySelector(".deliberation-layer-custom-body").classList.toggle("hidden",!custom);
+  if(custom&&!card.querySelector(".deliberation-layer-options-editor").children.length){
+    readDeliberationOptionsEditor().forEach(option=>addLayerOption(card,option));
+  }
+}
+
 function addDeliberationLayer(layer = null,{skipSync=false}={}) {
   const current=getDeliberationLayerCount();
   if (current>=DELIBERATION_MAX_LAYERS) {
@@ -1449,7 +1488,30 @@ function addDeliberationLayer(layer = null,{skipSync=false}={}) {
       <label class="field"><span>核心提問</span><textarea class="deliberation-layer-question" rows="3">${escapeHtml(data.question || "")}</textarea></label>
     </div>
     <label class="field"><span>本層新增資訊</span><textarea class="deliberation-layer-content" rows="4">${escapeHtml(data.content || "")}</textarea></label>
-    <label class="field"><span>教師備註 <span class="optional-tag">不送學生端</span></span><textarea class="deliberation-layer-note" rows="3">${escapeHtml(data.teacherNote || "")}</textarea></label>`;
+    <label class="field"><span>教師備註 <span class="optional-tag">不送學生端</span></span><textarea class="deliberation-layer-note" rows="3">${escapeHtml(data.teacherNote || "")}</textarea></label>
+    <details class="deliberation-layer-custom-settings settings-disclosure settings-disclosure-nested">
+      <summary class="settings-disclosure-summary"><strong>本層作答設定</strong><small>判斷選項與理由必填可以逐層調整</small></summary>
+      <div class="deliberation-layer-custom-content">
+        <label class="mini-check deliberation-layer-override"><input class="deliberation-layer-custom-options" type="checkbox" ${Array.isArray(data.options) ? "checked" : ""}><span>這一層使用獨立判斷選項</span></label>
+        <div class="deliberation-layer-custom-body hidden">
+          <div class="deliberation-layer-options-editor deliberation-options-editor"></div>
+          <button type="button" class="btn btn-secondary deliberation-layer-add-option">＋ 新增本層選項</button>
+          <small class="field-help">每層可設定 2～10 個選項。不同層可以使用不同數量和文字。</small>
+        </div>
+        <label class="field"><span>本層「我的理由」</span><select class="deliberation-layer-reason-required">
+          <option value="inherit">沿用共用設定</option>
+          <option value="required">必填</option>
+          <option value="optional">選填</option>
+        </select></label>
+      </div>
+    </details>`;
+  const customOptions=card.querySelector(".deliberation-layer-custom-options");
+  const reasonSelect=card.querySelector(".deliberation-layer-reason-required");
+  reasonSelect.value=data.reasonRequired===true ? "required" : data.reasonRequired===false ? "optional" : "inherit";
+  if(Array.isArray(data.options)) data.options.forEach(option=>addLayerOption(card,option));
+  customOptions.addEventListener("change",()=>updateLayerOptionMode(card));
+  card.querySelector(".deliberation-layer-add-option").addEventListener("click",()=>addLayerOption(card));
+  updateLayerOptionMode(card);
   card.querySelector(".deliberation-layer-title").addEventListener("input",()=>{
     card.querySelector("h3").textContent=card.querySelector(".deliberation-layer-title").value.trim() || "未命名層次";
   });
@@ -1520,7 +1582,9 @@ function readDeliberationEditor() {
       title:card.querySelector(".deliberation-layer-title").value.trim(),
       content:card.querySelector(".deliberation-layer-content").value.trim(),
       question:card.querySelector(".deliberation-layer-question").value.trim(),
-      teacherNote:card.querySelector(".deliberation-layer-note").value.trim()
+      teacherNote:card.querySelector(".deliberation-layer-note").value.trim(),
+      options:card.querySelector(".deliberation-layer-custom-options").checked ? readLayerOptions(card) : null,
+      reasonRequired:card.querySelector(".deliberation-layer-reason-required").value==="required" ? true : card.querySelector(".deliberation-layer-reason-required").value==="optional" ? false : null
     })),
     reflection:{
       key:deliberationReflectionKey.value.trim(), value:deliberationReflectionValue.value.trim(),
@@ -1941,6 +2005,11 @@ function validateDeliberationActivity(activity) {
     if (!layer.title?.trim()) return `第 ${i+1} 層尚未填寫標題`;
     if (!layer.content?.trim()) return `第 ${i+1} 層尚未填寫新增資訊`;
     if (!layer.question?.trim()) return `第 ${i+1} 層尚未填寫核心提問`;
+    if (Array.isArray(layer.options)) {
+      if(layer.options.length<2 || layer.options.length>10) return `第 ${i+1} 層的獨立選項須有 2～10 個`;
+      if(layer.options.some(option=>!String(option.label||"").trim())) return `第 ${i+1} 層有未填寫的判斷選項`;
+      if(new Set(layer.options.map(option=>option.id)).size!==layer.options.length) return `第 ${i+1} 層的選項識別碼不可重複`;
+    }
   }
   return "";
 }
@@ -2160,7 +2229,10 @@ function buildDeliberationSnapshot(activity,{includeLayers=true,includeTeacherNo
     o:(d.options || []).map(option=>({i:option.id,l:option.label})),
     l:includeLayers ? (d.layers || []).map((layer,index)=>({
       i:String(index+1), id:layer.id || `layer-${index+1}`, t:layer.title || `第 ${index+1} 層`,
-      c:layer.content || "", q:layer.question || "", ...(includeTeacherNotes ? {n:layer.teacherNote || ""} : {})
+      c:layer.content || "", q:layer.question || "",
+      ...(Array.isArray(layer.options) ? {o:layer.options.map(option=>({i:option.id,l:option.label}))} : {}),
+      ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : {}),
+      ...(includeTeacherNotes ? {n:layer.teacherNote || ""} : {})
     })) : [],
     r:{k:d.reflection?.key || "",v:d.reflection?.value || "",a:d.reflection?.action || "",e:d.reflection?.extension || ""}
   };

@@ -8,6 +8,7 @@ let presentationMode = false;
 let courseSessionPollTimer = null;
 let courseSessionRealtime = null;
 let lastCourseRevision = 0;
+let currentCourseNodeSettled = false;
 let presentationSessionId = "";
 let presentationChannel = null;
 let presentationView = "content";
@@ -581,6 +582,13 @@ function updateCourseNodeProgressView() {
   const continuous = isActivity && isContinuousCourseActivity(step.node);
   const button = $("courseNextBtn");
   const note = $("courseActivityWait");
+  if (currentCourseNodeSettled) {
+    $("courseNodeStatus").textContent="✓ 活動已結算";
+    button.disabled=true;
+    button.textContent="✓ 已結算，等待老師";
+    note.textContent="老師已結算這個活動，無法再提交新答案；請等待切換至另一個活動。";
+    return;
+  }
   $("courseNodeStatus").textContent = completed ? "已完成 · 等待老師" : isActivity ? "進行活動" : "學習中";
   button.disabled = completed || (isActivity && !continuous);
   button.textContent = completed ? "✓ 已完成，等待老師" : isActivity ? "✓ 我已參與本次互動" : "✓ 我完成這一步";
@@ -666,7 +674,7 @@ function renderCurrentStep() {
 
 async function markCurrentCourseNodeComplete() {
   const step = flatSteps[currentStepIndex];
-  if (!courseSessionMode || !step || completedCourseNodes.has(step.node.id)) return;
+  if (!courseSessionMode || !step || completedCourseNodes.has(step.node.id) || currentCourseNodeSettled) return;
   try {
     const submitProgress = window.ClassroomSessionAPI?.submitCourseProgress;
     if (typeof submitProgress !== "function") throw new Error("課程進度服務尚未就緒");
@@ -736,6 +744,7 @@ async function syncCourseSessionState(initial = false) {
       return;
     }
 
+    currentCourseNodeSettled=state.node_settled===true;
     const targetIndex = flatSteps.findIndex(step => step.node.id === state.current_node_ref);
     const revisionChanged = Number(state.revision || 0) !== Number(lastCourseRevision || 0);
     // revision 可能只代表老師揭露下一階段，不等於換節點；此時絕不可卸載學生 iframe。

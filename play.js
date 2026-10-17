@@ -1055,7 +1055,11 @@ function renderDeliberationTask() {
         source_note:activity.deliberation?.sourceNote || "",
         fixed_question:activity.deliberation?.fixedQuestion || "",
         options:activity.deliberation?.options || [],
-        released_layers:layers.slice(0,1),
+        released_layers:layers.slice(0,1).map((layer,index)=>({
+          t:layer.title || layer.t || `第 ${index+1} 層`,c:layer.content || layer.c || "",q:layer.question || layer.q || "",
+          ...(Array.isArray(layer.options) ? {o:layer.options.map(option=>({i:option.id,l:option.label}))} : layer.o ? {o:layer.o} : {}),
+          ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : typeof layer.rr==="boolean" ? {rr:layer.rr} : {})
+        })),
         distribution:[],
         anonymous_reasons:[],
         reflection:null
@@ -1086,9 +1090,22 @@ function deliberationReasonChoices() {
   return normalizeDeliberationReasonChoices(activity?.deliberation?.reasonChoices);
 }
 
+function currentDeliberationLayerRule() {
+  const layers=deliberationState?.deliberation?.released_layers || [];
+  const stage=Math.max(1,Number(deliberationState?.current_stage)||1);
+  return layers[stage-1] || {};
+}
+function deliberationStageReasonRequired() {
+  const layer=currentDeliberationLayerRule();
+  return typeof layer.rr==="boolean" ? layer.rr : activity?.deliberation?.reasonRequired !== false;
+}
+function deliberationStageOptions(stage) {
+  const layer=(deliberationState?.deliberation?.released_layers || [])[stage-1];
+  return normalizeDeliberationOptions(layer?.o || deliberationState?.deliberation?.options || activity?.deliberation?.options);
+}
 function renderDeliberationReasonControls({own=null,stageChanged=false,round="open"}={}) {
   const mode=deliberationReasonMode();
-  const required=activity?.deliberation?.reasonRequired !== false;
+  const required=deliberationStageReasonRequired();
   const locked=Boolean(own) || round!=="open";
   const textField=el("deliberationReasonTextField");
   const choiceField=el("deliberationReasonChoiceField");
@@ -1254,8 +1271,12 @@ function renderDeliberationHistory() {
     const changed=previous && previous!==r.selected_type;
     const row=document.createElement("div");
     row.className=`deliberation-history-row ${changed?"changed":""}`;
-    const option=normalizeDeliberationOptions(deliberationState?.deliberation?.options || activity?.deliberation?.options).find(item=>item.id===r.selected_type);
-    row.innerHTML=`<span>第 ${stage} 層</span><strong>${escapeHtml(option?.label || DELIBERATION_LABELS[r.selected_type] || "未命名選項")}</strong><small>${changed?"改變":"維持／起始"}</small>`;
+    const option=deliberationStageOptions(stage).find(item=>item.id===r.selected_type);
+    const previousLayer=stage>1?deliberationStageOptions(stage-1):[];
+    const sameScale=stage>1 && JSON.stringify(previousLayer.map(o=>o.label))===JSON.stringify(deliberationStageOptions(stage).map(o=>o.label));
+    const safeChanged=Boolean(changed && sameScale);
+    row.classList.toggle("changed",safeChanged);
+    row.innerHTML=`<span>第 ${stage} 層</span><strong>${escapeHtml(option?.label || "未命名選項")}</strong><small>${sameScale?(safeChanged?"改變":"維持"):"不同題組／起始"}</small>`;
     list.appendChild(row);
     previous=r.selected_type || previous;
   }
@@ -1337,14 +1358,13 @@ function renderDeliberationState() {
     released.appendChild(card);
   });
 
-  const reasonRequired=activity?.deliberation?.reasonRequired !== false;
   const needRequired=Boolean(activity?.deliberation?.needToKnowRequired);
   el("deliberationNeedRequirement").textContent=needRequired ? "必填" : "選填";
   renderDeliberationReasonControls({own,stageChanged,round});
 
   const grid=el("deliberationChoiceGrid");
   grid.innerHTML="";
-  normalizeDeliberationOptions(d.options || activity.deliberation?.options).forEach(option=>{
+  deliberationStageOptions(stage).forEach(option=>{
     const button=document.createElement("button");
     button.type="button";
     button.className="deliberation-choice";
@@ -1378,7 +1398,7 @@ function renderDeliberationState() {
       el("deliberationStudentDistribution"),
       d.distribution || [],
       activity?.deliberation?.chartType || "bar",
-      d.options || activity?.deliberation?.options
+      current.o || d.options || activity?.deliberation?.options
     );
     const reasons=el("deliberationStudentReasons");reasons.innerHTML="";
     const reasonItems=Array.isArray(d.anonymous_reasons)?d.anonymous_reasons:[];
@@ -1417,7 +1437,7 @@ async function submitDeliberationAnswer() {
   if (reasonData.mode==="choices") {
     const hasPreset=reasonData.reasonSelections.length>0;
     const hasOther=deliberationReasonOtherSelected;
-    if (activity?.deliberation?.reasonRequired !== false && !hasPreset && !hasOther) {
+    if (deliberationStageReasonRequired() && !hasPreset && !hasOther) {
       showToast("請至少勾選一個理由，或選擇「其他」");
       return;
     }
@@ -1425,7 +1445,7 @@ async function submitDeliberationAnswer() {
       showToast("請填寫「其他」理由");
       return;
     }
-  } else if (activity?.deliberation?.reasonRequired !== false && !reason) {
+  } else if (deliberationStageReasonRequired() && !reason) {
     showToast("請填寫本層最影響你的理由");
     return;
   }
@@ -1522,7 +1542,11 @@ function previewNextDeliberationLayer() {
   if (next===deliberationState.current_stage) return;
   deliberationState.current_stage=next;
   deliberationState.round_state="open";
-  deliberationState.deliberation.released_layers=(activity.deliberation?.layers || []).slice(0,next);
+  deliberationState.deliberation.released_layers=(activity.deliberation?.layers || []).slice(0,next).map((layer,index)=>({
+    t:layer.title || layer.t || `第 ${index+1} 層`,c:layer.content || layer.c || "",q:layer.question || layer.q || "",
+    ...(Array.isArray(layer.options) ? {o:layer.options.map(option=>({i:option.id,l:option.label}))} : layer.o ? {o:layer.o} : {}),
+    ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : typeof layer.rr==="boolean" ? {rr:layer.rr} : {})
+  }));
   deliberationState.deliberation.distribution=[];
   deliberationState.deliberation.anonymous_reasons=[];
   deliberationState.deliberation.reflection=null;

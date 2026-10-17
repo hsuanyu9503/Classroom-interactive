@@ -15,6 +15,9 @@
     const current=Math.max(1,Number(snapshot?.current_stage)||1);
     const total=Math.max(1,Math.min(20,Number(snapshot?.stage_count)||1));
     const publishedMax=Math.min(total,current-(snapshot?.round_state==="published"?0:1));
+    const stageOptions=Array.from({length:total},(_,i)=>optionsFrom(data.l?.[i]?.o || data.o));
+    // Projection must not expose future custom options via history payload.
+    if(projection) for(let i=publishedMax;i<total;i++) stageOptions[i]=[];
     const nodeRef=String(snapshot?.current_node_ref||"");
     const isCourse=snapshot?.session_kind==="course";
     const responses=(snapshot?.responses||[]).filter(r=>r?.mode==="layered-deliberation" && /^layer-(\d+)$/.test(String(r.stage_key||"")) && (!isCourse||String(r.node_ref||"")===nodeRef));
@@ -30,20 +33,25 @@
       });
       const seq=[];
       let prev="";
+      let prevScale="";
       let changes=0;
       for(let stage=1;stage<=total;stage++) {
         const exposed=stage<=(projection?publishedMax:current);
         const choice=exposed?answers.get(stage)||"":"";
-        const changed=Boolean(choice&&prev&&choice!==prev);
-        if(changed) changes++;
-        if(choice)prev=choice;
+        const choices=stageOptions[stage-1];
+        const scale=JSON.stringify(choices.map(o=>o.label));
+        const label=choices.find(o=>o.id===choice)?.label || "";
+        const changed=Boolean(label&&prev&&scale===prevScale&&label!==prev);
+        if(changed)changes++;
+        if(label){prev=label;prevScale=scale;}
         seq.push({stage,choice,changed,visible:exposed});
       }
       rows.push({key:`P${String(rows.length+1).padStart(2,"0")}`,label:!projection&&named?studentCode||`學生 ${rows.length+1}`:`P${String(rows.length+1).padStart(2,"0")}`,sequence:seq,changes,answered:seq.filter(c=>c.choice).length});
     }
     const visibleMax=projection?publishedMax:current;
     const stageInfo=Array.from({length:total},(_,i)=>({stage:i+1,visible:i<visibleMax,published:i<publishedMax}));
-    return {version:1,options,stages:stageInfo,rows,participantCount:rows.length,visibleMax,publishedMax,current,total,projection};
+    const visibleOptions=stageOptions[Math.max(0,Math.min(total,visibleMax)-1)] || [];
+    return {version:2,options:visibleOptions,stageOptions,stages:stageInfo,rows,participantCount:rows.length,visibleMax,publishedMax,current,total,projection};
   }
   function el(tag,cls,text) {const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=String(text);return node;}
   function render(container,history) {
@@ -72,7 +80,7 @@
       line.append(name);
       row.sequence.forEach((cell,i)=>{
         const box=el("div",`dh-cell${cell.changed?" dh-shifted":""}${!cell.visible?" dh-locked":""}`);
-        const option=history.options.find(o=>o.id===cell.choice);
+        const option=(history.stageOptions?.[i] || history.options).find(o=>o.id===cell.choice);
         if(!cell.visible){box.append(el("span","dh-blank","🔒"));}
         else if(option){
           const pill=el("span","dh-pill",option.label);
@@ -88,7 +96,7 @@
     });
     scroll.append(matrix);container.append(scroll);
     scroll.scrollLeft=previousScrollLeft;
-    container.append(el("p","dh-note",history.projection?"投影使用匿名編號；未公布的層次不顯示答案。":"空白表示該層尚未作答；↻ 表示相較前一次有效作答改變選擇。"));
+    container.append(el("p","dh-note",history.projection?"投影使用匿名編號；只顯示已公布層次的選項。上方圖例是最新公布層的選項。":"各格以該層自己的選項文字為準；↻ 只在相鄰可比較題組中標示選擇改變。"));
   }
   window.ClassroomDeliberationHistory={build,render};
 })();

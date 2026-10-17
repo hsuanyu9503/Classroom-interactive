@@ -1655,3 +1655,34 @@ body::before {height:4px;background:linear-gradient(90deg,#605bcc 0%,#4195c4 25%
 .deliberation-presentation-page.dp-view-history .deliberation-presentation-grid{display:none}
 .deliberation-presentation-page.dp-view-history .dp-history-panel{display:block}
 @media(max-width:760px){.dh-row{grid-template-columns:110px repeat(var(--dh-columns),minmax(145px,1fr))}.dh-person{padding:8px 10px}.deliberation-history-view{padding:10px}.dp-history-panel{padding:16px 11px}}
+
+
+/* V2.35.8 — 逐層思辨個別作答規則 */
+.deliberation-layer-custom-settings{margin-top:16px;border:1px solid #d8def4;border-radius:16px;background:#f8f9ff;overflow:hidden}
+.deliberation-layer-custom-settings .settings-disclosure-summary{padding:14px 16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.deliberation-layer-custom-settings .settings-disclosure-summary small{color:#5d6784;line-height:1.5}
+.deliberation-layer-custom-content{padding:16px;display:grid;gap:16px;border-top:1px solid #e1e5f2}
+.deliberation-layer-custom-body{display:grid;gap:10px;min-width:0}
+.deliberation-layer-custom-body.hidden{display:none!important}
+.deliberation-layer-options-editor{min-width:0;display:grid;gap:10px}
+.deliberation-layer-custom-content .field{min-width:0;max-width:460px}
+.deliberation-layer-custom-content .mini-check{display:flex;align-items:center;gap:10px}
+.deliberation-layer-option-row{min-width:0}
+.deliberation-layer-add-option{justify-self:start}
+@media(max-width:640px){.deliberation-layer-custom-content{padding:12px}.deliberation-layer-custom-settings .deliberation-option-row{display:grid;grid-template-columns:minmax(0,1fr) auto}.deliberation-layer-custom-settings .deliberation-option-order{grid-column:1 / -1}.deliberation-layer-custom-settings .deliberation-layer-option-label{min-width:0}}
+
+/* V2.35.9 Course parallel activity controls */
+.course-parallel-control{margin:14px 0 20px;padding:18px;border:1px solid #d8ddf7;border-radius:20px;background:linear-gradient(140deg,#fbfaff,#f3f8ff)}
+.course-parallel-header h4{margin:4px 0;font-size:1.1rem;color:#34406c}
+.course-parallel-header p{margin:4px 0 14px;line-height:1.65;color:#596b85;font-size:.87rem}
+.course-parallel-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.course-parallel-slot{display:flex;flex-direction:column;gap:8px;min-width:0;border:1px solid #dce4f2;background:#fff;padding:14px;border-radius:15px}
+.course-parallel-slot[data-slot=b]{border-color:#cbece0}
+.course-parallel-slot label{font-weight:800;color:#4856a9}
+.course-parallel-slot[data-slot=b] label{color:#167763}
+.course-parallel-slot select{width:100%;min-width:0;max-width:100%;font-size:.9rem}
+.course-parallel-slot p{margin:0;color:#52627d;font-size:.83rem;line-height:1.5;min-height:2.5em;overflow-wrap:anywhere}
+.course-parallel-slot button{margin-top:auto}
+.course-parallel-settle{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid #e0e7f3;flex-wrap:wrap}
+.course-parallel-settle>span{color:#52627d;font-size:.88rem;overflow-wrap:anywhere}
+@media(max-width:720px){.course-parallel-control{padding:14px}.course-parallel-slots{grid-template-columns:1fr}.course-parallel-settle .btn{width:100%}}
