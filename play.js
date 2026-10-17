@@ -1114,15 +1114,23 @@ function renderDeliberationReasonControls({own=null,stageChanged=false,round="op
   const otherCheck=el("deliberationReasonOtherCheck");
   const otherInput=el("deliberationReasonOtherInput");
 
-  textField?.classList.toggle("hidden",mode!=="text");
-  choiceField?.classList.toggle("hidden",mode!=="choices");
-  if (el("deliberationReasonRequirement")) el("deliberationReasonRequirement").textContent=required ? "必填" : "選填";
-  if (el("deliberationReasonChoiceRequirement")) el("deliberationReasonChoiceRequirement").textContent=required ? "必填" : "選填";
-
-  if (mode==="text") {
-    if (textInput) textInput.disabled=locked;
+  // rr=false 代表完全不顯示理由，不再是可選填。只隱藏目前層的理由，
+  // 「我還需要知道什麼」仍依自己的設定獨立顯示。
+  textField?.classList.toggle("hidden",!required || mode!=="text");
+  choiceField?.classList.toggle("hidden",!required || mode!=="choices");
+  if (el("deliberationReasonRequirement")) el("deliberationReasonRequirement").textContent="必填";
+  if (el("deliberationReasonChoiceRequirement")) el("deliberationReasonChoiceRequirement").textContent="必填";
+  if (textInput) {
+    textInput.disabled=locked || !required || mode!=="text";
+    textInput.required=required && mode==="text";
+  }
+  if (!required) {
+    if (grid) grid.innerHTML="";
+    if (otherCheck) otherCheck.disabled=true;
+    if (otherInput) otherInput.disabled=true;
     return;
   }
+  if (mode==="text") return;
 
   if (grid) {
     grid.innerHTML="";
@@ -1175,6 +1183,10 @@ function renderDeliberationReasonControls({own=null,stageChanged=false,round="op
 
 function buildDeliberationReasonPayload() {
   const mode=deliberationReasonMode();
+  // 「不顯示」不送出理由，即使先前層次曾填過文字／勾選理由。
+  if (!deliberationStageReasonRequired()) {
+    return {mode,reason:"",reasonSelections:[],reasonOther:""};
+  }
   if (mode==="text") {
     return {
       mode,
@@ -1434,10 +1446,10 @@ async function submitDeliberationAnswer() {
   const needToKnow=el("deliberationNeedInput").value.trim();
   if (!choice) { showToast("請先選擇你的判斷"); return; }
 
-  if (reasonData.mode==="choices") {
+  if (deliberationStageReasonRequired() && reasonData.mode==="choices") {
     const hasPreset=reasonData.reasonSelections.length>0;
     const hasOther=deliberationReasonOtherSelected;
-    if (deliberationStageReasonRequired() && !hasPreset && !hasOther) {
+    if (!hasPreset && !hasOther) {
       showToast("請至少勾選一個理由，或選擇「其他」");
       return;
     }

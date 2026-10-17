@@ -1428,7 +1428,7 @@ function setDeliberationLayerCount(value,{confirmTrim=true}={}) {
   return true;
 }
 
-// V2.35.8 — 個別情境的選項與理由規則；舊資料預設沿用共用設定。
+// V2.35.11 — 各層理由規則為必填／不顯示；未覆蓋時沿用共用設定。
 function readLayerOptions(card) {
   return [...card.querySelectorAll(".deliberation-layer-option-row")].map(row=>({
     id:row.dataset.optionId,
@@ -1490,7 +1490,7 @@ function addDeliberationLayer(layer = null,{skipSync=false}={}) {
     <label class="field"><span>本層新增資訊</span><textarea class="deliberation-layer-content" rows="4">${escapeHtml(data.content || "")}</textarea></label>
     <label class="field"><span>教師備註 <span class="optional-tag">不送學生端</span></span><textarea class="deliberation-layer-note" rows="3">${escapeHtml(data.teacherNote || "")}</textarea></label>
     <details class="deliberation-layer-custom-settings settings-disclosure settings-disclosure-nested">
-      <summary class="settings-disclosure-summary"><strong>本層作答設定</strong><small>判斷選項與理由必填可以逐層調整</small></summary>
+      <summary class="settings-disclosure-summary"><strong>本層作答設定</strong><small>獨立判斷選項、理由必填或不顯示</small></summary>
       <div class="deliberation-layer-custom-content">
         <label class="mini-check deliberation-layer-override"><input class="deliberation-layer-custom-options" type="checkbox" ${Array.isArray(data.options) ? "checked" : ""}><span>這一層使用獨立判斷選項</span></label>
         <div class="deliberation-layer-custom-body hidden">
@@ -1501,13 +1501,13 @@ function addDeliberationLayer(layer = null,{skipSync=false}={}) {
         <label class="field"><span>本層「我的理由」</span><select class="deliberation-layer-reason-required">
           <option value="inherit">沿用共用設定</option>
           <option value="required">必填</option>
-          <option value="optional">選填</option>
+          <option value="hidden">不顯示（不用填寫）</option>
         </select></label>
       </div>
     </details>`;
   const customOptions=card.querySelector(".deliberation-layer-custom-options");
   const reasonSelect=card.querySelector(".deliberation-layer-reason-required");
-  reasonSelect.value=data.reasonRequired===true ? "required" : data.reasonRequired===false ? "optional" : "inherit";
+  reasonSelect.value=data.reasonRequired===true ? "required" : data.reasonRequired===false ? "hidden" : "inherit";
   if(Array.isArray(data.options)) data.options.forEach(option=>addLayerOption(card,option));
   customOptions.addEventListener("change",()=>updateLayerOptionMode(card));
   card.querySelector(".deliberation-layer-add-option").addEventListener("click",()=>addLayerOption(card));
@@ -1584,7 +1584,7 @@ function readDeliberationEditor() {
       question:card.querySelector(".deliberation-layer-question").value.trim(),
       teacherNote:card.querySelector(".deliberation-layer-note").value.trim(),
       options:card.querySelector(".deliberation-layer-custom-options").checked ? readLayerOptions(card) : null,
-      reasonRequired:card.querySelector(".deliberation-layer-reason-required").value==="required" ? true : card.querySelector(".deliberation-layer-reason-required").value==="optional" ? false : null
+      reasonRequired:card.querySelector(".deliberation-layer-reason-required").value==="required" ? true : card.querySelector(".deliberation-layer-reason-required").value==="hidden" ? false : null
     })),
     reflection:{
       key:deliberationReflectionKey.value.trim(), value:deliberationReflectionValue.value.trim(),
