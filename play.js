@@ -120,7 +120,7 @@ function decodeLayeredDeliberation(raw) {
       sourceNote:raw.d.src||"",
       fixedQuestion:raw.d.q||"",
       chartType:raw.d.chart === "pie" ? "pie" : "bar",
-      reasonMode:(raw.d.req?.rm === "choices" || raw.d.req?.reasonMode === "choices") ? "choices" : "text",
+      reasonMode:["choices","single"].includes(raw.d.req?.rm || raw.d.req?.reasonMode) ? (raw.d.req?.rm || raw.d.req?.reasonMode) : "text",
       reasonChoices:Array.isArray(raw.d.req?.rc)
         ? raw.d.req.rc
         : Array.isArray(raw.d.req?.reasonChoices) ? raw.d.req.reasonChoices : [],
@@ -1058,7 +1058,8 @@ function renderDeliberationTask() {
         released_layers:layers.slice(0,1).map((layer,index)=>({
           t:layer.title || layer.t || `第 ${index+1} 層`,c:layer.content || layer.c || "",q:layer.question || layer.q || "",
           ...(Array.isArray(layer.options) ? {o:layer.options.map(option=>({i:option.id,l:option.label}))} : layer.o ? {o:layer.o} : {}),
-          ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : typeof layer.rr==="boolean" ? {rr:layer.rr} : {})
+          ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : typeof layer.rr==="boolean" ? {rr:layer.rr} : {}),
+          ...(["text","choices","single"].includes(layer.reasonMode || layer.rm) ? {rm:layer.reasonMode || layer.rm} : {})
         })),
         distribution:[],
         anonymous_reasons:[],
@@ -1083,7 +1084,9 @@ function normalizeDeliberationReasonChoices(choices) {
 }
 
 function deliberationReasonMode() {
-  return activity?.deliberation?.reasonMode === "choices" ? "choices" : "text";
+  const layer=currentDeliberationLayerRule();
+  const mode=layer.rm || activity?.deliberation?.reasonMode;
+  return ["choices","single"].includes(mode) ? mode : "text";
 }
 
 function deliberationReasonChoices() {
@@ -1117,7 +1120,7 @@ function renderDeliberationReasonControls({own=null,stageChanged=false,round="op
   // rr=false 代表完全不顯示理由，不再是可選填。只隱藏目前層的理由，
   // 「我還需要知道什麼」仍依自己的設定獨立顯示。
   textField?.classList.toggle("hidden",!required || mode!=="text");
-  choiceField?.classList.toggle("hidden",!required || mode!=="choices");
+  choiceField?.classList.toggle("hidden",!required || (mode!=="choices" && mode!=="single"));
   if (el("deliberationReasonRequirement")) el("deliberationReasonRequirement").textContent="必填";
   if (el("deliberationReasonChoiceRequirement")) el("deliberationReasonChoiceRequirement").textContent="必填";
   if (textInput) {
@@ -1131,6 +1134,11 @@ function renderDeliberationReasonControls({own=null,stageChanged=false,round="op
     return;
   }
   if (mode==="text") return;
+  if (mode==="single") {
+    const first=[...deliberationSelectedReasons][0];
+    deliberationSelectedReasons=new Set(first ? [first] : []);
+    if (first) deliberationReasonOtherSelected=false;
+  }
 
   if (grid) {
     grid.innerHTML="";
@@ -1138,16 +1146,25 @@ function renderDeliberationReasonControls({own=null,stageChanged=false,round="op
       const label=document.createElement("label");
       label.className="deliberation-reason-choice";
       const input=document.createElement("input");
-      input.type="checkbox";
+      input.type=mode==="single" ? "radio" : "checkbox";
+      if (mode==="single") input.name="deliberation-single-reason";
       input.value=choice.id;
       input.checked=deliberationSelectedReasons.has(choice.id);
       input.disabled=locked;
       const span=document.createElement("span");
       span.textContent=choice.label;
       input.addEventListener("change",()=>{
+        if (mode==="single" && input.checked) {
+          deliberationSelectedReasons.clear();
+          deliberationReasonOtherSelected=false;
+          deliberationReasonOtherText="";
+          if (otherCheck) otherCheck.checked=false;
+          if (otherInput) {otherInput.value="";otherInput.classList.add("hidden");otherInput.disabled=true;}
+          otherCheck?.closest(".deliberation-reason-choice")?.classList.remove("selected");
+        }
         if (input.checked) deliberationSelectedReasons.add(choice.id);
         else deliberationSelectedReasons.delete(choice.id);
-        label.classList.toggle("selected",input.checked);
+        grid.querySelectorAll(".deliberation-reason-choice").forEach(row=>row.classList.toggle("selected",Boolean(row.querySelector("input")?.checked)));
       });
       label.classList.toggle("selected",input.checked);
       label.append(input,span);
@@ -1156,10 +1173,16 @@ function renderDeliberationReasonControls({own=null,stageChanged=false,round="op
   }
 
   if (otherCheck) {
+    otherCheck.type=mode==="single" ? "radio" : "checkbox";
+    otherCheck.name=mode==="single" ? "deliberation-single-reason" : "";
     otherCheck.checked=deliberationReasonOtherSelected;
     otherCheck.disabled=locked;
     otherCheck.onchange=()=>{
       deliberationReasonOtherSelected=otherCheck.checked;
+      if (mode==="single" && otherCheck.checked) {
+        deliberationSelectedReasons.clear();
+        grid?.querySelectorAll("input").forEach(input=>{input.checked=false;input.closest(".deliberation-reason-choice")?.classList.remove("selected");});
+      }
       if (!otherCheck.checked) {
         deliberationReasonOtherText="";
         if (otherInput) otherInput.value="";
@@ -1171,6 +1194,10 @@ function renderDeliberationReasonControls({own=null,stageChanged=false,round="op
     };
     otherCheck.closest(".deliberation-reason-choice")?.classList.toggle("selected",otherCheck.checked);
   }
+  const reasonHelp=el("deliberationReasonChoiceHelp");
+  if (reasonHelp) reasonHelp.textContent=mode==="single"
+    ? "只能選擇一項理由；若都不符合，可選「其他」自行填寫。"
+    : "可複選；若都不符合，可以勾選「其他」再自行填寫。";
   if (otherInput) {
     otherInput.value=deliberationReasonOtherText;
     otherInput.classList.toggle("hidden",!deliberationReasonOtherSelected);
@@ -1197,11 +1224,11 @@ function buildDeliberationReasonPayload() {
   }
 
   const choices=deliberationReasonChoices();
-  const selectedIds=[...deliberationSelectedReasons];
+  const selectedIds=[...deliberationSelectedReasons].slice(0,mode==="single" ? 1 : undefined);
   const selectedLabels=selectedIds
     .map(id=>choices.find(choice=>choice.id===id)?.label || "")
     .filter(Boolean);
-  const other=deliberationReasonOtherSelected ? deliberationReasonOtherText.trim() : "";
+  const other=deliberationReasonOtherSelected && (mode!=="single" || !selectedIds.length) ? deliberationReasonOtherText.trim() : "";
   const parts=[...selectedLabels];
   if (other) parts.push(`其他：${other}`);
   return {
@@ -1446,11 +1473,15 @@ async function submitDeliberationAnswer() {
   const needToKnow=el("deliberationNeedInput").value.trim();
   if (!choice) { showToast("請先選擇你的判斷"); return; }
 
-  if (deliberationStageReasonRequired() && reasonData.mode==="choices") {
+  if (deliberationStageReasonRequired() && ["choices","single"].includes(reasonData.mode)) {
     const hasPreset=reasonData.reasonSelections.length>0;
     const hasOther=deliberationReasonOtherSelected;
+    if (reasonData.mode==="single" && (reasonData.reasonSelections.length+(hasOther?1:0))!==1) {
+      showToast("請選擇一項理由，或選擇「其他」");
+      return;
+    }
     if (!hasPreset && !hasOther) {
-      showToast("請至少勾選一個理由，或選擇「其他」");
+      showToast("請至少選擇一個理由，或選擇「其他」");
       return;
     }
     if (hasOther && !reasonData.reasonOther) {
@@ -1557,7 +1588,8 @@ function previewNextDeliberationLayer() {
   deliberationState.deliberation.released_layers=(activity.deliberation?.layers || []).slice(0,next).map((layer,index)=>({
     t:layer.title || layer.t || `第 ${index+1} 層`,c:layer.content || layer.c || "",q:layer.question || layer.q || "",
     ...(Array.isArray(layer.options) ? {o:layer.options.map(option=>({i:option.id,l:option.label}))} : layer.o ? {o:layer.o} : {}),
-    ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : typeof layer.rr==="boolean" ? {rr:layer.rr} : {})
+    ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : typeof layer.rr==="boolean" ? {rr:layer.rr} : {}),
+    ...(["text","choices","single"].includes(layer.reasonMode || layer.rm) ? {rm:layer.reasonMode || layer.rm} : {})
   }));
   deliberationState.deliberation.distribution=[];
   deliberationState.deliberation.anonymous_reasons=[];

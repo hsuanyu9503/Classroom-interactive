@@ -505,8 +505,11 @@ function readDeliberationReasonChoicesEditor() {
 }
 
 function updateDeliberationReasonModeUi({ensureChoice=true}={}) {
-  const choicesMode=deliberationReasonMode?.value === "choices";
+  const perLayerModes=[...(deliberationLayersEditor?.querySelectorAll(".deliberation-layer-reason-mode") || [])].map(select=>select.value);
+  const choicesMode=["choices","single"].includes(deliberationReasonMode?.value) || perLayerModes.some(value=>["choices","single"].includes(value));
   deliberationReasonChoicesSettings?.classList.toggle("hidden",!choicesMode);
+  const help=el("deliberationReasonChoicesHelp");
+  if(help) help.textContent="此處設定共用的預設理由，單選每次只能選一項；多選可以勾選多項，兩者都可選擇「其他」。";
   if (choicesMode && ensureChoice && deliberationReasonChoicesEditor && !deliberationReasonChoicesEditor.children.length) {
     addDeliberationReasonChoice();
   }
@@ -668,7 +671,7 @@ function loadActivities() {
         ...newDeliberationActivityData(),
         ...(activity.deliberation || {}),
         options:normalizeDeliberationOptionsData(activity.deliberation?.options),
-        reasonMode:activity.deliberation?.reasonMode === "choices" ? "choices" : "text",
+        reasonMode:["choices","single"].includes(activity.deliberation?.reasonMode) ? activity.deliberation.reasonMode : "text",
         reasonChoices:normalizeDeliberationReasonChoicesData(activity.deliberation?.reasonChoices)
       };
     }
@@ -1490,7 +1493,7 @@ function addDeliberationLayer(layer = null,{skipSync=false}={}) {
     <label class="field"><span>本層新增資訊</span><textarea class="deliberation-layer-content" rows="4">${escapeHtml(data.content || "")}</textarea></label>
     <label class="field"><span>教師備註 <span class="optional-tag">不送學生端</span></span><textarea class="deliberation-layer-note" rows="3">${escapeHtml(data.teacherNote || "")}</textarea></label>
     <details class="deliberation-layer-custom-settings settings-disclosure settings-disclosure-nested">
-      <summary class="settings-disclosure-summary"><strong>本層作答設定</strong><small>獨立判斷選項、理由必填或不顯示</small></summary>
+      <summary class="settings-disclosure-summary"><strong>本層作答設定</strong><small>獨立判斷選項、理由呈現方式與是否顯示</small></summary>
       <div class="deliberation-layer-custom-content">
         <label class="mini-check deliberation-layer-override"><input class="deliberation-layer-custom-options" type="checkbox" ${Array.isArray(data.options) ? "checked" : ""}><span>這一層使用獨立判斷選項</span></label>
         <div class="deliberation-layer-custom-body hidden">
@@ -1503,11 +1506,20 @@ function addDeliberationLayer(layer = null,{skipSync=false}={}) {
           <option value="required">必填</option>
           <option value="hidden">不顯示（不用填寫）</option>
         </select></label>
+        <label class="field"><span>本層理由作答方式</span><select class="deliberation-layer-reason-mode">
+          <option value="inherit">沿用共用作答方式</option>
+          <option value="text">自由填寫</option>
+          <option value="choices">多選預設理由</option>
+          <option value="single">單選預設理由（只能選一項）</option>
+        </select><small class="field-help">選用單選或多選會使用上方設定的「預設理由」，「不顯示」則優先隱藏理由欄位。</small></label>
       </div>
     </details>`;
   const customOptions=card.querySelector(".deliberation-layer-custom-options");
   const reasonSelect=card.querySelector(".deliberation-layer-reason-required");
   reasonSelect.value=data.reasonRequired===true ? "required" : data.reasonRequired===false ? "hidden" : "inherit";
+  const layerReasonMode=card.querySelector(".deliberation-layer-reason-mode");
+  layerReasonMode.value=["text","choices","single"].includes(data.reasonMode) ? data.reasonMode : "inherit";
+  layerReasonMode.addEventListener("change",()=>updateDeliberationReasonModeUi({ensureChoice:true}));
   if(Array.isArray(data.options)) data.options.forEach(option=>addLayerOption(card,option));
   customOptions.addEventListener("change",()=>updateLayerOptionMode(card));
   card.querySelector(".deliberation-layer-add-option").addEventListener("click",()=>addLayerOption(card));
@@ -1527,7 +1539,10 @@ function addDeliberationLayer(layer = null,{skipSync=false}={}) {
   });
   deliberationLayersEditor.appendChild(card);
   refreshDeliberationLayerNumbers();
-  if (!skipSync) syncDeliberationLayerCountControls();
+  if (!skipSync) {
+    syncDeliberationLayerCountControls();
+    updateDeliberationReasonModeUi({ensureChoice:true});
+  }
   return card;
 }
 
@@ -1547,12 +1562,12 @@ function loadDeliberationEditor(data = null) {
     refreshDeliberationOptionRows();
   }
   deliberationChartType.value=["bar","pie"].includes(d.chartType) ? d.chartType : "bar";
-  if (deliberationReasonMode) deliberationReasonMode.value=d.reasonMode === "choices" ? "choices" : "text";
+  if (deliberationReasonMode) deliberationReasonMode.value=["choices","single"].includes(d.reasonMode) ? d.reasonMode : "text";
   if (deliberationReasonChoicesEditor) {
     deliberationReasonChoicesEditor.innerHTML="";
     normalizeDeliberationReasonChoicesData(d.reasonChoices).forEach(addDeliberationReasonChoice);
   }
-  updateDeliberationReasonModeUi({ensureChoice:d.reasonMode === "choices"});
+  updateDeliberationReasonModeUi({ensureChoice:["choices","single"].includes(d.reasonMode) || d.layers?.some(layer=>["choices","single"].includes(layer.reasonMode))});
   deliberationReasonRequired.checked=d.reasonRequired !== false;
   deliberationNeedRequired.checked=Boolean(d.needToKnowRequired);
   deliberationReflectionKey.value=d.reflection?.key || "";
@@ -1565,6 +1580,7 @@ function loadDeliberationEditor(data = null) {
   while (getDeliberationLayerCount()<DELIBERATION_MIN_LAYERS) addDeliberationLayer(null,{skipSync:true});
   refreshDeliberationLayerNumbers();
   syncDeliberationLayerCountControls();
+  updateDeliberationReasonModeUi({ensureChoice:true});
 }
 
 function readDeliberationEditor() {
@@ -1573,7 +1589,7 @@ function readDeliberationEditor() {
     fixedQuestion:deliberationFixedQuestion.value.trim(),
     options:readDeliberationOptionsEditor(),
     chartType:deliberationChartType.value === "pie" ? "pie" : "bar",
-    reasonMode:deliberationReasonMode?.value === "choices" ? "choices" : "text",
+    reasonMode:["choices","single"].includes(deliberationReasonMode?.value) ? deliberationReasonMode.value : "text",
     reasonChoices:readDeliberationReasonChoicesEditor(),
     reasonRequired:Boolean(deliberationReasonRequired.checked),
     needToKnowRequired:Boolean(deliberationNeedRequired.checked),
@@ -1584,7 +1600,8 @@ function readDeliberationEditor() {
       question:card.querySelector(".deliberation-layer-question").value.trim(),
       teacherNote:card.querySelector(".deliberation-layer-note").value.trim(),
       options:card.querySelector(".deliberation-layer-custom-options").checked ? readLayerOptions(card) : null,
-      reasonRequired:card.querySelector(".deliberation-layer-reason-required").value==="required" ? true : card.querySelector(".deliberation-layer-reason-required").value==="hidden" ? false : null
+      reasonRequired:card.querySelector(".deliberation-layer-reason-required").value==="required" ? true : card.querySelector(".deliberation-layer-reason-required").value==="hidden" ? false : null,
+      reasonMode:["text","choices","single"].includes(card.querySelector(".deliberation-layer-reason-mode").value) ? card.querySelector(".deliberation-layer-reason-mode").value : null
     })),
     reflection:{
       key:deliberationReflectionKey.value.trim(), value:deliberationReflectionValue.value.trim(),
@@ -1992,7 +2009,7 @@ function validateDeliberationActivity(activity) {
   if (d.options.length > 10) return "逐層思辨最多只能設定 10 個判斷選項";
   if (d.options.some(option=>!String(option.label || "").trim())) return "逐層思辨的每個判斷選項都需要填寫內容";
   if (new Set(d.options.map(option=>String(option.id || ""))).size !== d.options.length) return "逐層思辨的選項代碼不可重複";
-  if (d.reasonMode === "choices") {
+  if (["choices","single"].includes(d.reasonMode) || d.layers?.some(layer=>["choices","single"].includes(layer.reasonMode) && layer.reasonRequired!==false)) {
     if (!Array.isArray(d.reasonChoices) || d.reasonChoices.length < 1) return "勾選理由模式至少需要 1 個預設理由";
     if (d.reasonChoices.length > 12) return "預設理由最多只能設定 12 個";
     if (d.reasonChoices.some(choice=>!String(choice.label || "").trim())) return "每個預設理由都需要填寫內容";
@@ -2223,8 +2240,8 @@ function buildDeliberationSnapshot(activity,{includeLayers=true,includeTeacherNo
     req:{
       reason:d.reasonRequired !== false,
       need:Boolean(d.needToKnowRequired),
-      rm:d.reasonMode === "choices" ? "choices" : "text",
-      rc:(d.reasonMode === "choices" ? (d.reasonChoices || []) : []).map(choice=>({i:choice.id,l:choice.label}))
+      rm:["choices","single"].includes(d.reasonMode) ? d.reasonMode : "text",
+      rc:(d.reasonChoices || []).map(choice=>({i:choice.id,l:choice.label}))
     },
     o:(d.options || []).map(option=>({i:option.id,l:option.label})),
     l:includeLayers ? (d.layers || []).map((layer,index)=>({
@@ -2232,6 +2249,7 @@ function buildDeliberationSnapshot(activity,{includeLayers=true,includeTeacherNo
       c:layer.content || "", q:layer.question || "",
       ...(Array.isArray(layer.options) ? {o:layer.options.map(option=>({i:option.id,l:option.label}))} : {}),
       ...(typeof layer.reasonRequired==="boolean" ? {rr:layer.reasonRequired} : {}),
+      ...(["text","choices","single"].includes(layer.reasonMode) ? {rm:layer.reasonMode} : {}),
       ...(includeTeacherNotes ? {n:layer.teacherNote || ""} : {})
     })) : [],
     r:{k:d.reflection?.key || "",v:d.reflection?.value || "",a:d.reflection?.action || "",e:d.reflection?.extension || ""}
