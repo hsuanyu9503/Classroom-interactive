@@ -1514,7 +1514,16 @@ async function submitDeliberationAnswer() {
       completeConfidenceStep();
       showToast("本層判斷已提交");
     } catch (error) {
-      showToast(error.message || "提交失敗");
+      // The student's displayed rule can disagree with a legacy SQL RPC or an
+      // already-running Session snapshot. Never invent a reason to bypass SQL.
+      if (/reason required/i.test(String(error?.message || ""))) {
+        const localRequired=deliberationStageReasonRequired();
+        showToast(localRequired
+          ? `第 ${stage} 層的理由未獲雲端接受。請確認理由選項後重試；若持續失敗，請教師檢查 Supabase 理由驗證版本。`
+          : `第 ${stage} 層設定為不顯示理由，但雲端仍要求必填。請教師套用逐層理由 SQL 修正，並建立新的課堂 Session。`);
+      } else {
+        showToast(error.message || "提交失敗");
+      }
     }
     return;
   }

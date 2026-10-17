@@ -1,25 +1,22 @@
-# 課堂互動工具 V2.35.12｜逐層思辨單選理由
+# 課堂互動工具 V2.35.13｜逐層思辨理由提交修正
 
-## 新增功能
+## 問題與修正
+- 在教師設定第二層「不顯示理由」時，部分 Supabase 專案的舊版 `submit_classroom_response` RPC 仍採用整個活動的 `req.reason`（必填），沒有讀取第二層 `l[1].rr=false`，因此返回 `reason required`。
+- 附 `upgrade-v2.35.13-deliberation-reason-check.sql`：恢復以目前層的 `l[N].rr` 優先、否則才使用共用設定的驗證。**未放寬原本必填的驗證，亦不刪改現有作答資料**。
+- 學生端收到規則不一致的資料庫錯誤時，顯示說明及操作建議，不再只看到英文 `reason required`；不會假造理由繞過驗證。
+- `check-v2.35.13-deliberation-state.sql` 為只讀診斷 SQL，可檢查 RPC 是否使用逐層規則，以及現有 Session 快照各層儲存的理由狀態。
 
-- 「逐層思辨 → 作答與統計設定 → 理由作答方式」現在可選 **自由填寫／多選預設理由／單選預設理由**。
-- 各情境層的「本層作答設定」新增「本層理由作答方式」，可沿用共用設定，或指定自由填寫、多選、單選；原先的理由「沿用／必填／不顯示」獨立保留。
-- 預設理由清單由活動共用設定管理；若只有某一層使用單選或多選，編輯器仍會開放預設理由設定（1–12 項）。
-- 單選模式使用圓形單選按鈕，同一時間只能選一個預設理由，或選擇「其他」並輸入文字；選擇新選項會取消原選擇。
-- 理由不顯示時完全不提供理由欄位，亦不送出上一層的理由。學生作答仍以原本的 `reason`, `reasonSelections`, `reasonOther`, `reasonMode` 格式保存，教師理由檢視、統計及 Course 節點維持相容。
-- 舊的複選理由教材維持複選，不會自動改為單選。調整了手機版「預設理由」設定區按鈕的排版。
+## 必須注意
+- **先在 Supabase 備份資料庫並執行 V2.35.13 的 SQL**，再更新 GitHub Pages。
+- 請確認先前 V2.35.0／V2.35.6／V2.35.8／V2.35.9／V2.35.10 的必要升級已完成。
+- **已建立的 Session 保存建立當時的活動設定快照。** 如果第二層在 Session 建立後才改為「不顯示」，更新 SQL 不會自動修改該 Session；請在儲存活動／課程後建立新 Session 測試。勿為了修正強行修改進行中的作答資料。
+- 如果診斷 SQL 顯示目前第二層 `rr=true` 或 `rr` 不存在且共用設定為 `true`，雲端要求理由是符合現有 Session 的設定；需要建立新 Session，而非移除理由檢查。
+- 單選與複選理由的基本資料格式 `reason`／`reasonSelections`／`reasonMode` 仍維持不變。
 
-## 部署
+## 驗收
+1. 第一層「必填」：空白理由應無法送出，選擇／輸入理由後成功。
+2. 第二層「不顯示」：理由欄完全不出現；可只選立場即成功送出。
+3. 第三層「單選理由必填」：需選一項理由；換選後只保留最新項目。
+4. 在 Course、平行活動 A/B 和一般獨立 Session 各測一次，不要用未重新建立的舊 Session 當作新設定驗收。
 
-本次只更新前端網頁與樣式，**無須新增 Supabase SQL**（前提是先前 V2.35.0、V2.35.6、V2.35.8、V2.35.9、V2.35.10 的必要 SQL 已部署）。將 Lite 版本完整替換至 GitHub Pages 即可。
-
-注意：單選數量在學生端 UI 與提交前驗證，沿用 Supabase 既有的理由非空驗證；現有資料庫函式尚未針對 `reasonMode: "single"` 額外限制 `reasonSelections` 數量，因此應視為前端操作規則，而不是已實作的伺服器端防繞過限制。
-
-## QA
-
-- `node --check *.js` 語法檢查、既有 Session／Course／平行活動與逐層思辨測試。
-- `node tests/deliberation-single-reason.test.cjs`
-- `python tests/test_editor_single_reason_browser.py`
-- `python tests/test_single_reason_browser.py`
-- 390px、1024px 教師編輯器與學生單選／多選／隱藏／文字切換、重新載入、提交資料測試。
-- 正式 Supabase Realtime 多人端到端及 iPad Safari 實機效能未在此環境直接驗證。
+正式 Supabase 操作、資料庫升級與手機實機行為需在使用者部署環境驗證；本包只完成靜態與模擬檢查。
