@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
   <script src="activity-modules.js" defer></script>
   <script src="session-api.js" defer></script>
+  <script src="course-parallel-groups.js" defer></script>
   <script src="teacher-core.js" defer></script>
   <script src="activity-editor.js" defer></script>
   <script src="editor-guidance.js" defer></script>
@@ -23,7 +24,7 @@
     <div>
       <div class="workspace-brandline">
         <p id="workflowEyebrow" class="eyebrow">CLASSROOM INTERACTIVE</p>
-        <span class="workspace-version">V2.35.13</span>
+        <span class="workspace-version">V2.36.1</span>
       </div>
       <h1>課堂互動工具</h1>
       <p id="workflowSubtitle" class="subtle">先整理教材與活動，再把它們編排成完整課程。</p>
@@ -138,6 +139,15 @@
         </div>
 
         <div id="lessonEditor" class="lesson-editor"></div>
+        <section class="course-parallel-builder" id="courseParallelBuilder" aria-label="課程平行活動群組">
+          <div class="course-parallel-builder-head">
+            <div><span class="section-kicker">PARALLEL GROUPS</span><h3>平行活動群組</h3>
+              <p>備課時先設定可切換的活動。教師上課時自動載入，每次只開放一個活動，各自保留進度與結算。未加入群組的節點仍依原課程流程進行。</p></div>
+            <button id="addCourseParallelGroupBtn" class="btn btn-secondary" type="button">＋ 新增平行群組</button>
+          </div>
+          <div id="courseParallelGroupList" class="course-parallel-group-list"></div>
+          <small id="courseParallelGroupHelp" class="field-help">每組至少 2 個活動節點，同一節點不可重複加入不同群組。可以跨節次選取。</small>
+        </section>
 
         <div class="v15-savebar course-v2-savebar">
           <div class="save-state">
@@ -1159,12 +1169,18 @@
             <span id="courseSessionNodeBadge" class="stage-badge">1 / 1</span>
           </div>
 
-          <section class="course-parallel-control" id="courseParallelControl" aria-label="Course 平行雙活動">
+          <section class="course-parallel-control" id="courseParallelControl" aria-label="Course 平行活動控制">
             <div class="course-parallel-header">
-              <div><span class="section-kicker">PARALLEL ACTIVITIES</span><h4>平行活動 A／B</h4>
-                <p>同一時間只開放一個活動。切換會保留各自進度，結算後鎖定該活動，另一邊不受影響。</p></div>
+              <div><span class="section-kicker">PARALLEL ACTIVITIES</span><h4 id="courseParallelControlTitle">平行活動群組</h4>
+                <p id="courseParallelControlDescription">課程預設的平行群組會自動載入；活動切換保留各自進度，結算後鎖定該節點。</p></div>
             </div>
-            <div class="course-parallel-slots">
+            <div id="courseParallelGroupsRuntime" class="course-parallel-groups-runtime hidden">
+              <label for="courseParallelGroupSelect">目前平行群組</label>
+              <select id="courseParallelGroupSelect" aria-label="切換平行活動群組"></select>
+              <div id="courseParallelGroupButtons" class="course-parallel-runtime-grid"></div>
+              <p class="field-help">教師統一切換；學生端會跟著移動，未送出的草稿可能因切換而遺失。</p>
+            </div>
+            <div id="courseParallelLegacySlots" class="course-parallel-slots">
               <div class="course-parallel-slot" data-slot="a">
                 <label for="courseParallelA">活動 A</label>
                 <select id="courseParallelA" aria-label="選擇平行活動 A"></select>

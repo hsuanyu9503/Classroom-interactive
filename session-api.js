@@ -935,7 +935,7 @@
     const config = getConfig();
     if (!config?.url || !config?.key) throw new Error("找不到目前的 Supabase 雲端設定");
     return {
-      schema:"classroom-teacher-handoff", version:1, appVersion:"2.34.4", exportedAt:new Date().toISOString(),
+      schema:"classroom-teacher-handoff", version:1, appVersion:"2.36.0", exportedAt:new Date().toISOString(),
       warning:"此檔案可轉移教師 Session 控制權，請勿傳給學生或公開分享。",
       cloud:{url:config.url,key:config.key},
       session:{
@@ -1360,6 +1360,9 @@
     const session = sessions.find(item => item.id === context.sessionId);
     if (!session) throw new Error("本機 Session 已不存在");
     if (session.status !== "active") throw new Error("Session 已結束");
+    if (session.sessionKind === "course" && session.currentNodeRef !== cleanNode) {
+      throw new Error("課程已切換節點，請重新整理活動頁");
+    }
     const participant = session.participants.find(item => item.id === context.participantId && item.participantToken === context.participantToken);
     if (!participant) throw new Error("學生加入憑證已失效");
 
@@ -1441,23 +1444,31 @@
     const context = getParticipantContext();
     if (!context) throw new Error("尚未加入課堂 Session");
     if (context.mode === "cloud") {
-      const result = await rpc("get_student_session_state", {
-        p_session_id:context.sessionId,
-        p_participant_token:context.participantToken
-      }, context.cloudConfig);
-      const state=typeof result==="string" ? JSON.parse(result) : result;
-      if (state?.session_kind==="course") {
+      // The state and lifecycle are fetched by separate RPCs. If the teacher
+      // switches nodes between those calls, retry rather than attaching the
+      // new node's settlement status to an older node response.
+      for (let attempt=0; attempt<3; attempt++) {
+        const result=await rpc("get_student_session_state",{
+          p_session_id:context.sessionId,p_participant_token:context.participantToken
+        },context.cloudConfig);
+        const state=typeof result==="string"?JSON.parse(result):result;
+        if (state?.session_kind!=="course") return state;
         const key=`${context.sessionId}:${state.current_node_ref||""}:${state.revision||1}`;
         if (!nodeLifecycleCache.has(key)) {
           const lifecycle=await rpc("get_course_node_lifecycle_v2359",{
             p_session_id:context.sessionId,p_participant_token:context.participantToken
           },context.cloudConfig);
           const data=typeof lifecycle==="string"?JSON.parse(lifecycle):lifecycle;
+          if (String(data?.node_ref||"")!==String(state.current_node_ref||"") ||
+              Number(data?.revision||0)!==Number(state.revision||0)) {
+            continue;
+          }
           nodeLifecycleCache.clear();nodeLifecycleCache.set(key,data?.lifecycle==="settled");
         }
         state.node_settled=nodeLifecycleCache.get(key)===true;
+        return state;
       }
-      return state;
+      throw new Error("老師正在切換課程活動，請稍後重試同步");
     }
     const session = loadLocalSessions().find(item => item.id === context.sessionId);
     if (!session) throw new Error("本機 Session 已不存在");

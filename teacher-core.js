@@ -22,6 +22,7 @@
 
   const $ = (id) => document.getElementById(id);
   const ActivityModules = window.ClassroomActivityModules;
+  const ParallelGroups = window.ClassroomParallelGroups;
   const RETIRED_ACTIVITY_MODES = new Set(["scale-spectrum", "stance-map"]);
   const uuid = () => globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const nowIso = () => new Date().toISOString();
@@ -171,7 +172,8 @@
         },
         settings:{
           allowStudentNavigation:rawCourse.settings?.allowStudentNavigation !== false,
-          showProgress:rawCourse.settings?.showProgress !== false
+          showProgress:rawCourse.settings?.showProgress !== false,
+          parallelGroups:ParallelGroups.normalize(rawCourse.settings?.parallelGroups)
         },
         createdAt,
         updatedAt:rawCourse.updatedAt || createdAt
@@ -210,6 +212,7 @@
   save(KEYS.works, works);
 
   let currentCourseId = courses[0]?.id || null;
+  let parallelGroupsDraft = [];
   let currentTypeId = types[0]?.id || null;
   let currentWorkId = works[0]?.id || null;
 
@@ -524,7 +527,7 @@
       const nodeCount = lessonList.reduce((sum, lesson) => sum + (lesson.nodeRefs?.length || 0), 0);
       item.innerHTML = `<strong>${escapeHtml(course.cover?.icon || "📚")} ${escapeHtml(course.title || "未命名課程")}</strong><small>${lessonList.length} 節 · ${nodeCount} 個教學節點</small>`;
       item.addEventListener("click", () => {
-        saveCurrentCourse(false);
+        try {saveCurrentCourse(false);} catch (error) {showMiniToast(error.message);return;}
         currentCourseId = course.id;
         renderCourseList();
         loadCourseEditor(course);
@@ -540,10 +543,82 @@
     $("courseDescription").value = resolved?.description || "";
     $("courseAllowStudentNavigation").checked = resolved?.settings?.allowStudentNavigation !== false;
     $("courseShowProgress").checked = resolved?.settings?.showProgress !== false;
+    parallelGroupsDraft=ParallelGroups.normalize(resolved?.settings?.parallelGroups);
     $("lessonEditor").innerHTML = "";
     (resolved?.lessons || []).forEach((lesson,index) => addLessonCard(lesson,{expanded:index===0}));
+    renderCourseParallelGroups();
     updateCourseSaveState("saved", "已載入 V2 課程");
   }
+
+  function courseActivityNodeChoices() {
+    return [...$("lessonEditor").querySelectorAll(".lesson-card")].flatMap((lesson,i)=>{
+      const lessonTitle=lesson.querySelector(".lesson-title-input")?.value?.trim()||`第 ${i+1} 節`;
+      return [...lesson.querySelectorAll(".lesson-node")]
+        .filter(node=>node.querySelector(".node-type")?.value==="activity")
+        .map(node=>({id:node.dataset.id,type:"activity",label:`${lessonTitle}｜${node.querySelector(".node-title")?.value?.trim()||"未命名活動"}`}));
+    });
+  }
+
+  function renderCourseParallelGroups() {
+    const list=$("courseParallelGroupList");if(!list)return;
+    const choices=courseActivityNodeChoices();
+    list.replaceChildren();
+    if(!parallelGroupsDraft.length){
+      const empty=document.createElement("p");empty.className="field-help";
+      empty.textContent="目前沒有平行群組。課程會照原本的節點順序進行。";
+      list.appendChild(empty);return;
+    }
+    for(const group of parallelGroupsDraft){
+      const card=document.createElement("article");card.className="course-parallel-builder-card";
+      const top=document.createElement("div");top.className="course-parallel-builder-card-head";
+      const input=document.createElement("input");input.type="text";input.value=group.title;input.maxLength=60;
+      input.setAttribute("aria-label","平行群組名稱");input.placeholder="例如：立場與觀點討論";
+      input.addEventListener("input",()=>{group.title=input.value;markCourseDirty();});
+      const remove=document.createElement("button");remove.type="button";
+      remove.className="btn btn-danger-soft";remove.textContent="移除群組";
+      remove.addEventListener("click",()=>{parallelGroupsDraft=parallelGroupsDraft.filter(g=>g.id!==group.id);renderCourseParallelGroups();markCourseDirty();});
+      top.append(input,remove);card.appendChild(top);
+      const hint=document.createElement("p");hint.className="field-help";
+      hint.textContent=`已選取 ${group.nodeRefs.length} 個活動節點；上課時教師可以在這些節點間切換。`;
+      card.appendChild(hint);
+      const choicesBox=document.createElement("div");choicesBox.className="course-parallel-builder-choices";
+      for(const choice of choices){
+        const label=document.createElement("label");label.className="course-parallel-builder-choice";
+        const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.checked=group.nodeRefs.includes(choice.id);
+        const usedByOther=parallelGroupsDraft.some(other=>other!==group&&other.nodeRefs.includes(choice.id));
+        checkbox.disabled=usedByOther;
+        checkbox.addEventListener("change",()=>{
+          group.nodeRefs=checkbox.checked?[...group.nodeRefs,choice.id]:group.nodeRefs.filter(id=>id!==choice.id);
+          renderCourseParallelGroups();markCourseDirty();
+        });
+        const text=document.createElement("span");text.textContent=choice.label+(usedByOther?"（已加入其他群組）":"");
+        label.append(checkbox,text);choicesBox.appendChild(label);
+      }
+      card.appendChild(choicesBox);
+      const missing=group.nodeRefs.filter(id=>!choices.some(c=>c.id===id));
+      if(missing.length){const warning=document.createElement("p");warning.className="course-parallel-warning";
+        warning.textContent=`⚠ 有 ${missing.length} 個原活動節點已刪除或變更類型，請取消此群組並重新設定。`;
+        card.appendChild(warning);}
+      list.appendChild(card);
+    }
+  }
+
+  $("addCourseParallelGroupBtn")?.addEventListener("click",()=>{
+    const choices=courseActivityNodeChoices();
+    const available=choices.filter(c=>!parallelGroupsDraft.some(g=>g.nodeRefs.includes(c.id)));
+    if(available.length<2){showMiniToast("請先建立至少兩個尚未分組的活動節點");return;}
+    parallelGroupsDraft.push({id:uuid(),title:`平行活動群組 ${parallelGroupsDraft.length+1}`,nodeRefs:available.slice(0,2).map(c=>c.id)});
+    renderCourseParallelGroups();markCourseDirty();
+  });
+  $("lessonEditor")?.addEventListener("change",e=>{
+    if(e.target.closest(".node-type"))renderCourseParallelGroups();
+  });
+  $("lessonEditor")?.addEventListener("focusout",e=>{
+    if(e.target.matches(".node-title,.lesson-title-input"))renderCourseParallelGroups();
+  });
+  $("lessonEditor")?.addEventListener("click",e=>{
+    if(e.target.closest(".add-node-btn,.node-remove,.lesson-remove"))setTimeout(renderCourseParallelGroups,0);
+  });
 
   function setLessonExpanded(card, expanded, {collapseSiblings=true}={}) {
     if (!card) return;
@@ -844,7 +919,9 @@
       cover:oldCourse?.cover || {icon:"📚",image:""},
       settings:{
         allowStudentNavigation:true,
-        showProgress:$("courseShowProgress").checked
+        ...oldCourse?.settings,
+        showProgress:$("courseShowProgress").checked,
+        parallelGroups:ParallelGroups.validate(parallelGroupsDraft,nextNodes)
       },
       createdAt:oldCourse?.createdAt || nowIso(),
       updatedAt:nowIso()
@@ -904,10 +981,10 @@
     addLessonCard(undefined,{expanded:true});
     markCourseDirty();
   });
-  $("saveCourseBtn").addEventListener("click", () => saveCurrentCourse(true));
+  $("saveCourseBtn").addEventListener("click", () => {try{saveCurrentCourse(true);}catch(e){showMiniToast(e.message);}});
   $("startCourseSessionBtn")?.addEventListener("click",async()=>{
-    saveCurrentCourse(false);
     try {
+      saveCurrentCourse(false);
       await buildCourseSnapshot(currentCourseId);
       openTeachSession("course",currentCourseId);
     } catch (error) {
@@ -916,7 +993,7 @@
   });
 
   $("newCourseBtn").addEventListener("click", () => {
-    saveCurrentCourse(false);
+    try {saveCurrentCourse(false);} catch (error) {showMiniToast(error.message);return;}
     const createdAt = nowIso();
     const course = {
       id:uuid(),title:"未命名課程",subtitle:"",description:"",
@@ -932,7 +1009,7 @@
   });
 
   $("duplicateCourseBtn").addEventListener("click", () => {
-    saveCurrentCourse(false);
+    try {saveCurrentCourse(false);} catch (error) {showMiniToast(error.message);return;}
     const source = resolveCourse(currentCourse());
     if (!source) return;
     const lessonIdMap = new Map();
@@ -960,6 +1037,9 @@
       id:uuid(),
       title:`${source.title}－副本`,
       lessonRefs:source.lessons.map(lesson => lessonIdMap.get(lesson.id)),
+      settings:{...structuredClone(currentCourse().settings || {}),parallelGroups:ParallelGroups.normalize(currentCourse()?.settings?.parallelGroups).map(group=>({
+        ...group,id:uuid(),nodeRefs:group.nodeRefs.map(id=>nodeIdMap.get(id)).filter(Boolean)
+      }))},
       createdAt:nowIso(),
       updatedAt:nowIso()
     };
@@ -1119,7 +1199,7 @@
 
     return {
       schema:"classroom-course-snapshot",
-      version:1,
+      version:2,
       createdAt:nowIso(),
       course:{
         id:course.id,title:course.title,subtitle:course.subtitle,description:course.description,

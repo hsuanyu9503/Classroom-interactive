@@ -378,7 +378,7 @@ function startStudentRealtimeSync() {
         return;
       }
       if (activity?.template) {
-        ActivityModules?.invoke?.("student", activity.template, "startPolling", status === "connected" ? 12000 : 1800);
+        ActivityModules?.invoke?.("student", activity.template, "startPolling", status === "connected" ? 6000 : 1800);
       }
     }
   });
@@ -957,6 +957,8 @@ async function chooseLiveStance(side) {
   if(!payload)return;
 
   liveStanceBusy=true;
+  // Invalidate any pending poll started before the student's new choice.
+  ++liveStanceSyncGeneration;
   renderLiveStanceChoices();
   try {
     if(isSessionPlay()) {
@@ -984,10 +986,29 @@ async function chooseLiveStance(side) {
   }
 }
 
-async function syncLiveStanceState(initial=false) {
-  if(!isSessionPlay())return;
+let liveStanceSyncGeneration=0;
+let liveStanceSyncRunning=null;
+let liveStanceSyncPending=false;
+function syncLiveStanceState(initial=false) {
+  if(!isSessionPlay() || liveStanceBusy) return Promise.resolve();
+  if (liveStanceSyncRunning) {
+    liveStanceSyncPending=true;
+    return liveStanceSyncRunning;
+  }
+  const job=performLiveStanceSync(initial);
+  liveStanceSyncRunning=job;
+  void job.finally(()=>{
+    if(liveStanceSyncRunning===job)liveStanceSyncRunning=null;
+    if(liveStanceSyncPending){liveStanceSyncPending=false;void syncLiveStanceState(false);}
+  }).catch(()=>{});
+  return job;
+}
+
+async function performLiveStanceSync(initial=false) {
+  const requestGeneration=++liveStanceSyncGeneration;
   try {
     const state=await window.ClassroomSessionAPI.studentState();
+    if (requestGeneration!==liveStanceSyncGeneration) return;
     liveStanceState=state || liveStanceState;
     const own=(state?.responses || []).find(item=>item.mode==="live-stance" && item.stage_key==="final");
     if(own?.selected_type){

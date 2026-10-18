@@ -7,6 +7,9 @@
   let refreshTimer = null;
   let sessionRealtime = null;
   let realtimeRefreshTimer = null;
+  // Serialize teacher snapshots so slow, older RPC results cannot repaint newer Course nodes.
+  let teacherRefreshTail = Promise.resolve();
+  let teacherSilentRefresh = null;
   let activeCourseSnapshot = null;
   let latestTeacherSnapshot = null;
   let presentationWindow = null;
@@ -132,7 +135,7 @@
       onEvent:queueRealtimeTeacherRefresh,
       onStatus:(status,detail)=>{
         setTeacherRealtimeStatus(status,detail);
-        scheduleTeacherPolling(status === "connected" ? 12000 : 3000);
+        scheduleTeacherPolling(status === "connected" ? 6000 : 3000);
       }
     });
   }
@@ -1053,12 +1056,40 @@
     showSessionToast("這個 Session 的教師控制權已轉移到其他裝置");
   }
 
-  async function refreshActiveSession(silent=false) {
-    if (!activeSession) return;
+  function refreshActiveSession(silent=false) {
+    if (!activeSession) return Promise.resolve();
+    // Merge repeated Realtime / polling refreshes while keeping explicit post-action
+    // refresh requests ordered behind earlier reads.
+    if (silent && teacherSilentRefresh) return teacherSilentRefresh;
+    const sessionId = activeSession.id;
+    const request = teacherRefreshTail.then(() => {
+      if (!activeSession || activeSession.id !== sessionId) return;
+      return performTeacherRefresh(silent,sessionId);
+    });
+    teacherRefreshTail = request.catch(() => {});
+    if (silent) {
+      teacherSilentRefresh=request;
+      void request.finally(() => {
+        if (teacherSilentRefresh === request) teacherSilentRefresh=null;
+      }).catch(() => {});
+    }
+    return request;
+  }
+
+  async function performTeacherRefresh(silent=false,requestedSessionId="") {
+    if (!activeSession || activeSession.id !== requestedSessionId) return;
     const button = $("refreshSessionBtn");
     if (!silent) button.disabled = true;
     try {
       const snapshot = await window.ClassroomSessionAPI.teacherSnapshot(activeSession);
+      if (!activeSession || activeSession.id !== requestedSessionId) return;
+      // A teacher action may have switched nodes after the snapshot request began.
+      // Never repaint an older Course revision over a newly confirmed switch.
+      if (snapshot.session_kind === "course" &&
+          Number(snapshot.revision || 0) < Number(activeSession.revision || 0)) return;
+      if (activeSession.mode === "cloud") {
+        setTeacherRealtimeStatus(sessionRealtime?.connected ? "connected" : "fallback");
+      }
       activeSession.status = snapshot.status || activeSession.status || "active";
       activeSession.sessionKind = snapshot.session_kind || activeSession.sessionKind || "activity";
       activeSession.activityMode = snapshot.activity_mode ?? activeSession.activityMode ?? "";
@@ -1114,7 +1145,12 @@
       if (/invalid teacher token|session unavailable or teacher token invalid/i.test(message)) {
         await handleTeacherControlLost();
       } else {
-        showSessionToast(message);
+        if (activeSession?.mode === "cloud") {
+          setTeacherRealtimeStatus("fallback",message);
+          scheduleTeacherPolling(3000);
+        }
+        if (!silent) showSessionToast(message);
+        else console.warn("教師端同步暫時失敗",message);
       }
     } finally {
       if (!silent) button.disabled = false;
@@ -1370,9 +1406,100 @@
     return `${life}${stages}`;
   }
 
+  // V2.36.0 — configured Course groups; keep legacy A/B only for pre-upgrade Session snapshots.
+  const selectedParallelGroups=new Map();
+  function configuredParallelGroups(course,steps) {
+    const groups=window.ClassroomParallelGroups?.normalize(course?.course?.settings?.parallelGroups)||[];
+    const eligible=new Set(steps.filter(step=>step.node.type==="activity").map(step=>step.node.id));
+    return groups.filter(g=>g.nodeRefs.length>=2 && g.nodeRefs.every(ref=>eligible.has(ref)));
+  }
+
+  function renderConfiguredParallelGroups(course,steps,snapshot,groups) {
+    const panel=$("courseParallelControl");
+    const legacy=$("courseParallelLegacySlots"),newView=$("courseParallelGroupsRuntime");
+    legacy?.classList.add("hidden");newView?.classList.remove("hidden");
+    if($("courseParallelControlTitle"))$("courseParallelControlTitle").textContent="平行活動群組";
+    $("courseParallelControlDescription").textContent="群組已由課程編排設定，教師可切換群組內活動；各活動獨立保留進度與結算結果。";
+    const sessionKey=activeSession.id;
+    const currentRef=activeSession.currentNodeRef;
+    const previous=selectedParallelGroups.get(sessionKey)||{};
+    let selected=groups.find(g=>g.id===previous.groupId);
+    // Track actual node navigation, but never override a deliberate group selection.
+    const containing=groups.find(g=>g.nodeRefs.includes(currentRef));
+    if(containing && previous.nodeRef!==currentRef)selected=containing;
+    selected ||= containing||groups[0];
+    selectedParallelGroups.set(sessionKey,{groupId:selected.id,nodeRef:currentRef});
+    const select=$("courseParallelGroupSelect");
+    const signature=groups.map(g=>`${g.id}:${g.title}`).join("|");
+    if(select.dataset.signature!==signature){
+      select.replaceChildren();groups.forEach(g=>select.add(new Option(g.title,g.id)));
+      select.dataset.signature=signature;
+    }
+    select.value=selected.id;select.disabled=groups.length===1||activeSession.status==="closed";
+    const box=$("courseParallelGroupButtons");box.replaceChildren();
+    selected.nodeRefs.forEach((ref,i)=>{
+      const step=steps.find(st=>st.node.id===ref);
+      if(!step)return;
+      const status=parallelNodeStatus(ref,snapshot);
+      const item=document.createElement("div");item.className="course-parallel-runtime-item";
+      if(ref===currentRef)item.classList.add("current");
+      const info=document.createElement("div");
+      const name=document.createElement("strong");name.textContent=step.node.title||`活動 ${i+1}`;
+      const subtitle=document.createElement("small");subtitle.textContent=parallelStatusLabel(status);
+      info.append(name,subtitle);
+      const go=document.createElement("button");go.type="button";go.className="btn btn-secondary";
+      go.textContent=ref===currentRef?"目前活動":"切換到此活動";
+      go.disabled=ref===currentRef||activeSession.status==="closed";
+      go.addEventListener("click",()=>switchConfiguredParallelGroupNode(selected.id,ref));
+      item.append(info,go);box.appendChild(item);
+    });
+    const currentStatus=parallelNodeStatus(currentRef,snapshot);
+    const inside=selected.nodeRefs.includes(currentRef);
+    $("courseParallelCurrentState").textContent=inside
+      ? `${steps.find(st=>st.node.id===currentRef)?.node.title||"目前活動"}｜${parallelStatusLabel(currentStatus)}`
+      : "目前位於群組外的教學節點；選擇上方活動即可進入群組。";
+    const settled=currentStatus?.lifecycle==="settled";
+    $("courseParallelSettle").disabled=!inside||settled||activeSession.status==="closed";
+    $("courseParallelSettle").textContent=settled&&inside?"✓ 本活動已結算":"結算目前活動";
+    if(settled)disableSettledNodeControls();
+  }
+
+  function disableSettledNodeControls() {
+    const controls=["previousStageBtn","nextStageBtn","openPreviousPhaseBtn","openNextPhaseBtn",
+      "predictBackBtn","predictRevealBtn","deliberationOpenBtn","deliberationLockBtn",
+      "deliberationPublishBtn","deliberationNextBtn","groupConsensusAssignBtn",
+      "groupConsensusIndividualBtn","groupConsensusGroupBtn","liveStanceOpenBtn",
+      "liveStanceLockBtn","liveStanceCheckpointBtn"];
+    controls.forEach(id=>{if($(id))$(id).disabled=true;});
+  }
+
+  async function switchConfiguredParallelGroupNode(groupId,nodeRef) {
+    if(!activeSession||activeSession.sessionKind!=="course")return;
+    const course=await ensureActiveCourseSnapshot();
+    const steps=flattenCourseSnapshot(course),groups=configuredParallelGroups(course,steps);
+    if(!groups.some(group=>group.id===groupId&&group.nodeRefs.includes(nodeRef))){
+      showSessionToast("這個活動不在所選平行群組內");return;
+    }
+    await switchCourseNodeTo(nodeRef);
+  }
+
   function renderParallelActivityPanel(course,steps,snapshot) {
     const panel=$("courseParallelControl");
     if (!panel) return;
+    const groups=configuredParallelGroups(course,steps);
+    if(groups.length){
+      panel.classList.remove("hidden");
+      renderConfiguredParallelGroups(course,steps,snapshot,groups);
+      return;
+    }
+    // Version 2 courses without a configured group are ordinary linear Courses.
+    // Old Session snapshots keep the original A/B controls for backward compatibility.
+    if(Number(course?.version||1)>=2){panel.classList.add("hidden");return;}
+    panel.classList.remove("hidden");
+    if($("courseParallelControlTitle"))$("courseParallelControlTitle").textContent="舊版平行活動 A／B";
+    $("courseParallelLegacySlots")?.classList.remove("hidden");
+    $("courseParallelGroupsRuntime")?.classList.add("hidden");
+    $("courseParallelControlDescription").textContent="舊版 Course Session：使用原本 A／B 設定，所有新課程請在課程編排建立平行活動群組。";
     const activities=steps.filter(step=>step.node.type==="activity");
     const pair=parallelActivityPair(steps);
     const ready=activities.length>=2;
@@ -1404,13 +1531,7 @@
     $("courseParallelSettle").disabled=!ready||!pair.a&&!pair.b||
       ![pair.a,pair.b].includes(activeRef)||isSettled||activeSession.status==="closed";
     $("courseParallelSettle").textContent=isSettled?"✓ 本活動已結算":"結算目前活動";
-    // Read-only review of a settled node is allowed; changing its answers or stages isn't.
-    const controls=["previousStageBtn","nextStageBtn","openPreviousPhaseBtn","openNextPhaseBtn",
-      "predictBackBtn","predictRevealBtn","deliberationOpenBtn","deliberationLockBtn",
-      "deliberationPublishBtn","deliberationNextBtn","groupConsensusAssignBtn",
-      "groupConsensusIndividualBtn","groupConsensusGroupBtn","liveStanceOpenBtn",
-      "liveStanceLockBtn","liveStanceCheckpointBtn"];
-    if (isSettled) controls.forEach(id=>{if($(id)) $(id).disabled=true;});
+    if(isSettled)disableSettledNodeControls();
   }
 
   async function changeParallelPairSelection() {
@@ -1440,9 +1561,13 @@
 
   async function settleCurrentParallelNode() {
     if (!activeSession || activeSession.sessionKind!=="course" || activeSession.status!=="active") return;
-    const pair=parallelActivityPair(flattenCourseSnapshot(await ensureActiveCourseSnapshot()));
+    const course=await ensureActiveCourseSnapshot();
+    const steps=flattenCourseSnapshot(course);
+    const groups=configuredParallelGroups(course,steps);
     const nodeRef=activeSession.currentNodeRef;
-    if (![pair.a,pair.b].includes(nodeRef)) return showSessionToast("目前節點不是平行活動 A 或 B");
+    const allowed=groups.length?groups.some(g=>g.nodeRefs.includes(nodeRef)):
+      Number(course?.version||1)<2 && Object.values(parallelActivityPair(steps)).includes(nodeRef);
+    if(!allowed)return showSessionToast("目前節點不屬於平行活動群組");
     const status=parallelNodeStatus(nodeRef,latestTeacherSnapshot);
     if(status?.lifecycle==="settled") return showSessionToast("這項活動已結算");
     if(!confirm("確定結算目前活動？結算後這個節點無法再修改答案或階段，但另一個活動可以繼續進行。"))return;
@@ -3211,6 +3336,14 @@
   $("closeSessionBtn")?.addEventListener("click",closeActiveSession);
   $("previousCourseNodeBtn")?.addEventListener("click",()=>changeCourseNode(-1));
   $("nextCourseNodeBtn")?.addEventListener("click",()=>changeCourseNode(1));
+  $("courseParallelGroupSelect")?.addEventListener("change",()=>{
+    if(!activeSession)return;
+    selectedParallelGroups.set(activeSession.id,{
+      groupId:$("courseParallelGroupSelect").value,nodeRef:activeSession.currentNodeRef
+    });
+    if(activeCourseSnapshot&&latestTeacherSnapshot)
+      renderParallelActivityPanel(activeCourseSnapshot,flattenCourseSnapshot(activeCourseSnapshot),latestTeacherSnapshot);
+  });
   $("courseParallelA")?.addEventListener("change",changeParallelPairSelection);
   $("courseParallelB")?.addEventListener("change",changeParallelPairSelection);
   $("courseParallelGoA")?.addEventListener("click",()=>switchParallelSlot("a"));

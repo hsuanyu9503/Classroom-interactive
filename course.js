@@ -6,6 +6,8 @@ let completedCourseNodes = new Set();
 let courseSessionMode = false;
 let presentationMode = false;
 let courseSessionPollTimer = null;
+let courseSyncRunning = null;
+let courseSyncPending = false;
 let courseSessionRealtime = null;
 let lastCourseRevision = 0;
 let currentCourseNodeSettled = false;
@@ -715,11 +717,29 @@ function goPrevious() {
   renderCurrentStep();
 }
 
-async function syncCourseSessionState(initial = false) {
-  if (!courseSessionMode || !window.ClassroomSessionAPI?.studentState) return;
+function syncCourseSessionState(initial = false) {
+  if (!courseSessionMode || !window.ClassroomSessionAPI?.studentState) return Promise.resolve();
+  if (courseSyncRunning) {
+    courseSyncPending = true;
+    return courseSyncRunning;
+  }
+  const job = performCourseSessionSync(initial);
+  courseSyncRunning = job;
+  void job.finally(() => {
+    if (courseSyncRunning === job) courseSyncRunning = null;
+    if (courseSyncPending) {
+      courseSyncPending = false;
+      void syncCourseSessionState(false);
+    }
+  }).catch(() => {});
+  return job;
+}
+
+async function performCourseSessionSync(initial = false) {
   try {
     const state = await window.ClassroomSessionAPI.studentState();
     if (state.session_kind && state.session_kind !== "course") return;
+    if (Number(state.revision || 0) < Number(lastCourseRevision || 0)) return;
 
     completedCourseNodes = new Set(
       (state.progress || [])
@@ -759,6 +779,8 @@ async function syncCourseSessionState(initial = false) {
     }
   } catch (error) {
     console.warn("同步完整課程進度失敗",error);
+    setCourseRealtimeStatus("fallback",error.message || "課堂狀態讀取失敗");
+    startCourseSessionPolling(2200);
   }
 }
 
@@ -814,7 +836,7 @@ function startCourseSessionSync() {
         clearInterval(courseSessionPollTimer);
         return;
       }
-      startCourseSessionPolling(status === "connected" ? 12000 : 2200);
+      startCourseSessionPolling(status === "connected" ? 6000 : 2200);
     }
   });
 }
