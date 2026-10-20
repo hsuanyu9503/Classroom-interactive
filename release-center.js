@@ -1,6 +1,6 @@
 /* V2.32.1 | Final Release Center */
 (() => {
-  const APP_VERSION = "2.36.0";
+  const APP_VERSION = "2.36.3";
   const LAST_BACKUP_KEY = "interactive-classroom-last-backup";
   const CHECK_KEY = "interactive-classroom-release-check";
   const $ = id => document.getElementById(id);

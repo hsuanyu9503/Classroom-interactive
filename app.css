@@ -6692,8 +6692,8 @@ input:focus,textarea:focus,select:focus{
 
 
 /* ============================================================
-   V2.36.2 P2 — VERIFIED live stance projection: proportional bands,
-   subtle fixed centre reference line, restrained two-sided lightning.
+   V2.36.3 — live stance projection: proportional bands,
+   subtle fixed centre reference line, no lightning.
    This is deliberately last: the old v2.36.1 projection QA rules
    hid both coloured segments with opacity:0.
    ============================================================ */
@@ -6778,39 +6778,79 @@ input:focus,textarea:focus,select:focus{
 #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-center-flag::after{
   display:none;
 }
-/* Two lightning wings are directly attached to the moving knot; no separate
-   animations. Small, readable and symmetric at low motion intensity. */
-.live-stance-tug-board .live-stance-knot{overflow:visible;}
+
+/* ============================================================
+   V2.36.3 — Back to the supplied original projection reference.
+   The vote counter circles stay green/rose; only the narrow colour
+   bars change proportion with the existing LiveStanceMotion RAF value.
+   ============================================================ */
+.live-stance-projection-overlay .live-stance-tug-board.projection,
+#presentationLiveStanceBoard.live-stance-tug-board.projection {
+  background:linear-gradient(180deg,#fff 0%,#fafbfd 100%);
+  border:1px solid rgba(237,240,247,.96);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena {
+  isolation:isolate;
+}
+/* Match the green/red round scoreboard with a restrained track palette. */
+.live-stance-tug-board.projection {
+  --stance-left:#63a778;
+  --stance-right:#c66176;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope {
+  background:#dfe2e9;
+  border-color:rgba(131,143,166,.12);
+  box-shadow:inset 0 1px 3px rgba(125,136,156,.23),0 3px 9px rgba(15,23,42,.07);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::before,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::before {
+  background:linear-gradient(180deg,#79ba8b 0%,#63a778 100%);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::after,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::after {
+  background:linear-gradient(180deg,#d7798d 0%,#c66176 100%);
+}
+/* Prevent the old global blue/red pull emphasis from recolouring projected votes. */
+.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling .live-stance-tug-score.left,
+#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling .live-stance-tug-score.left {
+  box-shadow:0 20px 40px rgba(68,119,87,.23),inset 0 2px 0 rgba(255,255,255,.25),0 0 0 10px rgba(99,167,120,.12);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling .live-stance-tug-score.right,
+#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling .live-stance-tug-score.right {
+  box-shadow:0 20px 40px rgba(160,77,94,.23),inset 0 2px 0 rgba(255,255,255,.25),0 0 0 10px rgba(198,97,118,.12);
+}
+/* No special lightning shapes; keep a simple reference-style circle. */
 .live-stance-tug-board .live-stance-knot::before,
-.live-stance-tug-board .live-stance-knot::after{
-  content:"";
+.live-stance-tug-board .live-stance-knot::after {
+  content:none !important;
+  display:none !important;
+}
+.live-stance-tug-board.projection .live-stance-tug-caption {
   position:absolute;
-  top:50%;
-  width:clamp(13px,1.4vw,22px);
-  height:clamp(19px,2.05vw,31px);
-  display:block;
+  left:50%;
+  top:6px;
+  transform:translateX(-50%);
+  width:max-content;
+  max-width:98%;
+  font-size:clamp(12px,1.25vw,17px);
+  line-height:1.3;
+  font-weight:850;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+  color:#868d9e;
+  white-space:normal;
+  text-align:center;
   pointer-events:none;
-  opacity:.68;
-  clip-path:polygon(48% 0%,92% 1%,62% 38%,91% 38%,22% 100%,40% 59%,13% 59%);
-  filter:drop-shadow(0 1px 2px rgba(15,23,42,.15));
-  transition:opacity .2s ease,filter .2s ease;
 }
-.live-stance-tug-board .live-stance-knot::before{
-  left:-6px;
-  background:linear-gradient(180deg,rgba(255,255,255,.94),var(--stance-left) 75%);
-  transform:translate(-72%,-50%) rotate(-10deg);
+/* Only the projection gets the intro text, not the small teacher control. */
+.live-stance-tug-board:not(.projection) .live-stance-tug-caption {display:none;}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-center-flag,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-center-flag {
+  opacity:.6;
+  height:clamp(45px,5.5vw,75px);
 }
-.live-stance-tug-board .live-stance-knot::after{
-  right:-6px;
-  background:linear-gradient(180deg,rgba(255,255,255,.94),var(--stance-right) 75%);
-  transform:translate(72%,-50%) scaleX(-1) rotate(-10deg);
-}
-.live-stance-tug-board.is-pulling .live-stance-knot::before,
-.live-stance-tug-board.is-pulling .live-stance-knot::after{
-  opacity:1;
-  filter:drop-shadow(0 1px 4px rgba(15,23,42,.24));
-}
-@media(prefers-reduced-motion:reduce){
-  .live-stance-tug-board .live-stance-knot::before,
-  .live-stance-tug-board .live-stance-knot::after{transition:none;}
+@media(max-width:640px){
+  .live-stance-tug-board.projection .live-stance-tug-caption {font-size:10px;letter-spacing:.07em;top:0;}
 }

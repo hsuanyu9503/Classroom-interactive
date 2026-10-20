@@ -2265,6 +2265,7 @@
       </div>
       <div class="live-stance-tug-arena" aria-label="左右立場拉鋸">
         <span class="live-stance-center-flag" aria-hidden="true"></span>
+        <span class="live-stance-tug-caption" aria-hidden="true">FRIENDLY MATCH · 即時拉鋸</span>
         <div class="live-stance-rope" aria-hidden="true"></div>
         <span class="live-stance-tension-wave" aria-hidden="true"></span>
         <div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div>
@@ -2322,14 +2323,14 @@
     if(fresh){
       leftCount.textContent=String(left);
       rightCount.textContent=String(right);
-      leftPctEl.textContent=decided?`${leftPct}%`:"—";
-      rightPctEl.textContent=decided?`${rightPct}%`:"—";
+      leftPctEl.textContent=decided?`${leftPct}%`:(container.classList.contains("projection")?"0%":"—");
+      rightPctEl.textContent=decided?`${rightPct}%`:(container.classList.contains("projection")?"0%":"—");
       if(undecidedCount)undecidedCount.textContent=String(undecided);
     }else{
       animateLiveStanceMetric(leftCount,left);
       animateLiveStanceMetric(rightCount,right);
-      animateLiveStanceMetric(leftPctEl,leftPct,{suffix:"%",empty:!decided});
-      animateLiveStanceMetric(rightPctEl,rightPct,{suffix:"%",empty:!decided});
+      animateLiveStanceMetric(leftPctEl,decided?leftPct:0,{suffix:"%",empty:!decided&&!container.classList.contains("projection")});
+      animateLiveStanceMetric(rightPctEl,decided?rightPct:0,{suffix:"%",empty:!decided&&!container.classList.contains("projection")});
       if(undecidedCount)animateLiveStanceMetric(undecidedCount,undecided);
     }
     animateLiveStancePosition(container,knot);
