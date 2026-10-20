@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>逐層思辨｜全班投影</title>
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="app.css?v=2.36.4-neon" />
+  <link rel="stylesheet" href="interface-polish.css?v=2.36.4-neon" />
+  <script src="activity-modules.js?v=2.36.4-neon" defer></script>
+  <script src="deliberation-history.js?v=2.36.4-neon" defer></script>
+  <script src="deliberation-present.js?v=2.36.4-neon" defer></script>
+</head>
+<body class="deliberation-presentation-page">
+  <main class="deliberation-presentation-shell">
+    <header class="deliberation-presentation-hero">
+      <div>
+        <p class="eyebrow">全班思辨</p>
+        <h1 id="dpTitle">逐層思辨</h1>
+        <p id="dpSource" class="subtle"></p>
+      </div>
+      <div class="deliberation-presentation-status">
+        <span id="dpStage" class="stage-badge">第 1 層 / 1</span>
+        <span id="dpRound" class="status-chip">等待同步</span>
+      </div>
+    </header>
+
+    <section class="deliberation-presentation-grid">
+      <article class="panel deliberation-presentation-content">
+        <span class="summary-label">目前情境</span>
+        <h2 id="dpLayerTitle">等待老師開啟投影</h2>
+        <p id="dpLayerContent"></p>
+        <div class="deliberation-presentation-question">
+          <span>核心提問</span>
+          <p id="dpLayerQuestion"></p>
+        </div>
+        <div class="deliberation-presentation-fixed">
+          <span>固定判斷題</span>
+          <p id="dpFixedQuestion"></p>
+        </div>
+        <p id="dpProgress" class="subtle">已提交 0 / 0</p>
+      </article>
+
+      <article class="panel deliberation-presentation-results">
+        <div id="dpWaitingResults" class="centered-card">
+          <div class="big-icon">🔒</div>
+          <h2>結果尚未公布</h2>
+          <p>作答結束前不顯示票數，避免跟隨多數。</p>
+        </div>
+        <div id="dpPublishedResults" class="hidden">
+          <span class="summary-label">全班判斷分布</span>
+          <div id="dpDistribution" class="stage-distribution-list"></div>
+          <span class="summary-label deliberation-reason-heading">匿名理由</span>
+          <div id="dpReasons" class="deliberation-reason-list"></div>
+        </div>
+      </article>
+    </section>
+
+    <section id="dpHistoryPanel" class="panel dp-history-panel hidden" aria-label="全班選擇歷程">
+      <div class="dp-history-heading"><div><span class="summary-label">CHOICE JOURNEY</span><h2>全班選擇歷程</h2><p>橫向比較每一層判斷；↻ 代表學生改變選擇。</p></div><span class="dp-history-privacy">匿名投影 · 僅顯示已公布的選擇</span></div>
+      <div id="dpHistoryContent" class="deliberation-history-view"></div>
+    </section>
+
+    <section class="deliberation-presentation-control-dock" aria-label="投影課堂控制">
+      <div class="dp-control-status-row">
+        <span id="dpControlStatus" class="dp-control-status offline">⚪ 僅投影模式</span>
+        <small id="dpControlHint">教師控制端連線後，可直接在這裡操作課堂流程。</small>
+      </div>
+
+      <div class="dp-control-groups">
+        <div class="dp-control-group" aria-label="課堂流程控制">
+          <button id="dpPreviousBtn" class="btn btn-secondary dp-session-control" type="button">← 上一層</button>
+          <button id="dpOpenBtn" class="btn btn-secondary dp-session-control" type="button">🟢 開放作答</button>
+          <button id="dpLockBtn" class="btn btn-secondary dp-session-control" type="button">🔒 鎖定</button>
+          <button id="dpPublishBtn" class="btn btn-primary dp-session-control" type="button">📊 公布結果</button>
+          <button id="dpNextBtn" class="btn btn-primary dp-session-control" type="button">下一層 →</button>
+        </div>
+
+        <div class="dp-control-group dp-local-controls" aria-label="投影顯示控制">
+          <button id="dpViewOverviewBtn" class="btn btn-secondary active" type="button">總覽</button>
+          <button id="dpViewContentBtn" class="btn btn-secondary" type="button">情境</button>
+          <button id="dpViewResultsBtn" class="btn btn-secondary" type="button">統計</button>
+          <button id="dpViewHistoryBtn" class="btn btn-secondary" type="button">📈 選擇歷程</button>
+          <button id="dpFullscreenBtn" class="btn btn-secondary" type="button">⛶ 全螢幕</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-credit" aria-label="網站作者">
+    Created by 小宇老師
+  </footer>
+
+</body>
+</html>
