@@ -6854,3 +6854,589 @@ input:focus,textarea:focus,select:focus{
 @media(max-width:640px){
   .live-stance-tug-board.projection .live-stance-tug-caption {font-size:10px;letter-spacing:.07em;top:0;}
 }
+
+
+/* ============================================================
+   V2.36.4 — Neon glass live-stance projection refresh
+   Based on the approved mockup: deep navy stage, frosted glass board,
+   green/rose luminous vote circles, slim centre line, and glowing bands.
+   ============================================================ */
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)){
+  background:
+    radial-gradient(circle at 18% 14%, rgba(86,232,178,.16) 0%, rgba(86,232,178,0) 22%),
+    radial-gradient(circle at 86% 22%, rgba(255,96,143,.14) 0%, rgba(255,96,143,0) 20%),
+    radial-gradient(circle at 50% 100%, rgba(92,118,255,.18) 0%, rgba(92,118,255,0) 34%),
+    linear-gradient(180deg,#071330 0%,#040c22 100%);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-player-shell{
+  position:relative;
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-player-header{
+  background:linear-gradient(180deg,rgba(11,24,57,.82) 0%, rgba(11,24,57,.62) 100%);
+  border-color:rgba(173,191,255,.16);
+  box-shadow:0 20px 45px rgba(2,6,23,.28);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-player-header h1,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-player-header p,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-player-header .student-session-badge,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-player-header .course-presentation-badge,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-player-header .presentation-sync-state{
+  color:#f4f7ff;
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-presentation-badge{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(220,229,255,.18);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-live-dot{
+  background:#6ff2b8;
+  box-shadow:0 0 0 4px rgba(111,242,184,.15),0 0 18px rgba(111,242,184,.32);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-presentation-results{
+  position:relative;
+  overflow:hidden;
+  margin-top:22px;
+  padding:32px;
+  border:1px solid rgba(175,195,255,.16);
+  border-radius:34px;
+  background:linear-gradient(180deg,rgba(10,22,57,.82) 0%, rgba(8,18,48,.74) 100%);
+  box-shadow:0 28px 70px rgba(1,5,20,.38), inset 0 1px 0 rgba(255,255,255,.05);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-presentation-results::before,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-presentation-results::after{
+  content:"";
+  position:absolute;
+  border-radius:999px;
+  pointer-events:none;
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-presentation-results::before{
+  inset:-120px auto auto -120px;
+  width:280px;
+  height:280px;
+  background:radial-gradient(circle, rgba(82,255,193,.18) 0%, rgba(82,255,193,.06) 32%, rgba(82,255,193,0) 68%);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-presentation-results::after{
+  inset:auto -140px -150px auto;
+  width:360px;
+  height:360px;
+  background:radial-gradient(circle, rgba(255,110,160,.18) 0%, rgba(255,110,160,.05) 34%, rgba(255,110,160,0) 70%);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-results-head{
+  position:relative;
+  z-index:1;
+  border-bottom-color:rgba(207,219,255,.1);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-results-head h2{
+  color:#fbfcff;
+  text-shadow:0 10px 30px rgba(0,0,0,.24);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-results-head .subtle,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-results-head p,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-results-section-head,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-results-section-head span{
+  color:rgba(224,232,255,.78);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-result-metric{
+  background:rgba(255,255,255,.06);
+  border-color:rgba(210,220,255,.09);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-result-metric span,
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-result-metric small{
+  color:rgba(225,233,255,.72);
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-result-metric strong{
+  color:#ffffff;
+}
+body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .presentation-distribution-section{
+  position:relative;
+  z-index:1;
+  border-top-color:rgba(207,219,255,.1);
+}
+.live-stance-tug-board.projection{
+  --stance-left:#4cf0a1;
+  --stance-right:#ff6f8b;
+  --stance-left-deep:#138a55;
+  --stance-right-deep:#b52f58;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection,
+#presentationLiveStanceBoard.live-stance-tug-board.projection{
+  position:relative;
+  overflow:hidden;
+  grid-template-columns:minmax(200px,.95fr) minmax(340px,1.95fr) minmax(200px,.95fr);
+  gap:clamp(20px,2.3vw,34px);
+  align-items:center;
+  padding:clamp(38px,4vw,54px) clamp(30px,4vw,56px) clamp(30px,3vw,40px);
+  border-radius:34px;
+  border:1px solid rgba(214,225,255,.26);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.07) 100%),
+    linear-gradient(180deg, rgba(15,29,70,.78) 0%, rgba(12,23,58,.72) 100%);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  box-shadow:
+    0 28px 72px rgba(1,6,21,.34),
+    inset 0 1px 0 rgba(255,255,255,.18);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection::before,
+.live-stance-projection-overlay .live-stance-tug-board.projection::after,
+#presentationLiveStanceBoard.live-stance-tug-board.projection::before,
+#presentationLiveStanceBoard.live-stance-tug-board.projection::after{
+  content:"";
+  position:absolute;
+  inset:auto;
+  width:320px;
+  height:320px;
+  border-radius:50%;
+  pointer-events:none;
+  opacity:.7;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection::before,
+#presentationLiveStanceBoard.live-stance-tug-board.projection::before{
+  top:-180px;
+  left:-140px;
+  background:radial-gradient(circle, rgba(80,248,171,.22) 0%, rgba(80,248,171,.06) 34%, rgba(80,248,171,0) 68%);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection::after,
+#presentationLiveStanceBoard.live-stance-tug-board.projection::after{
+  right:-150px;
+  bottom:-170px;
+  background:radial-gradient(circle, rgba(255,97,150,.20) 0%, rgba(255,97,150,.06) 34%, rgba(255,97,150,0) 70%);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
+  position:relative;
+  z-index:1;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  gap:8px;
+  justify-self:center;
+  width:min(100%,clamp(190px,19vw,252px));
+  aspect-ratio:1;
+  padding:18px;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.28);
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.08) 0%, rgba(255,255,255,.02) 26%, rgba(3,10,26,.12) 100%);
+  overflow:visible;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.left,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.left{
+  box-shadow:0 0 0 2px rgba(118,255,192,.14), 0 0 28px rgba(92,255,181,.46), inset 0 0 24px rgba(20,157,95,.24), 0 18px 40px rgba(2,8,22,.28);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right{
+  box-shadow:0 0 0 2px rgba(255,129,169,.12), 0 0 28px rgba(255,98,146,.4), inset 0 0 24px rgba(181,47,88,.22), 0 18px 40px rgba(2,8,22,.28);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score span,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score span{
+  color:#fbfdff;
+  font-size:clamp(18px,1.45vw,30px);
+  font-weight:850;
+  letter-spacing:.08em;
+  text-shadow:0 2px 16px rgba(0,0,0,.24);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score strong,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score strong{
+  color:#fbfdff;
+  font-size:clamp(76px,6.5vw,122px);
+  line-height:.9;
+  font-weight:900;
+  text-shadow:0 0 18px rgba(255,255,255,.14), 0 8px 20px rgba(0,0,0,.24);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score::after,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score::after{
+  content:"票";
+  color:#fbfdff;
+  font-size:clamp(18px,1.35vw,24px);
+  font-weight:850;
+  letter-spacing:.08em;
+  opacity:.95;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small{
+  position:absolute;
+  left:50%;
+  bottom:-26px;
+  transform:translateX(-50%);
+  min-width:144px;
+  padding:12px 18px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.04);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  text-align:center;
+  font-size:clamp(28px,3vw,44px);
+  line-height:1;
+  font-weight:900;
+  letter-spacing:-.01em;
+  text-shadow:none;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.left small,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.left small{
+  color:#7dffd0;
+  box-shadow:0 8px 24px rgba(2,10,25,.18), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right small,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right small{
+  color:#ff9db0;
+  box-shadow:0 8px 24px rgba(2,10,25,.18), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena{
+  position:relative;
+  z-index:1;
+  height:clamp(180px,18vw,220px);
+  align-self:center;
+  isolation:isolate;
+}
+.live-stance-tug-board.projection .live-stance-tug-caption{
+  position:absolute;
+  left:50%;
+  top:6px;
+  transform:translateX(-50%);
+  z-index:3;
+  padding:12px 24px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.06);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  color:rgba(245,248,255,.92);
+  font-size:clamp(14px,1.1vw,18px);
+  line-height:1.2;
+  font-weight:800;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  white-space:nowrap;
+  text-align:center;
+  pointer-events:none;
+}
+.live-stance-tug-board.projection .live-stance-center-flag,
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-center-flag,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-center-flag{
+  position:absolute;
+  left:50%;
+  top:54%;
+  z-index:0;
+  width:2px;
+  height:clamp(74px,9vw,110px);
+  transform:translate(-50%,-50%);
+  border-radius:999px;
+  background:linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(207,219,255,.16) 16%, rgba(207,219,255,.34) 50%, rgba(207,219,255,.16) 84%, rgba(255,255,255,0) 100%);
+  opacity:.9;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope{
+  left:9%;
+  right:9%;
+  top:56%;
+  height:20px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.07);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),0 8px 20px rgba(0,0,0,.18);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::before,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::before{
+  background:linear-gradient(90deg, rgba(76,240,161,.85) 0%, rgba(76,240,161,1) 40%, rgba(76,240,161,.85) 100%);
+  box-shadow:0 0 12px rgba(76,240,161,.45),0 0 24px rgba(76,240,161,.18);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::after,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::after{
+  background:linear-gradient(90deg, rgba(255,111,139,.92) 0%, rgba(255,111,139,1) 58%, rgba(255,111,139,.82) 100%);
+  box-shadow:0 0 12px rgba(255,111,139,.38),0 0 24px rgba(255,111,139,.16);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena::before,
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena::after,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena::before,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena::after{
+  width:20px;
+  height:20px;
+  border:3px solid rgba(255,255,255,.7);
+  box-shadow:0 0 0 3px rgba(255,255,255,.05), 0 6px 18px rgba(2,8,22,.28);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena::before,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena::before{
+  background:linear-gradient(180deg, rgba(76,240,161,1) 0%, rgba(19,138,85,1) 100%);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena::after,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena::after{
+  background:linear-gradient(180deg, rgba(255,111,139,1) 0%, rgba(181,47,88,1) 100%);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-knot,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-knot{
+  width:50px;
+  height:50px;
+  border:0;
+  background:radial-gradient(circle at 45% 36%, rgba(255,255,255,.98) 0%, rgba(215,235,255,.92) 35%, rgba(121,149,214,.84) 100%);
+  box-shadow:0 0 0 4px rgba(255,255,255,.16),0 0 18px rgba(182,209,255,.32),0 14px 28px rgba(2,8,22,.3);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-knot span,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-knot span{
+  width:14px;
+  height:14px;
+  background:radial-gradient(circle at 38% 35%, #ffffff 0%, #c6d8ff 45%, #91a6d8 100%);
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.48);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tension-wave,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tension-wave{
+  width:110px;
+  height:110px;
+  background:radial-gradient(circle, rgba(190,214,255,.22) 0%, rgba(132,161,255,.12) 38%, rgba(255,255,255,0) 72%);
+  filter:blur(7px);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count{
+  grid-column:2;
+  justify-self:center;
+  margin-top:-10px;
+  padding:10px 18px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.06);
+  color:#eef3ff;
+  box-shadow:0 8px 18px rgba(2,8,22,.18);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count strong,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count strong{
+  color:#fff;
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling .live-stance-rope,
+#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling .live-stance-rope{
+  filter:saturate(1.08) brightness(1.05);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 10px 24px rgba(0,0,0,.22);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling .live-stance-knot,
+#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling .live-stance-knot{
+  box-shadow:0 0 0 4px rgba(255,255,255,.18),0 0 22px rgba(190,214,255,.4),0 14px 28px rgba(2,8,22,.34);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling[data-live-stance-leader="blue"] .live-stance-tug-score.left,
+#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling[data-live-stance-leader="blue"] .live-stance-tug-score.left{
+  box-shadow:0 0 0 2px rgba(118,255,192,.14), 0 0 36px rgba(92,255,181,.5), inset 0 0 24px rgba(20,157,95,.26), 0 18px 40px rgba(2,8,22,.28);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling[data-live-stance-leader="red"] .live-stance-tug-score.right,
+#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling[data-live-stance-leader="red"] .live-stance-tug-score.right{
+  box-shadow:0 0 0 2px rgba(255,129,169,.12), 0 0 36px rgba(255,98,146,.46), inset 0 0 24px rgba(181,47,88,.24), 0 18px 40px rgba(2,8,22,.28);
+}
+@media(max-width:980px){
+  .live-stance-projection-overlay .live-stance-tug-board.projection,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection{
+    grid-template-columns:1fr;
+    padding:26px 18px 36px;
+    gap:18px;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
+    width:min(100%,220px);
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena{
+    order:2;
+    height:150px;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right{
+    order:3;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count{
+    grid-column:auto;
+    order:4;
+    margin-top:0;
+  }
+}
+@media(max-width:640px){
+  body.teacher-course-presentation.presentation-results-view:has(#presentationLiveStanceSection:not(.hidden)) .course-presentation-results{padding:22px 16px;}
+  .live-stance-tug-board.projection .live-stance-tug-caption{top:4px;padding:10px 14px;font-size:10px;letter-spacing:.08em;}
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small{font-size:24px;min-width:120px;bottom:-20px;}
+}
+
+
+/* ============================================================
+   V2.36.4 NEON — final QA alignment and glass score fix
+   This small, projection-only override is intentionally placed last:
+   the legacy filled score backgrounds have higher specificity.
+   ============================================================ */
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.left,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.left{
+  background:
+    radial-gradient(circle at 46% 32%, rgba(91,249,177,.28) 0%, rgba(19,126,89,.35) 36%, rgba(7,42,51,.75) 100%),
+    rgba(4,28,46,.78);
+  border-color:rgba(105,255,191,.74);
+  box-shadow:0 0 0 2px rgba(118,255,192,.11),0 0 36px rgba(59,245,154,.38),inset 0 0 38px rgba(19,176,116,.21),0 18px 40px rgba(2,8,22,.27);
+}
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right{
+  background:
+    radial-gradient(circle at 48% 30%, rgba(255,147,183,.28) 0%, rgba(183,43,96,.34) 36%, rgba(55,15,51,.76) 100%),
+    rgba(42,12,47,.82);
+  border-color:rgba(255,135,166,.74);
+  box-shadow:0 0 0 2px rgba(255,129,169,.11),0 0 36px rgba(255,91,137,.37),inset 0 0 38px rgba(211,57,104,.17),0 18px 40px rgba(2,8,22,.27);
+}
+/* The RAF driver maps arena 4..96% to rope 0..100%.
+   The track MUST use these same 4/96 endpoints so its split matches the knot. */
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope{
+  left:4%;
+  right:4%;
+  top:50%;
+}
+.live-stance-tug-board.projection .live-stance-center-flag,
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-center-flag,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-center-flag{
+  top:50%;
+}
+/* The knot and colour bands now share the same vertical baseline. */
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-knot,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-knot{
+  top:50%;
+}
+@media(prefers-reduced-motion:reduce){
+  .live-stance-tug-board.projection .live-stance-knot{transition:none;}
+}
+
+
+/* ============================================================
+   V2.36.4 NEON — responsive projection QA fixes
+   Keep vote circles symmetric on tablets/phones; only stance projection.
+   ============================================================ */
+@media(min-width:981px){
+  .live-stance-projection-overlay .live-stance-tug-board.projection,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection{
+    padding-bottom:clamp(74px,6vw,96px);
+  }
+}
+@media(max-width:980px){
+  .live-stance-projection-overlay .live-stance-tug-board.projection,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:16px 18px;
+    padding:26px 20px 40px;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.left,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.left{
+    grid-column:1;
+    grid-row:1;
+    justify-self:center;
+    order:0;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right{
+    grid-column:2;
+    grid-row:1;
+    justify-self:center;
+    order:0;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
+    width:min(100%,205px);
+    min-width:0;
+    aspect-ratio:1;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score strong,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score strong{
+    font-size:clamp(46px,8vw,76px);
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena{
+    grid-column:1/-1;
+    grid-row:2;
+    order:0;
+    height:152px;
+    min-width:0;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count{
+    grid-column:1/-1;
+    grid-row:3;
+    order:0;
+    margin-top:2px;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small{
+    bottom:-24px;
+    font-size:clamp(23px,3.7vw,36px);
+    min-width:100px;
+    padding:8px 12px;
+  }
+}
+@media(max-width:520px){
+  .live-stance-projection-overlay .live-stance-tug-board.projection,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection{
+    gap:14px 10px;
+    padding:24px 12px 32px;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
+    width:min(100%,146px);
+    padding:12px 6px;
+    gap:4px;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score span,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score span,
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score::after,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score::after{
+    font-size:15px;
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score strong,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score strong{
+    font-size:clamp(41px,11vw,56px);
+  }
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small{
+    bottom:-22px;
+    font-size:22px;
+    min-width:75px;
+    padding:7px 10px;
+  }
+}
+
+
+/* Final QA: percentage capsules must contain the large numbers.  Legacy
+   projection CSS gave the LEFT capsule an undersized fixed height. */
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small,
+.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right small,
+#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right small{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:max-content;
+  min-width:144px;
+  height:52px;
+  min-height:52px;
+  box-sizing:border-box;
+  padding:0 18px;
+  left:50%;
+  bottom:-75px;
+  line-height:1;
+  font-size:clamp(28px,2.7vw,40px);
+}
+@media(max-width:980px){
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small,
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right small,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right small{
+    min-width:110px;
+    height:42px;
+    min-height:42px;
+    padding:0 12px;
+    bottom:-51px;
+    font-size:clamp(22px,3.4vw,32px);
+  }
+}
+@media(max-width:520px){
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small,
+  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right small,
+  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right small{
+    min-width:78px;
+    height:34px;
+    min-height:34px;
+    padding:0 10px;
+    bottom:-40px;
+    font-size:22px;
+  }
+}

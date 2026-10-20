@@ -2893,7 +2893,7 @@ function exportTeachingBackup() {
   const payload = {
     schema:"classroom-interactive-backup",
     version:2,
-    appVersion:"2.36.3",
+    appVersion:"2.36.4",
     exportedAt:new Date().toISOString(),
     data:{
       courses:readBackupArray(BACKUP_KEYS.courses),
