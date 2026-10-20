@@ -1,0 +1,132 @@
+TAP version 13
+# PASS 8 個模組及隱藏 runtime 均不再被 Course 黑名單阻擋
+# PASS 學生 Course 快照中的逐層思辨使用去除隱藏層的 shell
+# PASS SQL：15 個升級函式／節點存取控制及私有情境定義存在
+# PASS Course: 兩名學生加入並獨立保存作答
+# PASS Course: 重複活動的兩個 node_ref 互不覆寫
+# PASS Course: 匿名提問與認同／回應依節點隔離
+# PASS Course: 兩個小組共識節點的分組與歷史資料分離
+# PASS Course: 即時立場歷程依節點隔離
+# PASS Course: 學生進度只允許目前節點
+# PASS Course: 含逐層思辨私有情境禁止本機模擬
+# PASS Cloud RPC: 將逐層思辨私有資料獨立送入受保護後端
+# PASS Cloud RPC: 教師切換課程節點改用安全版 RPC
+# TOTAL: 12 Course checks passed
+# Subtest: tests/course-all-modules.test.cjs
+ok 1 - tests/course-all-modules.test.cjs
+  ---
+  duration_ms: 57.417534
+  type: 'test'
+  ...
+# PASS A has two distinct students
+# PASS paused A stale student cannot write to B
+# PASS B has independent answers for both students
+# PASS settled B rejects writes while A remains active
+# PASS independent settlement persists across switching
+# Subtest: tests/course-parallel-two-students-v2360.test.cjs
+ok 2 - tests/course-parallel-two-students-v2360.test.cjs
+  ---
+  duration_ms: 44.041372
+  type: 'test'
+  ...
+# PASS A 鎖定後切換 B，B 起始仍開放
+# PASS 切回 A 還原 A 的鎖定狀態
+# PASS 跨不同活動類型往返，第二階段仍保存
+# PASS B 獨立結算後，不能重新開放立場
+# PASS 結算 B 不影響 A 的控制與繼續運行
+# PASS 返回已結算 B 僅供檢視，狀態不會重設
+# PASS SQL 具備節點狀態保存、結算、提交防護與教師驗證
+# PASS 教師端 A／B 控制元件與狀態顯示完整
+# TOTAL 8 Course parallel checks passed
+# Subtest: tests/course-parallel-v2359.test.cjs
+ok 3 - tests/course-parallel-v2359.test.cjs
+  ---
+  duration_ms: 48.154582
+  type: 'test'
+  ...
+# PASS: 模擬舊唯一鍵時，第二個拉鋸節點確實重現提交衝突
+# PASS: 模擬新唯一鍵時，兩名學生在兩個拉鋸節點分別提交成功、互不覆蓋
+# PASS: SQL 節點唯一鍵修正與教師端嚴格節點過濾均存在
+# Subtest: tests/course-repeat-live-stance.test.cjs
+ok 4 - tests/course-repeat-live-stance.test.cjs
+  ---
+  duration_ms: 48.006959
+  type: 'test'
+  ...
+# PASS Course 多節點答案完全隔離
+# PASS 教師可查看目前尚未公布的答案
+# PASS 匿名投影不包含學生名稱與未公布選擇
+# PASS 未作答學生仍列於歷程
+# PASS 略過階段保留空格且只計前後有效變更
+# PASS 投影公布本層後才顯示該層
+# PASS 反思和階段後補記不視為立場
+# PASS 獨立 Session 無 node_ref 也可正常運作
+# PASS 階段總數限制及無資料處理
+# All 9 choice-history tests passed.
+# Subtest: tests/deliberation-history.test.cjs
+ok 5 - tests/deliberation-history.test.cjs
+  ---
+  duration_ms: 40.156738
+  type: 'test'
+  ...
+# PASS 6 per-layer reason acceptance cases, SQL reference and student mismatch notice
+# Subtest: tests/deliberation-reason-required-v23513.test.cjs
+ok 6 - tests/deliberation-reason-required-v23513.test.cjs
+  ---
+  duration_ms: 27.811393
+  type: 'test'
+  ...
+# PASS 13 項逐層理由顯示／必填／沿用／快照／資料庫相容檢查
+# Subtest: tests/deliberation-reason-visibility.test.cjs
+ok 7 - tests/deliberation-reason-visibility.test.cjs
+  ---
+  duration_ms: 34.020155
+  type: 'test'
+  ...
+# PASS 逐層單選理由 11 項程式結構測試
+# Subtest: tests/deliberation-single-reason.test.cjs
+ok 8 - tests/deliberation-single-reason.test.cjs
+  ---
+  duration_ms: 36.106915
+  type: 'test'
+  ...
+# PASS 逐層思辨 11 項靜態與歷程測試：覆蓋選項、必填驗證、匯出、未公布隱藏、舊資料回退
+# Subtest: tests/per-layer-settings.test.cjs
+ok 9 - tests/per-layer-settings.test.cjs
+  ---
+  duration_ms: 37.323942
+  type: 'test'
+  ...
+# PASS 本機：教師＋兩名學生分別加入，統計人數正確
+# PASS 本機：兩人回答獨立保存，教師看見兩筆結果
+# PASS 本機：教師切換階段，學生收到新階段，提早作答遭拒
+# PASS 本機：結束 Session 後拒絕繼續提交
+# PASS 本機：progressive-reveal 按揭露進度接收／拒絕作答
+# PASS 本機：open-classification 按揭露進度接收／拒絕作答
+# PASS 本機：匿名提問、學生認同及回應跨頁同步
+# PASS 本機：教師刪除提問，同步清除相關認同與回應
+# PASS 本機：立場改變保留歷程、鎖定拒絕提交、重新開放後可提交
+# PASS 模擬雲端：教師建立 Session、分享網址攜帶公開用設定
+# PASS 模擬雲端：兩個獨立瀏覽器資料區加入同一課堂
+# PASS 模擬雲端：教師看到全班，學生只讀取自己的作答
+# PASS 模擬雲端：教師控制公開階段與學生再次作答
+# PASS 模擬雲端：關閉後拒絕再提交
+# PASS 模擬雲端：多人匿名提問／認同／回覆及教師刪除
+# PASS 模擬雲端：學生提交及教師控制均觸發 Realtime 廣播請求
+# PASS SQL：五種階段／鎖定驗證皆存在於 RPC 定義
+# TOTAL: 17 passed
+# Subtest: tests/session-integration.test.cjs
+ok 10 - tests/session-integration.test.cjs
+  ---
+  duration_ms: 52.945183
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 187.737256

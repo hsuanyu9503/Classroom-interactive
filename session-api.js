@@ -985,51 +985,28 @@
     if (!sessionMeta?.id || !sessionMeta?.teacherToken) throw new Error("Session 資料不完整");
 
     if (sessionMeta.mode === "cloud") {
-      // The teacher snapshot and Course runtime come from separate RPCs.
-      // A node switch between them must never paint the old node's answers
-      // using the new node's stage/lifecycle metadata.
-      for (let attempt=0;attempt<3;attempt++) {
-        const result = await rpc("get_teacher_session", {
-          p_session_id:sessionMeta.id,
-          p_teacher_token:sessionMeta.teacherToken
-        });
-        const snapshot=typeof result === "string" ? JSON.parse(result) : (result || {});
-        if (snapshot.session_kind === "course") {
-          const states=await getCourseNodeStates({...sessionMeta,sessionKind:"course"});
-          const active=(Array.isArray(states) ? states : []).filter(row=>row.lifecycle === "active");
-          if (active.length && !active.some(row=>row.node_ref===snapshot.current_node_ref)) {
-            // State changed while RPCs were running. Re-read an entire pair.
-            continue;
-          }
-          if (!active.length && Number(snapshot.revision || 0)>1) {
-            // All nodes may be settled, so no row carries lifecycle=active.
-            // Verify the session revision directly before accepting this pair.
-            const confirmationResult=await rpc("get_teacher_session",{
-              p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken
-            });
-            const confirmation=typeof confirmationResult==="string" ? JSON.parse(confirmationResult) : (confirmationResult || {});
-            if (Number(confirmation.revision || 0)!==Number(snapshot.revision || 0) ||
-                String(confirmation.current_node_ref || "")!==String(snapshot.current_node_ref || "")) continue;
-          }
-          snapshot.course_node_states=states;
+      const result = await rpc("get_teacher_session", {
+        p_session_id: sessionMeta.id,
+        p_teacher_token: sessionMeta.teacherToken
+      });
+      const snapshot = typeof result === "string" ? JSON.parse(result) : (result || {});
+      if ((snapshot?.activity_mode || sessionMeta.activityMode) === "live-stance") {
+        try {
+          const historyResult = await rpc("get_live_stance_history", {
+            p_session_id:sessionMeta.id,
+            p_teacher_token:sessionMeta.teacherToken
+          });
+          const history = typeof historyResult === "string" ? JSON.parse(historyResult) : (historyResult || {});
+          snapshot.live_stance_events = Array.isArray(history.live_stance_events) ? history.live_stance_events : [];
+          snapshot.live_stance_checkpoints = Array.isArray(history.live_stance_checkpoints) ? history.live_stance_checkpoints : [];
+        } catch (error) {
+          console.warn("無法取得即時立場歷程",error);
+          snapshot.live_stance_events = [];
+          snapshot.live_stance_checkpoints = [];
         }
-        if ((snapshot?.activity_mode || sessionMeta.activityMode) === "live-stance") {
-          try {
-            const historyResult=await rpc("get_live_stance_history", {
-              p_session_id:sessionMeta.id,p_teacher_token:sessionMeta.teacherToken
-            });
-            const history=typeof historyResult === "string" ? JSON.parse(historyResult) : (historyResult || {});
-            snapshot.live_stance_events=Array.isArray(history.live_stance_events) ? history.live_stance_events : [];
-            snapshot.live_stance_checkpoints=Array.isArray(history.live_stance_checkpoints) ? history.live_stance_checkpoints : [];
-          } catch(error) {
-            console.warn("無法取得即時立場歷程",error);
-            snapshot.live_stance_events=[];
-            snapshot.live_stance_checkpoints=[];
-          }
-        }
-        return snapshot;
       }
-      throw new Error("教師端活動節點正在切換，請稍後重新同步");
+      if (snapshot.session_kind==="course") snapshot.course_node_states=await getCourseNodeStates({...sessionMeta,sessionKind:"course"});
+      return snapshot;
     }
 
     const session = loadLocalSessions().find(item => item.id === sessionMeta.id && item.teacherToken === sessionMeta.teacherToken);

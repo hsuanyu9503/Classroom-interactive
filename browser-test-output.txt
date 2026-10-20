@@ -1,0 +1,9 @@
+JS ERRORS []
+READY 1
+groups after 1 checks 2
+STATE V2 課程已儲存
+STORED [{"id": "id-1792290295676-eb4866e33b3248", "title": "課堂討論", "nodeRefs": ["id-1792290295471-92d598cc714a08", "id-1792290295590-45483f6ce8e958"]}]
+COPY [{'id': 'id-1792290295821-be01abf47ad748', 'title': '課堂討論', 'nodeRefs': ['id-1792290295821-ae9aff8df61f58', 'id-1792290295821-6443daf0ed1fb']}]
+WIDTH 0
+MOBILE_OVERFLOW 0
+FINAL_ERRORS []
