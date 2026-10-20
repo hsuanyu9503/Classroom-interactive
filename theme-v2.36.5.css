@@ -1,0 +1,369 @@
+/* Classroom Interactive v2.36.5 — Unified classroom design language
+ * Teacher = pastel workspace; Student = playful, task first;
+ * Results/projection = dark, high-contrast immersive panels.
+ * Presentation motion and Supabase behavior are unchanged.
+ * Loaded AFTER app.css and interface-polish.css to prevent stale overrides.
+ */
+:root {
+  --ci-ink:#25365b;--ci-lavender:#7660d8;--ci-lavender-soft:#f1ecff;
+  --ci-mint:#32ae87;--ci-mint-soft:#eafbf5;--ci-sky:#409fe6;
+  --ci-rose:#ee7894;--ci-amber:#f0ae3c;
+  --ci-hairline:#e4e9f5;--ci-shadow:0 12px 32px rgba(40,63,111,.065);
+  --ci-round:22px;--ci-focus:0 0 0 4px rgba(118,96,216,.20);
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page,.deliberation-presentation-page){
+  --primary:#7061d5;--primary-dark:#5647b8;--soft:#f0edff;
+  --line:#e3e9f4;--shadow:var(--ci-shadow);
+  color:var(--ci-ink);
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) :where(button,input,textarea,select,a):focus-visible{
+  outline:2px solid #7967de;outline-offset:3px;
+  box-shadow:var(--ci-focus);
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) :where(input,textarea,select){
+  accent-color:#7660d8;
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) :where(.btn){
+  border-radius:13px;transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) .btn-primary{
+  background:linear-gradient(130deg,#7564dd,#5e58cf);color:white;border-color:transparent;
+  box-shadow:0 8px 18px rgba(97,85,206,.15);
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) .btn-primary:hover:not(:disabled){
+  background:linear-gradient(130deg,#6d5bcf,#5144ba);transform:translateY(-1px);
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) .btn-secondary{
+  border-color:#dfe5f3;color:#4b5d80;background:#fff;
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) .btn-secondary:hover:not(:disabled){
+  background:#f6f5ff;border-color:#cfc9f6;
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) :where(.field input,.field select,.field textarea){
+  border-radius:13px;background:#fff;border-color:#dfe6f1;
+}
+:where(.teacher-page,.student-page,.join-page,.course-player-page) :where(.panel,.student-card){
+  border-color:var(--ci-hairline);box-shadow:var(--ci-shadow);
+}
+
+/* TEACHER | A: soft, readable classroom workspace. Keep existing controls. */
+body.teacher-page{
+  background:
+    radial-gradient(ellipse 800px 480px at -6% 2%,rgba(193,177,255,.17),transparent 70%),
+    radial-gradient(ellipse 700px 420px at 100% 12%,rgba(149,234,207,.17),transparent 70%),
+    linear-gradient(180deg,#f8faff,#f4f8fd 48%,#f8faff);
+}
+.teacher-page:before{display:none!important}
+.teacher-page .topbar{
+  position:relative;isolation:isolate;overflow:hidden;
+  min-height:154px;padding:23px 29px 26px;margin:22px auto 18px;
+  border:1px solid rgba(208,216,245,.9);border-radius:27px;
+  background:linear-gradient(111deg,#e9f2ff 0%,#f4efff 53%,#e9faf2 100%);
+  box-shadow:0 15px 38px rgba(81,91,159,.08);
+}
+.teacher-page .topbar:before{
+  content:"";display:block;position:absolute;z-index:-1;pointer-events:none;
+  width:270px;height:270px;right:12%;top:-160px;border-radius:50%;
+  background:radial-gradient(circle,rgba(126,113,217,.16),transparent 70%);
+}
+.teacher-page .topbar:after{
+  content:"✦";display:block;position:absolute;z-index:-1;right:22%;top:36px;
+  font-size:44px;color:rgba(121,110,218,.26);transform:rotate(12deg);pointer-events:none;
+}
+.teacher-page .topbar h1{font-size:clamp(27px,3.5vw,42px);color:#27365b;letter-spacing:-.03em}
+.teacher-page .topbar .eyebrow{color:#6d5ace;letter-spacing:.16em}
+.teacher-page .topbar .subtle{max-width:640px;color:#667792;line-height:1.75}
+.teacher-page .workspace-version{
+  background:rgba(255,255,255,.75);border:1px solid #ddd7fa;
+  border-radius:999px;color:#675ac4;padding:5px 11px;font-weight:850;
+}
+.teacher-page .topbar .btn-secondary{
+  border:1px solid #ddd9f5;background:rgba(255,255,255,.82);
+  color:#6555c0;box-shadow:0 5px 15px rgba(101,89,173,.06);
+}
+.teacher-page .teacher-workflow-nav{margin-top:4px}
+.teacher-page .workflow-switcher{
+  border:1px solid #e1e6f5;background:rgba(255,255,255,.78);
+  border-radius:19px;padding:7px;gap:7px;
+  box-shadow:0 8px 22px rgba(70,93,153,.045);
+}
+.teacher-page .workflow-mode-btn{border-radius:15px;min-height:66px}
+.teacher-page .workflow-mode-btn.active{
+  border:1px solid #e6dffa;background:linear-gradient(115deg,#faf7ff,#eff8ff);
+  color:#5c4cc0;box-shadow:0 6px 18px rgba(114,100,177,.08);
+}
+.teacher-page .workflow-mode-btn.active .workflow-mode-icon{background:#eee8ff;color:#6c5bd1}
+.teacher-page[data-workflow="teach"] .workflow-mode-btn.active{
+  border-color:#c8efdf;background:linear-gradient(115deg,#effdf6,#f4faff);color:#137e64;
+}
+.teacher-page .workspace-tabs{
+  background:rgba(255,255,255,.88);border:1px solid #e3e9f5;
+  border-radius:17px;padding:6px;gap:5px;box-shadow:0 7px 17px rgba(48,72,126,.04);
+}
+.teacher-page .workspace-tab{border-radius:13px;color:#5d6d88;font-size:14px}
+.teacher-page .workspace-tab:hover{background:#f2efff;color:#5548b0}
+.teacher-page .workspace-tab.active{
+  background:linear-gradient(115deg,#eeeaff,#e9f3ff);color:#6250c1;
+  box-shadow:inset 0 0 0 1px #dedafa,0 3px 9px rgba(84,89,173,.065);
+}
+.teacher-page .workflow-context-bar{
+  background:linear-gradient(110deg,#fff,#fafbff);border-color:#e4e9f5;
+  border-radius:20px;box-shadow:var(--ci-shadow);padding:18px 21px;
+}
+.teacher-page .workflow-context-bar .section-kicker{color:#8165d8}
+.teacher-page .workflow-context-bar strong{color:#34416e}
+.teacher-page .workflow-context-stat{
+  border:1px solid #e9e4fc;background:#f7f4ff;border-radius:13px;padding:10px 15px;
+}
+.teacher-page .workflow-context-stat strong{color:#7056c9}
+.teacher-page[data-workflow="teach"] .workflow-context-bar{
+  border-color:#d2eee3;background:linear-gradient(100deg,#fff,#f0fcf7);
+}
+.teacher-page[data-workflow="teach"] .workflow-context-stat{background:#eaf8f1;border-color:#d6efe5}
+.teacher-page .v15-layout{gap:21px}
+.teacher-page :where(.v15-sidebar,.v15-editor){border:1px solid #e5e8f4;border-radius:24px;background:#fff;box-shadow:var(--ci-shadow)}
+.teacher-page .v15-editor{padding:27px}
+.teacher-page .v15-sidebar{padding:19px}
+.teacher-page .v15-editor:before{display:none}
+.teacher-page .v15-editor-head h2,.teacher-page .v15-section-toolbar h3{color:#2d3d64}
+.teacher-page .v15-list-item{border:1px solid #eff0f8;border-radius:14px;background:#f9faff}
+.teacher-page .v15-list-item:hover{border-color:#d8d0f9;background:#fcfbff}
+.teacher-page .v15-list-item.active{border:1px solid #d9cdfc;background:linear-gradient(125deg,#f0ecff,#f4f8ff)}
+.teacher-page .v15-list-item.active::before{background:#8166dc}
+.teacher-page :where(.tip-box,.settings-disclosure,.course-parallel-builder){
+  background:linear-gradient(125deg,#fbf9ff,#f3fafb);border-color:#e6e3f3;border-radius:17px;
+}
+.teacher-page :where(.case-card,.wave-editor-card,.student-inspector,.session-card,.course-session-control){
+  border-radius:18px;border-color:#e5e9f4;
+}
+.teacher-page :where(.v15-savebar,.sticky-actions){border-radius:16px}
+.teacher-page .course-parallel-builder-choice:has(input:checked){border-color:#b8a9ed;background:#f5f0ff}
+
+/* STUDENT | Bright, playful, accessible choice-led screens. */
+body.student-page{
+  background:
+    radial-gradient(ellipse 600px 460px at -10% 22%,rgba(152,225,255,.24),transparent 74%),
+    radial-gradient(ellipse 470px 420px at 110% 16%,rgba(254,202,124,.21),transparent 75%),
+    radial-gradient(ellipse 420px 310px at 40% 98%,rgba(174,233,206,.18),transparent 74%),
+    #f7fbff;
+}
+.student-page:before,.student-page:after{display:none!important}
+.student-page .student-shell{width:min(1120px,calc(100% - 28px))}
+.student-page .student-hero{
+  padding:22px 27px 22px;margin-bottom:19px;
+  border:1px solid #d7eaf9;border-radius:25px;
+  background:linear-gradient(112deg,#e9f5ff,#f1f5ff 55%,#ebfff6);
+  box-shadow:0 12px 30px rgba(63,117,177,.07);
+}
+.student-page .student-hero:before{
+  content:"";position:absolute;right:19%;top:11%;width:58px;height:58px;
+  border-radius:50%;background:rgba(255,255,255,.45);pointer-events:none;
+}
+.student-page .student-hero .eyebrow{color:#4f78bf;font-size:12px;letter-spacing:.14em}
+.student-page .student-hero h1{color:#253b6b;font-size:clamp(26px,3.6vw,39px)}
+.student-page .student-hero .subtle{color:#597491}
+.student-page .progress-wrap{
+  border:1px solid #dceaf6;border-radius:17px;background:rgba(255,255,255,.8);
+  padding:15px 18px;box-shadow:0 6px 17px rgba(74,110,156,.055);min-width:220px;
+}
+.student-page .progress-meta{color:#4b678b;font-size:13px}
+.student-page .progress-track{height:13px;background:#e0ebf6;border-radius:999px}
+.student-page .progress-bar{background:linear-gradient(90deg,#63cf99,#55badd)}
+.student-page :where(.student-card,.mission-card){border-radius:25px;border:1px solid #e0eaf7;box-shadow:0 14px 35px rgba(69,100,155,.07)}
+.student-page .mission-card{padding:clamp(18px,3vw,32px)}
+.student-page .mission-heading{
+  padding:19px 22px;border:1px solid #e7e7f8;border-left:6px solid #f2bb53;
+  border-radius:20px;background:linear-gradient(110deg,#fff,#fffdf6);margin-bottom:20px;
+}
+.student-page .mission-heading h2{font-size:clamp(22px,3vw,31px);color:#243b69;line-height:1.35}
+.student-page .mission-heading .section-kicker{
+  width:max-content;padding:6px 10px;border-radius:999px;background:#fff2c9;color:#996513;
+}
+.student-page .mission-heading .case-prompt{color:#5f7394;line-height:1.75}
+.student-page .classification-step{
+  border-radius:22px;border-color:#dee9f7;
+  background:linear-gradient(135deg,#fbfcff,#f3faff);padding:clamp(15px,2.5vw,24px);
+}
+.student-page .step-number{background:#e9eaff;color:#6554cc;border-radius:999px;font-size:12px}
+.student-page :where(.student-type-choice,.evidence-choice,.classification-choice,.scale-choice,.group-consensus-option){
+  min-height:64px;border:2px solid #e1e9f5;border-radius:18px;background:#fff;
+  box-shadow:0 5px 12px rgba(54,104,159,.045);touch-action:manipulation;
+}
+.student-page :where(.student-type-choice,.evidence-choice,.classification-choice,.scale-choice,.group-consensus-option):hover{
+  border-color:#adcaf5;box-shadow:0 10px 22px rgba(51,112,196,.09);
+}
+.student-page :where(.evidence-choice,.classification-choice,.group-consensus-option).selected,
+.student-page .student-type-choice.selected{
+  box-shadow:0 0 0 4px rgba(122,111,219,.10),0 9px 20px rgba(67,102,162,.08);
+}
+.student-page .type-choice-grid .student-type-choice:nth-child(3n+1){background:linear-gradient(145deg,#fff,#fff6fa)}
+.student-page .type-choice-grid .student-type-choice:nth-child(3n+2){background:linear-gradient(145deg,#fff,#f1f9ff)}
+.student-page .type-choice-grid .student-type-choice:nth-child(3n+3){background:linear-gradient(145deg,#fff,#f3fff8)}
+.student-page .type-choice-grid .student-type-choice.selected{background:color-mix(in srgb,var(--type-color,#7660d8) 11%,white)}
+.student-page .student-type-choice strong{font-size:clamp(16px,2vw,19px);line-height:1.35;color:#243b68}
+.student-page .student-type-choice small{font-size:13px;color:#627898}
+.student-page .classification-step-footer .btn-primary,.student-page .student-actions .btn-primary{
+  min-height:52px;padding-inline:23px;border-radius:15px;font-weight:850;
+}
+.student-page :where(.progressive-clue-board,.progressive-waiting-panel,.open-classification-waiting-panel,.feedback-panel){
+  border-radius:22px;border-color:#dbe7f5;background:linear-gradient(145deg,#fff,#f5faff);
+}
+.student-page .card-pool{background:#f0f7ff;border-color:#bfdcf5;border-radius:20px}
+.student-page .answer-zone{background:#fffbec;border-color:#f6db9e;border-radius:20px}
+.student-page .student-session-badge{background:#e8f4ff;border-color:#d5e8fb;color:#3c76bd}
+.student-page .status-chip{background:#edf5ff;color:#3a78b5}
+.student-page .student-type-choice:focus-visible,.student-page .evidence-choice:focus-visible{outline-offset:3px}
+
+/* JOIN | same student identity, very clear next action */
+body.join-page{background:
+  radial-gradient(circle at 12% 16%,rgba(166,223,255,.4),transparent 29%),
+  radial-gradient(circle at 88% 82%,rgba(215,196,255,.24),transparent 31%),
+  #f8fbff;
+}
+.join-page .join-card{border:1px solid #dfebf7;border-radius:29px;box-shadow:0 22px 54px rgba(70,99,153,.10)}
+.join-page .join-icon{border-radius:21px;background:linear-gradient(135deg,#e5f3ff,#f6eaff);color:#6654c8}
+.join-page .join-card h1{color:#273b69}
+.join-page .join-step-strip{background:#f4f9ff;border-radius:16px}
+.join-page .join-form input{min-height:54px;background:#fbfdff;border-color:#d3e4f7}
+.join-page .join-submit{min-height:58px;border-radius:16px;font-weight:900;font-size:17px}
+.join-page .join-mode-notice{border-color:#dfeaf8;background:#f5faff}
+
+/* COURSE | learner content keeps fresh light palette; projected results switch to C */
+body.course-player-page:not(.teacher-course-presentation){
+  background:radial-gradient(ellipse at 6% 8%,rgba(170,213,255,.22),transparent 30%),
+             radial-gradient(ellipse at 96% 18%,rgba(199,236,217,.20),transparent 28%),#f8fbff;
+}
+.course-player-page:not(.teacher-course-presentation) :where(.course-player-header,.course-node-card,.course-lesson-intro){
+  border-radius:24px;border-color:#e1e9f5;box-shadow:var(--ci-shadow);
+}
+.course-player-page:not(.teacher-course-presentation) .course-player-header{
+  background:linear-gradient(113deg,#eef6ff,#f7f2ff 67%,#effcf7);
+}
+.course-player-page:not(.teacher-course-presentation) .course-cover-icon{background:#e9e5ff;color:#6f5bc8}
+.course-player-page:not(.teacher-course-presentation) .course-node-head{border-color:#e9ecf6}
+.course-player-page:not(.teacher-course-presentation) .course-player-nav{
+  border-radius:18px;background:rgba(248,251,255,.95);border-color:#e1e9f5;
+}
+
+/* C: dark, high-contrast statistical presentation panels.
+ * Keep v2.36.4 NEON live stance projection CSS unchanged. */
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))){
+  background:
+    radial-gradient(ellipse at 6% 8%,rgba(51,180,171,.14),transparent 30%),
+    radial-gradient(ellipse at 100% 28%,rgba(99,86,200,.20),transparent 30%),
+    linear-gradient(165deg,#07142d,#0e1234 58%,#070e24);
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .course-presentation-results{
+  background:linear-gradient(140deg,rgba(24,41,81,.92),rgba(20,25,60,.95));
+  border-color:rgba(164,190,244,.22);border-radius:26px;
+  color:#eff5ff;box-shadow:0 27px 60px rgba(0,4,18,.3);
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-results-head{
+  border-bottom-color:rgba(200,215,247,.15);
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-results-head h2,
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-results-section-head{
+  color:#f5f8ff;
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) :where(.presentation-results-head .subtle,.presentation-results-section-head span){
+  color:#c6d5f4;
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) :where(.presentation-result-metric,.presentation-results-empty,.presentation-confidence-summary){
+  background:rgba(255,255,255,.065);border-color:rgba(209,220,255,.15);color:#eff5ff;border-radius:17px;
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-result-metric span,
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-result-metric small{color:#bacbe9}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-result-metric strong{color:#89ebdf}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-distribution-section{border-top-color:rgba(200,215,247,.15)}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-distribution-row>span{color:#edf5ff}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-distribution-row strong{color:#9bece2}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-distribution-bar{background:rgba(214,226,255,.15)}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-distribution-bar i{background:linear-gradient(90deg,#55e1ba,#7692f3)}
+
+/* Whole-class deliberation projection: atmospheric background, legible panels */
+body.deliberation-presentation-page{
+  background:radial-gradient(circle at 5% 2%,rgba(63,214,179,.17),transparent 31%),
+             radial-gradient(circle at 96% 17%,rgba(123,111,242,.18),transparent 34%),
+             linear-gradient(165deg,#07142d,#101a40 66%,#08112a);
+}
+.deliberation-presentation-page .deliberation-presentation-hero h1{color:#f7f9ff}
+.deliberation-presentation-page .deliberation-presentation-hero :where(.subtle,.eyebrow){color:#d2dcf5}
+.deliberation-presentation-page :where(.deliberation-presentation-content,.deliberation-presentation-results,.dp-history-panel){
+  border-radius:24px;border-color:rgba(170,198,244,.36);box-shadow:0 24px 54px rgba(0,4,22,.24);
+}
+.deliberation-presentation-page :where(.stage-badge,.status-chip){border-radius:999px}
+
+/* Responsive: preserve controls and prevent cards from falling off screen. */
+@media(max-width:900px){
+  .teacher-page .topbar{margin-top:12px;min-height:unset;padding:20px 22px;border-radius:22px}
+  .teacher-page .v15-editor{padding:20px}
+  .student-page .student-hero{grid-template-columns:minmax(0,1fr);padding:19px 21px}
+  .student-page .progress-wrap{width:100%;min-width:0}
+}
+@media(max-width:640px){
+  .teacher-page .topbar{margin-top:8px;padding:19px 17px;border-radius:19px}
+  .teacher-page .workflow-switcher{gap:5px;padding:5px}
+  .teacher-page .workflow-mode-btn{min-width:0;min-height:55px;padding:8px}
+  .teacher-page .workspace-tabs{overflow-x:auto;gap:4px}
+  .teacher-page .workspace-tab{min-width:max-content;padding:8px 12px}
+  .teacher-page .v15-sidebar,.teacher-page .v15-editor{border-radius:19px}
+  .teacher-page .v15-editor{padding:16px}
+  .teacher-page .workflow-context-bar{padding:15px}
+  .student-page .student-hero{padding:17px 16px;border-radius:20px}
+  .student-page .mission-card{padding:16px;border-radius:20px}
+  .student-page .mission-heading{padding:15px 16px;border-radius:16px}
+  .student-page .type-choice-grid{grid-template-columns:1fr}
+  .student-page .classification-choice-grid{grid-template-columns:1fr}
+  .student-page .classification-step-footer{flex-wrap:wrap}
+  .student-page .classification-step-footer .btn{width:100%}
+  .student-page .student-type-choice{min-height:72px}
+  .join-page .join-card{padding:23px 18px;border-radius:22px}
+}
+@media(prefers-reduced-motion:reduce){
+  :where(.teacher-page,.student-page,.join-page,.course-player-page) .btn,
+  .student-page :where(.student-type-choice,.evidence-choice,.classification-choice){transition:none}
+}
+/* Statistics detail readability on dark results panels. */
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) :where(.presentation-secondary-row,.presentation-text-card){
+  background:rgba(255,255,255,.07);border-color:rgba(209,222,252,.15);
+  color:#f0f5ff;box-shadow:none;
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-secondary-row>b{color:#b6f8e2}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-secondary-row>small{color:#bfcee9}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-secondary-row>span{
+  color:#a8e9dd;background:rgba(79,210,175,.13);
+}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-confidence-summary>div span{color:#bacbe9}
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-confidence-summary>div strong{color:#8feadc}
+/* Word-cloud semantic colors need the original light backing for readable labels. */
+body.teacher-course-presentation.presentation-results-view:not(:has(#presentationLiveStanceSection:not(.hidden))) .presentation-word-cloud{
+  background:#f8faff;border-color:#d5dff2;
+}
+
+/* v2.36.5 QA1 — legible standalone deliberation projection header.
+   The earlier light header from interface-polish.css must not sit behind
+   the white typography introduced by the immersive presentation theme. */
+.deliberation-presentation-page .deliberation-presentation-hero{
+  position:relative;
+  padding:clamp(18px,2.8vw,34px);
+  border:1px solid rgba(159,195,247,.28);
+  border-radius:24px;
+  background:
+    radial-gradient(circle at 4% 10%,rgba(73,220,178,.13),transparent 32%),
+    radial-gradient(circle at 95% 16%,rgba(115,110,240,.19),transparent 38%),
+    linear-gradient(135deg,rgba(23,45,90,.98),rgba(16,25,64,.98));
+  box-shadow:0 18px 44px rgba(0,5,25,.23),inset 0 1px 0 rgba(255,255,255,.07);
+}
+.deliberation-presentation-page .deliberation-presentation-hero h1{
+  color:#f8fbff;
+  text-shadow:0 4px 24px rgba(0,0,0,.17);
+}
+.deliberation-presentation-page .deliberation-presentation-hero :where(.subtle,.eyebrow){
+  color:#cfdbf6;
+}
+@media(max-width:640px){
+  .deliberation-presentation-page .deliberation-presentation-hero{
+    padding:20px 17px;
+    border-radius:21px;
+  }
+}

@@ -1,27 +1,38 @@
-# Classroom Interactive v2.36.4｜霓虹玻璃即時立場拉鋸（QA 修正版）
+# Classroom Interactive v2.36.5 — 視覺系統整合版
 
-## 版本及來源
-- 以原始 v2.36.3 完整開發包為基礎，保留 v2.36.2 的教師端平行活動同步修復。
-- 正式展示版號：V2.36.4；HTML 資源快取參數：`?v=2.36.4-neon`。
-- 本次僅更新投影顯示 CSS、教師端投影標題，以及必要版本識別。未修改 Supabase Schema、RPC、學生提交資料格式或拉鋸計算邏輯。
+> 基底為使用者確認保留的 **v2.36.4 NEON-QA-FIXED**，**不是**已取消的 STYLE-REFINED 版本。
 
-## 這次更新的視覺
-- 僅對即時立場拉鋸投影採用深海軍藍背景及毛玻璃卡片。
-- 綠／粉紅發光圓形票數和下方百分比膠囊。
-- 綠紅色帶依目前已表態兩側票數比例平順伸縮，同步移動中間圓形節點。
-- 固定的淡色中央基準線；不使用閃電特效。
-- Course 教師投影深色背景僅在即時立場拉鋸出現時使用，其他統計模組不會被套用。
-- 平板、手機採左右圓形並排、滑軌下置的響應式布局。
+## 視覺方向
 
-## 部署方式
-- GitHub ZIP：解壓縮後，將最外層的 `index.html`、`app.css`、其他 HTML/JS/CSS 檔案直接放入 GitHub Pages 使用的 Repository 根目錄（或網站原有發布目錄），不要多包一層資料夾。
-- 完整開發 ZIP：包含測試紀錄、歷史 SQL、既有初始化 SQL。**不要將完整開發 ZIP 當作 GitHub 靜態站部署內容。**
-- 版本確認：教師工作台顯示 `V2.36.4`，檢視網站載入 `app.css?v=2.36.4-neon`。
-- 這是前端更新，**既有正式 Supabase 專案不需要執行 SQL**；不得將 `sql/NEW-PROJECT-ONLY...` 直接執行於正式資料庫。
+- 教師端：清新教育工具（A）— 薰衣草紫、薄荷綠、天空藍，柔和背景、卡片、清楚的操作狀態。**保留備課／上課及所有既有工作流程**。
+- 學生端：簡明、活潑、好觸控 — 清楚任務說明、圓角選項、選取回饋、進度卡片及大尺寸操作按鈕。
+- 統計投影：沉浸式深色科技感（C）— 深藍背景、清晰統計數字與對比。
+- 即時立場拉鋸：**保留 v2.36.4 NEON-QA-FIXED 原有投影效果**（綠紅色帶、圓形節點、字體與動畫）沒有採用已取消版本的加粗及縮小調整。
 
-## 驗證狀態
-- 13/13 組 Node.js 回歸測試、所有 15 個 JavaScript 檔案語法檢查通過。
-- Chromium 本地測試桌機、平板、手機排版，並測試中心節點／色帶比例及減少動態效果。
-- 所有測試使用本地模擬票數，並非真實 Supabase 跨裝置多人驗收。
+## 技術變更範圍
 
-詳細見 `tests/QA-V2.36.4-NEON-VERIFIED.md`。
+- 新增 `theme-v2.36.5.css`，五個 HTML 頁面的樣式表最後載入此檔。
+- 五頁靜態資源快取參數改為 `?v=2.36.5-pastel-immersive`。
+- `index.html` 工作台版號及 `release-center.js`、`activity-editor.js`、`session-api.js` 中的 `appVersion` 改為 `2.36.5`。
+- 既有活動 JavaScript、同步與 Course Node 程式、Supabase SQL、RPC、RLS 均**無功能性修改**。
+- **不要將設計概念圖視為已新增的功能**：本次沒有建立新的首頁儀表板、出勤管理、通知中心、可愛角色或登入系統。
+
+## 正式部署與回退
+
+1. 在 GitHub Pages Repository 根目錄更新 **GITHUB ZIP** 的 24 個必要檔案加上 README（共 25 項），其中新增 `theme-v2.36.5.css`。
+2. 不要執行任何 SQL；現有 Supabase 直接沿用。
+3. 更新後強制重新整理，教師工作台應顯示 `V2.36.5`，HTML 應載入 `theme-v2.36.5.css?v=2.36.5-pastel-immersive`。
+4. 回退時用 `Classroom-Interactive-v2.36.4-NEON-QA-FIXED-GITHUB.zip` 覆蓋同一 Repository，並**刪除或停用** `theme-v2.36.5.css` 的引用，確認 `V2.36.4`。
+
+## 檢查範圍
+
+13 項既有 Node.js 測試；3 種尺寸的教師、學生、加入頁面離線 Chromium CSS 版面測試；一般統計投影深色配色；即時拉鋸投影關鍵 CSS computed-style 與 v2.36.4 比對。
+
+**注意：**離線畫面夾具以模擬文字、票數與選項呈現，並非連上真實 Supabase；使用前仍建議測試課堂 Session、教師／學生同步、平板 Safari 與實際投影機。
+
+## SQL
+
+`sql/` 的新專案 SQL 僅適用空白測試資料庫，正式資料庫不執行；`sql-history/` 是歷史參考資料。
+
+## v2.36.5 QA1 視覺校對修正
+修正逐層思辨投影頁淺色標題背景與白字對比不足問題；資源快取版本更新為 `2.36.5-pastel-immersive-qa1`。其餘程式與 SQL 不變。詳見 `tests/QA-V2.36.5-SECOND-PASS-QA1.md`。
