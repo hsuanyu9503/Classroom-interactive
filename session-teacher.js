@@ -272,7 +272,7 @@
     const data=snapshot?.deliberation_data || {};
     const layers=Array.isArray(data.l)?data.l:[];
     const layer=layers[stage-1] || {};
-    const current=(snapshot?.responses || []).filter(r=>r.mode==="layered-deliberation" && r.stage_key===`layer-${stage}`);
+    const current=currentCourseResponses(snapshot).filter(r=>r.mode==="layered-deliberation" && r.stage_key===`layer-${stage}`);
     const options=normalizeTeacherDeliberationOptions(layer.o || data.o);
     const counts=Object.fromEntries(options.map(option=>[option.id,0]));
     current.forEach(r=>{ if (Object.hasOwn(counts,r.selected_type)) counts[r.selected_type]++; });
@@ -374,10 +374,16 @@
     return presentationChannel;
   }
 
+  // Snapshot RPC deliberately returns every Course node for historical reporting.
+  // Live controls must only consume rows that belong to the node actually displayed.
+  function responseBelongsToCurrentNode(snapshot,response) {
+    if (snapshot?.session_kind !== "course" && activeSession?.sessionKind !== "course") return true;
+    const nodeRef=String(snapshot?.current_node_ref || activeSession?.currentNodeRef || "");
+    return Boolean(nodeRef) && String(response?.node_ref || "") === nodeRef;
+  }
+
   function currentCourseResponses(snapshot) {
-    const all = snapshot?.responses || [];
-    if (activeSession?.sessionKind !== "course") return all;
-    return all.filter(item => item.node_ref === activeSession.currentNodeRef);
+    return (snapshot?.responses || []).filter(item=>responseBelongsToCurrentNode(snapshot,item));
   }
 
   function buildPresentationSummary(snapshot) {
@@ -1086,7 +1092,9 @@
       // A teacher action may have switched nodes after the snapshot request began.
       // Never repaint an older Course revision over a newly confirmed switch.
       if (snapshot.session_kind === "course" &&
-          Number(snapshot.revision || 0) < Number(activeSession.revision || 0)) return;
+          (Number(snapshot.revision || 0) < Number(activeSession.revision || 0) ||
+           (Number(snapshot.revision || 0) === Number(activeSession.revision || 0) &&
+            activeSession.currentNodeRef && snapshot.current_node_ref !== activeSession.currentNodeRef))) return;
       if (activeSession.mode === "cloud") {
         setTeacherRealtimeStatus(sessionRealtime?.connected ? "connected" : "fallback");
       }
@@ -1280,7 +1288,7 @@
       return;
     }
 
-    const responses=(snapshot?.responses || [])
+    const responses=currentCourseResponses(snapshot)
       .filter(item=>item.participant_id===participant.id)
       .slice().sort((a,b)=>new Date(a.submitted_at||0)-new Date(b.submitted_at||0));
     const questionPosts=activeSession?.activityMode==="question-wall"
@@ -1820,10 +1828,8 @@
     $("deliberationTeacherNote").textContent=layer.n || "";
     $("deliberationTeacherNoteWrap").classList.toggle("hidden",!layer.n);
 
-    const current=(snapshot.responses || []).filter(r=>
-      r.mode==="layered-deliberation" &&
-      r.stage_key===`layer-${stage}` &&
-      (!r.node_ref || activeSession.sessionKind !== "course")
+    const current=currentCourseResponses(snapshot).filter(r=>
+      r.mode==="layered-deliberation" && r.stage_key===`layer-${stage}`
     );
     const unique=new Set(current.map(r=>r.participant_id)).size;
     $("deliberationSubmissionText").textContent=`本層已提交 ${unique} / ${snapshot.participant_count || 0}`;
@@ -1842,7 +1848,7 @@
       data.chart === "pie" ? "pie" : "bar",
       layer.o || data.o,
       {
-        key:`deliberation:${activeSession?.id || "session"}:${stage}`,
+        key:`deliberation:${activeSession?.id || "session"}:${snapshot?.current_node_ref || "activity"}:${stage}`,
         totalParticipants:snapshot.participant_count || 0
       }
     );
@@ -1921,10 +1927,10 @@
     );
     const anonymous=new Map();
     participants.forEach((p,index)=>anonymous.set(p.id,`P${String(index+1).padStart(2,"0")}`));
-    (snapshot?.responses || []).forEach(r=>{
+    currentCourseResponses(snapshot).forEach(r=>{
       if (!anonymous.has(r.participant_id)) anonymous.set(r.participant_id,`P${String(anonymous.size+1).padStart(2,"0")}`);
     });
-    const responses=(snapshot?.responses || []).filter(r=>r.mode === "layered-deliberation");
+    const responses=currentCourseResponses(snapshot).filter(r=>r.mode === "layered-deliberation");
     const headers=[
       "場次代碼","活動名稱","匿名參與者","層次","層次標題","本層新增資訊","核心提問",
       "選項代碼","選項文字","原始理由","還需要知道什麼","理由公開狀態","討論後補記","原始提交時間",
@@ -1981,7 +1987,7 @@
     if (button) { button.disabled=true; button.textContent="整理中…"; }
     try {
       const snapshot=await window.ClassroomSessionAPI.teacherSnapshot(activeSession);
-      const responseCount=(snapshot.responses || []).filter(r=>r.mode === "layered-deliberation").length;
+      const responseCount=currentCourseResponses(snapshot).filter(r=>r.mode === "layered-deliberation").length;
       if (!snapshot.participant_count && !responseCount) throw new Error("目前還沒有可匯出的參與或作答資料");
       const csv=buildDeliberationCsv(snapshot);
       const safeCode=String(activeSession.code || "session").replace(/[^A-Za-z0-9_-]/g,"");
@@ -2666,7 +2672,7 @@
       list.appendChild(card);
     });
   }
-  function sessionResponsesForMode(snapshot,mode){return (snapshot?.responses||[]).filter(response=>response.mode===mode && (activeSession?.sessionKind!=="course" || response.node_ref===activeSession.currentNodeRef));}
+  function sessionResponsesForMode(snapshot,mode){return currentCourseResponses(snapshot).filter(response=>response.mode===mode);}
   function groupConsensusEntriesFromSnapshot(snapshot,kind="individual") {
     const source=kind==="group"?(snapshot?.group_submissions||[]).filter(row=>activeSession?.sessionKind!=="course"||row.node_ref===activeSession.currentNodeRef):sessionResponsesForMode(snapshot,"group-consensus").filter(row=>row.stage_key==="individual");
     const grouped=new Map();
@@ -2743,7 +2749,7 @@
     return {answered:new Set(rows.map(r=>r.participant_id)).size,pointCount:count,average:values.length?average:null,lowLabel:sample.lowLabel||"不太確定",highLabel:sample.highLabel||"非常確定",distribution};
   }
   function renderConfidenceControl(snapshot){
-    const panel=$("confidenceSessionControl");if(!panel)return;const stageKey=confidenceStageKeyForSession();const rows=(snapshot?.responses||[]).filter(r=>r.stage_key===stageKey&&r.payload?.confidence&&(activeSession?.sessionKind!=="course"||!r.node_ref||r.node_ref===activeSession.currentNodeRef));if(!rows.length){panel.classList.add("hidden");return;}panel.classList.remove("hidden");const total=Number(snapshot?.participant_count)||0;$("confidenceAnsweredBadge").textContent=`${new Set(rows.map(r=>r.participant_id)).size} / ${total}`;const sample=rows[0].payload.confidence,count=Math.max(3,Math.min(7,Number(sample.pointCount)||5)),entries=Array.from({length:count},(_,i)=>({id:String(i+1),label:String(i+1),count:0,order:i})),values=[];rows.forEach(r=>{const value=Number(r.payload?.confidence?.value);if(Number.isFinite(value)&&value>=1&&value<=count){entries[value-1].count++;values.push(value);}});renderLiveBarStats($("confidenceDistribution"),entries,{key:`confidence:${activeSession?.id||""}:${activeSession?.currentNodeRef||"activity"}:${stageKey}`,totalParticipants:total,emptyText:"目前還沒有信心程度資料。"});const shown=liveStatsIsShown(`confidence:${activeSession?.id||""}:${activeSession?.currentNodeRef||"activity"}:${stageKey}`);const avg=values.length?values.reduce((a,b)=>a+b,0)/values.length:0;$("confidenceAverageValue").textContent=shown&&values.length?avg.toFixed(2).replace(/\.00$/,""):"—";$("confidenceLabels").textContent=`${sample.lowLabel||"不太確定"} ← 1 ～ ${count} → ${sample.highLabel||"非常確定"}`;const list=$("confidenceDistribution");if(list)list._rerenderLiveStats=()=>renderConfidenceControl(snapshot);
+    const panel=$("confidenceSessionControl");if(!panel)return;const stageKey=confidenceStageKeyForSession();const rows=currentCourseResponses(snapshot).filter(r=>r.stage_key===stageKey&&r.payload?.confidence);if(!rows.length){panel.classList.add("hidden");return;}panel.classList.remove("hidden");const total=Number(snapshot?.participant_count)||0;$("confidenceAnsweredBadge").textContent=`${new Set(rows.map(r=>r.participant_id)).size} / ${total}`;const sample=rows[0].payload.confidence,count=Math.max(3,Math.min(7,Number(sample.pointCount)||5)),entries=Array.from({length:count},(_,i)=>({id:String(i+1),label:String(i+1),count:0,order:i})),values=[];rows.forEach(r=>{const value=Number(r.payload?.confidence?.value);if(Number.isFinite(value)&&value>=1&&value<=count){entries[value-1].count++;values.push(value);}});renderLiveBarStats($("confidenceDistribution"),entries,{key:`confidence:${activeSession?.id||""}:${activeSession?.currentNodeRef||"activity"}:${stageKey}`,totalParticipants:total,emptyText:"目前還沒有信心程度資料。"});const shown=liveStatsIsShown(`confidence:${activeSession?.id||""}:${activeSession?.currentNodeRef||"activity"}:${stageKey}`);const avg=values.length?values.reduce((a,b)=>a+b,0)/values.length:0;$("confidenceAverageValue").textContent=shown&&values.length?avg.toFixed(2).replace(/\.00$/,""):"—";$("confidenceLabels").textContent=`${sample.lowLabel||"不太確定"} ← 1 ～ ${count} → ${sample.highLabel||"非常確定"}`;const list=$("confidenceDistribution");if(list)list._rerenderLiveStats=()=>renderConfidenceControl(snapshot);
   }
 
   function renderPredictSessionSummary({snapshot,details,participants}) {
@@ -2803,7 +2809,7 @@
     const currentResponses = (snapshot.responses || []).filter(r=>
       r.mode==="progressive-reveal" &&
       stageNumberFromKey(r.stage_key)===stage &&
-      (activeSession.sessionKind !== "course" || !r.node_ref || r.node_ref === activeSession.currentNodeRef)
+      responseBelongsToCurrentNode(snapshot,r)
     );
     $("teacherStageSubmissionText").textContent = `本層已提交 ${currentResponses.length} / ${snapshot.participant_count || 0}`;
     $("previousStageBtn").disabled = stage <= 1;
@@ -2836,7 +2842,7 @@
     const stageKey=isRejudge?"final":"initial";
     const responses=(snapshot.responses||[]).filter(r=>
       r.mode==="open-classification" &&
-      (activeSession.sessionKind !== "course" || !r.node_ref || r.node_ref === activeSession.currentNodeRef)
+      responseBelongsToCurrentNode(snapshot,r)
     );
     const current=responses.filter(r=>r.stage_key===stageKey);
     $("openClassificationPhaseBadge").textContent=isRejudge?"重新判斷":"初次判斷";
@@ -2887,7 +2893,7 @@
   }
 
   function renderDeliberationSessionSummary({snapshot,details,participants}) {
-    const responses=(snapshot.responses || []).filter(r=>r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""));
+    const responses=currentCourseResponses(snapshot).filter(r=>r.mode==="layered-deliberation" && /^layer-\d+$/.test(r.stage_key || ""));
     const completedByParticipant=new Map();
     responses.forEach(r=>{
       if (!completedByParticipant.has(r.participant_id)) completedByParticipant.set(r.participant_id,new Set());
