@@ -2258,7 +2258,7 @@
         <small data-live-stance-role="left-pct">—</small>
       </div>
       <div class="live-stance-tug-arena" aria-label="左右立場拉鋸">
-        <span class="live-stance-center-flag">中心</span>
+        <span class="live-stance-center-flag" aria-hidden="true"></span>
         <div class="live-stance-rope" aria-hidden="true"></div>
         <span class="live-stance-tension-wave" aria-hidden="true"></span>
         <div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div>

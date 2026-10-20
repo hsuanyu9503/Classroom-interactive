@@ -4478,7 +4478,7 @@ select:focus{
 .live-stance-tug-board{--tug-position:50%;--tug-split:50%;display:grid;grid-template-columns:minmax(120px,.8fr) minmax(220px,2fr) minmax(120px,.8fr);gap:14px;align-items:center;padding:20px;border:1px solid var(--line,#dfe3ea);border-radius:22px;background:linear-gradient(180deg,#fff,#f9fafb);position:relative;overflow:hidden;}
 .live-stance-tug-score{min-width:0;display:grid;gap:4px;align-content:center;text-align:center;padding:14px;border-radius:18px;background:#fff;box-shadow:0 8px 22px rgba(16,24,40,.06);}.live-stance-tug-score.left{border:1px solid #bfdbfe;background:#eff6ff}.live-stance-tug-score.right{border:1px solid #fecdd3;background:#fff1f2}.live-stance-tug-score span{font-size:14px;font-weight:800;overflow-wrap:anywhere}.live-stance-tug-score strong{font-size:34px;line-height:1}.live-stance-tug-score small{font-weight:800;color:var(--muted,#667085)}
 .live-stance-tug-arena{position:relative;height:96px;min-width:0;display:flex;align-items:center;}.live-stance-rope{position:absolute;left:4%;right:4%;top:50%;height:8px;transform:translateY(-50%);border-radius:999px;background:#d9dee8;box-shadow:0 2px 5px rgba(15,23,42,.14)}
-.live-stance-center-flag{position:absolute;left:50%;top:5px;transform:translateX(-50%);font-size:11px;color:#98a2b3}.live-stance-center-flag::after{content:"";display:block;width:1px;height:65px;background:#d0d5dd;margin:3px auto 0;}
+.live-stance-center-flag{position:absolute;left:50%;top:50%;width:2px;height:72px;transform:translate(-50%,-50%);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(148,163,184,.28) 18%,rgba(148,163,184,.34) 50%,rgba(148,163,184,.28) 82%,rgba(255,255,255,0) 100%);box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:0;font-size:0;color:transparent}.live-stance-center-flag::after{display:none}
 .live-stance-knot{position:absolute;left:var(--tug-position);top:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#fff;border:5px solid #f59e0b;box-shadow:0 7px 18px rgba(245,158,11,.25);transition:left .52s cubic-bezier(.2,.8,.2,1);z-index:2}.live-stance-knot span{font-size:10px;color:#f59e0b;}
 .live-stance-undecided-count{grid-column:1/-1;justify-self:center;display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:999px;background:#eef1f5;color:#4b5563;font-size:13px}.live-stance-undecided-count strong{font-size:16px;}
 .live-stance-actions{margin-top:14px;flex-wrap:wrap;}
@@ -5441,15 +5441,16 @@ select:focus{
 .live-stance-tug-arena{
   isolation:isolate;
 }
-/* Solid colour lengths match the live share. The visual split and centre marker
-   are updated from the same animated position in both teacher and Course views. */
+/* The rope should visually "pull" with the current share.
+   Blue/red bands expand and contract from the centre split while the overall
+   layout remains clean and projection-friendly. */
 .live-stance-rope{
   left:4%;
   right:4%;
   height:12px;
   overflow:hidden;
   border:1px solid rgba(15,23,42,.1);
-  background:#d9dee8;
+  background:linear-gradient(180deg,#e8edf5,#dce3ee);
   box-shadow:0 4px 12px rgba(15,23,42,.14),inset 0 2px 2px rgba(255,255,255,.38),inset 0 -2px 3px rgba(15,23,42,.08);
 }
 .live-stance-rope::before,
@@ -5459,23 +5460,26 @@ select:focus{
   top:0;
   bottom:0;
   pointer-events:none;
+  transition:opacity .18s ease;
 }
 .live-stance-rope::before{
   left:0;
-  width:var(--tug-split,50%);
-  background:var(--stance-left);
+  right:calc(100% - var(--tug-split,50%));
   border-radius:999px 0 0 999px;
+  background:linear-gradient(90deg,var(--stance-left) 0%,var(--stance-left-soft) 100%);
+  box-shadow:inset -1px 0 0 rgba(255,255,255,.26);
 }
 .live-stance-rope::after{
+  left:var(--tug-split,50%);
   right:0;
-  width:calc(100% - var(--tug-split,50%));
-  background:var(--stance-right);
   border-radius:0 999px 999px 0;
+  background:linear-gradient(90deg,var(--stance-right-soft) 0%,var(--stance-right) 100%);
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.26);
 }
-/* All undecided / no submissions: neutral rope, not a misleading 50/50 vote. */
+/* All undecided / no submissions: keep only a faint colour hint at the edges. */
 .live-stance-tug-board[data-live-stance-empty="true"] .live-stance-rope::before,
 .live-stance-tug-board[data-live-stance-empty="true"] .live-stance-rope::after{
-  opacity:0;
+  opacity:.35;
 }
 .live-stance-tug-arena::before,
 .live-stance-tug-arena::after{
@@ -5499,15 +5503,44 @@ select:focus{
   left:96%;
   background:var(--stance-right);
 }
+.live-stance-center-flag{
+  width:2px;
+  height:72px;
+  background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(148,163,184,.16) 18%,rgba(148,163,184,.26) 50%,rgba(148,163,184,.16) 82%,rgba(255,255,255,0) 100%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08);
+}
 .live-stance-knot{
   left:var(--tug-position);
-  width:38px;
-  height:38px;
+  width:40px;
+  height:40px;
   border:5px solid transparent;
   background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,var(--stance-left) 5%,#8b7fc7 50%,var(--stance-right) 95%) border-box;
   box-shadow:0 8px 22px rgba(15,23,42,.18),0 0 0 4px rgba(255,255,255,.7);
   will-change:left;
   transition:box-shadow .2s ease,transform .2s ease;
+}
+.live-stance-knot::before,
+.live-stance-knot::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  width:14px;
+  height:18px;
+  pointer-events:none;
+  opacity:.72;
+  clip-path:polygon(42% 0,100% 0,62% 40%,84% 40%,18% 100%,40% 58%,10% 58%);
+  filter:drop-shadow(0 1px 1px rgba(255,255,255,.45)) drop-shadow(0 2px 6px rgba(15,23,42,.12));
+  transition:opacity .18s ease, filter .18s ease, transform .18s ease;
+}
+.live-stance-knot::before{
+  left:-2px;
+  transform:translate(-72%,-50%) rotate(-8deg);
+  background:linear-gradient(180deg,rgba(255,255,255,.95) 0%,color-mix(in srgb,var(--stance-left) 74%, white 26%) 100%);
+}
+.live-stance-knot::after{
+  right:-2px;
+  transform:translate(72%,-50%) scaleX(-1) rotate(-8deg);
+  background:linear-gradient(180deg,rgba(255,255,255,.95) 0%,color-mix(in srgb,var(--stance-right) 74%, white 26%) 100%);
 }
 .live-stance-knot span{
   display:block;
@@ -5521,10 +5554,19 @@ select:focus{
 .live-stance-tug-board.large .live-stance-rope{
   height:16px;
 }
+.live-stance-tug-board.large .live-stance-center-flag{
+  height:92px;
+  opacity:.72;
+}
 .live-stance-tug-board.large .live-stance-knot{
-  width:50px;
-  height:50px;
+  width:52px;
+  height:52px;
   border-width:7px;
+}
+.live-stance-tug-board.large .live-stance-knot::before,
+.live-stance-tug-board.large .live-stance-knot::after{
+  width:18px;
+  height:24px;
 }
 .live-stance-tug-board.large .live-stance-knot span{
   width:13px;
@@ -5543,7 +5585,9 @@ select:focus{
   box-shadow:0 8px 22px rgba(239,71,111,.08);
 }
 @media (prefers-reduced-motion:reduce){
-  .live-stance-knot{transition:none;}
+  .live-stance-knot,
+  .live-stance-knot::before,
+  .live-stance-knot::after{transition:none;}
 }
 
 
@@ -6185,7 +6229,7 @@ input:focus,textarea:focus,select:focus{
 /* The red/blue segments are intentionally solid and pattern-free. */
 .live-stance-tug-board.is-pulling .live-stance-rope{
   box-shadow:0 5px 15px rgba(15,23,42,.2),inset 0 2px 3px rgba(255,255,255,.48);
-  filter:saturate(1.12);
+  filter:saturate(1.04);
 }
 /* The pressure halo follows the SAME animated split as the knot and rope. */
 .live-stance-tension-wave{
@@ -6208,6 +6252,15 @@ input:focus,textarea:focus,select:focus{
 }
 .live-stance-tug-board.is-pulling .live-stance-knot{
   box-shadow:0 9px 25px rgba(15,23,42,.23),0 0 0 5px rgba(251,191,36,.16);
+}
+.live-stance-tug-board.is-pulling .live-stance-knot::before,
+.live-stance-tug-board.is-pulling .live-stance-knot::after{
+  opacity:.96;
+  filter:drop-shadow(0 1px 1px rgba(255,255,255,.5)) drop-shadow(0 3px 8px rgba(15,23,42,.16));
+}
+.live-stance-tug-board.is-swinging .live-stance-knot::before,
+.live-stance-tug-board.is-swinging .live-stance-knot::after{
+  opacity:1;
 }
 .live-stance-tug-board.is-swinging .live-stance-knot{
   box-shadow:0 10px 28px rgba(15,23,42,.24),0 0 0 7px rgba(251,191,36,.19);
@@ -6243,7 +6296,7 @@ input:focus,textarea:focus,select:focus{
 }
 /* V2.35.5: keep the clean lines smooth; motion only changes their widths. */
 .live-stance-tug-board.is-pulling .live-stance-rope {
-  filter:saturate(1.05);
+  filter:saturate(1.02);
 }
 .live-stance-tension-wave {
   transition:opacity .20s ease;
@@ -6265,427 +6318,4 @@ input:focus,textarea:focus,select:focus{
   background:var(--stance-right);
   background-image:none;
   animation:none;
-}
-
-
-/* =========================================================
-   V2.36.1 — Live stance projection visual refresh
-   Match the cleaner classroom projection treatment:
-   dark stage background + bright rounded board + large vote circles.
-   ========================================================= */
-.live-stance-projection-overlay{
-  background:
-    radial-gradient(circle at 50% 18%, rgba(94,104,255,.18) 0%, rgba(94,104,255,0) 28%),
-    radial-gradient(circle at 50% 110%, rgba(36,170,145,.12) 0%, rgba(36,170,145,0) 30%),
-    linear-gradient(180deg, #09122c 0%, #060d1e 100%);
-}
-.live-stance-projection-shell{
-  width:min(1260px,95vw);
-  gap:24px;
-}
-.live-stance-projection-shell .section-kicker{
-  justify-self:center;
-  color:rgba(229,232,255,.88);
-  letter-spacing:.26em;
-  font-size:clamp(14px,1.2vw,22px);
-}
-.live-stance-projection-shell h2{
-  font-size:clamp(42px,5.2vw,74px);
-  font-weight:900;
-  line-height:1.08;
-  letter-spacing:.02em;
-  text-shadow:0 10px 36px rgba(8,12,30,.28);
-}
-.live-stance-projection-shell .subtle{
-  margin-top:-8px;
-  color:rgba(226,230,245,.82);
-  font-size:clamp(16px,1.55vw,24px);
-}
-
-/* Apply the new projection card treatment both in overlay mode
-   and in the course presentation page. */
-.live-stance-projection-overlay .live-stance-tug-board.projection,
-#presentationLiveStanceBoard.live-stance-tug-board.projection{
-  grid-template-columns:minmax(200px,.95fr) minmax(340px,1.95fr) minmax(200px,.95fr);
-  gap:clamp(18px,2vw,34px);
-  align-items:center;
-  padding:clamp(26px,3vw,44px) clamp(20px,3.6vw,56px) clamp(84px,8vw,110px);
-  border-radius:36px;
-  border:1px solid rgba(235,239,247,.92);
-  background:
-    radial-gradient(circle at 50% 0%, rgba(255,255,255,.72) 0%, rgba(255,255,255,0) 34%),
-    linear-gradient(180deg, rgba(248,249,252,.98) 0%, rgba(242,244,248,.98) 100%);
-  box-shadow:
-    0 28px 70px rgba(3,7,18,.32),
-    inset 0 1px 0 rgba(255,255,255,.95);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection.large,
-#presentationLiveStanceBoard.live-stance-tug-board.projection.large{
-  grid-template-columns:minmax(220px,.95fr) minmax(360px,1.95fr) minmax(220px,.95fr);
-  padding:clamp(32px,3.2vw,50px) clamp(22px,4vw,58px) clamp(92px,8vw,118px);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
-  position:relative;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  justify-self:center;
-  gap:6px;
-  width:min(100%,clamp(180px,18vw,258px));
-  aspect-ratio:1;
-  padding:20px;
-  border-radius:50%;
-  border:8px solid rgba(255,255,255,.28);
-  box-shadow:
-    0 20px 40px rgba(15,23,42,.18),
-    inset 0 2px 0 rgba(255,255,255,.32),
-    0 0 0 10px rgba(255,255,255,.2);
-  color:#fff;
-  overflow:visible;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.left,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.left{
-  background:linear-gradient(180deg, #72b281 0%, #5da06e 100%);
-  border-color:rgba(232,247,236,.78);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right{
-  background:linear-gradient(180deg, #d27184 0%, #c15b71 100%);
-  border-color:rgba(255,232,237,.8);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score span,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score span{
-  font-size:clamp(16px,1.35vw,24px);
-  font-weight:800;
-  letter-spacing:.04em;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score strong,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score strong{
-  font-size:clamp(64px,6vw,110px);
-  line-height:.9;
-  font-weight:900;
-  text-shadow:0 8px 22px rgba(0,0,0,.16);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score::after,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score::after{
-  content:"票";
-  font-size:clamp(18px,1.3vw,24px);
-  font-weight:800;
-  opacity:.96;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small{
-  position:absolute;
-  left:50%;
-  bottom:calc(-1 * clamp(52px,4vw,68px));
-  transform:translateX(-50%);
-  background:none;
-  color:#5766bf;
-  font-size:clamp(44px,4vw,64px);
-  line-height:1;
-  font-weight:900;
-  letter-spacing:-.02em;
-  text-shadow:none;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right small,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right small{
-  color:#c05b72;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena{
-  height:clamp(172px,18vw,230px);
-  align-self:center;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-center-flag,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-center-flag{
-  top:6px;
-  left:50%;
-  width:max-content;
-  transform:translateX(-50%);
-  color:#81879d;
-  font-size:clamp(14px,1.18vw,20px);
-  letter-spacing:.18em;
-  font-weight:800;
-  text-transform:uppercase;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-center-flag::after,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-center-flag::after{
-  display:none;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope{
-  left:8%;
-  right:8%;
-  height:16px;
-  border-radius:999px;
-  background:#d9dde6;
-  box-shadow:inset 0 2px 6px rgba(148,163,184,.28), 0 4px 14px rgba(15,23,42,.1);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::before,
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::after,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::before,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::after{
-  opacity:.9;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena::before,
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena::after,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena::before,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena::after{
-  width:18px;
-  height:18px;
-  border-width:4px;
-  box-shadow:0 4px 12px rgba(15,23,42,.14);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-knot,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-knot{
-  width:56px;
-  height:56px;
-  border-width:7px;
-  background:linear-gradient(#eef1f6,#eef1f6) padding-box,linear-gradient(180deg,#b8bfce 0%, #858ea4 100%) border-box;
-  box-shadow:0 14px 30px rgba(54,65,86,.28), 0 0 0 8px rgba(255,255,255,.78);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-knot span,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-knot span{
-  width:16px;
-  height:16px;
-  background:linear-gradient(180deg,#909ab2 0%, #717a91 100%);
-  box-shadow:inset 0 0 0 2px rgba(255,255,255,.68);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tension-wave,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tension-wave{
-  width:118px;
-  height:118px;
-  background:radial-gradient(circle, rgba(129,140,248,.24) 0%, rgba(129,140,248,.10) 38%, rgba(255,255,255,0) 72%);
-  filter:blur(6px);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count{
-  grid-column:2;
-  justify-self:center;
-  margin-top:-6px;
-  padding:12px 18px;
-  border-radius:999px;
-  background:#dfe3ed;
-  border:1px solid rgba(187,194,209,.86);
-  color:#27314a;
-  font-size:clamp(15px,1.2vw,18px);
-  box-shadow:0 8px 22px rgba(15,23,42,.08);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count strong,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count strong{
-  font-size:clamp(18px,1.35vw,22px);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection[data-live-stance-empty="true"] .live-stance-rope,
-#presentationLiveStanceBoard.live-stance-tug-board.projection[data-live-stance-empty="true"] .live-stance-rope{
-  background:#d5d9e2;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection[data-live-stance-empty="true"] .live-stance-knot,
-#presentationLiveStanceBoard.live-stance-tug-board.projection[data-live-stance-empty="true"] .live-stance-knot{
-  box-shadow:0 14px 30px rgba(54,65,86,.2), 0 0 0 8px rgba(255,255,255,.78);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling .live-stance-rope,
-#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling .live-stance-rope{
-  filter:saturate(1.02);
-  box-shadow:inset 0 2px 6px rgba(148,163,184,.32), 0 6px 16px rgba(15,23,42,.14);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling[data-live-stance-leader="blue"] .live-stance-tug-score.left,
-#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling[data-live-stance-leader="blue"] .live-stance-tug-score.left{
-  box-shadow:0 0 0 10px rgba(116,176,138,.22), 0 20px 40px rgba(93,160,110,.28);
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection.is-pulling[data-live-stance-leader="red"] .live-stance-tug-score.right,
-#presentationLiveStanceBoard.live-stance-tug-board.projection.is-pulling[data-live-stance-leader="red"] .live-stance-tug-score.right{
-  box-shadow:0 0 0 10px rgba(209,113,132,.2), 0 20px 40px rgba(193,91,113,.28);
-}
-
-@media(max-width:980px){
-  .live-stance-projection-overlay .live-stance-tug-board.projection,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection,
-  .live-stance-projection-overlay .live-stance-tug-board.projection.large,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection.large{
-    grid-template-columns:1fr;
-    padding:22px 18px 86px;
-    gap:18px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
-    width:min(100%,220px);
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena{
-    order:2;
-    height:150px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right{
-    order:3;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count{
-    grid-column:auto;
-    order:4;
-    margin-top:0;
-  }
-}
-@media(max-width:640px){
-  .live-stance-projection-shell{
-    gap:16px;
-  }
-  .live-stance-projection-shell h2{
-    font-size:clamp(34px,10vw,50px);
-  }
-  .live-stance-projection-shell .subtle{
-    margin-top:-4px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small{
-    bottom:-52px;
-    font-size:40px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope{
-    left:6%;
-    right:6%;
-  }
-}
-
-/* V2.36.1 projection QA correction: keep percentages below their circles,
-   keep the track aligned with the motion engine's 4–96% end points,
-   and prevent portrait viewports from stacking and overlapping statistics. */
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small,
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right small,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right small{
-  top:calc(100% + 10px);
-  bottom:auto;
-}
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope{
-  left:4%;
-  right:4%;
-}
-/* The reference uses a single understated neutral track; the animated
-   marker still shows the live share. No numerical or animation change. */
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::before,
-.live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope::after,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::before,
-#presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope::after{
-  opacity:0;
-}
-@media(max-width:980px){
-  .live-stance-projection-overlay .live-stance-tug-board.projection,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection,
-  .live-stance-projection-overlay .live-stance-tug-board.projection.large,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection.large{
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    align-items:start;
-    gap:18px 16px;
-    padding:24px 20px 28px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
-    width:min(100%,220px);
-    margin-bottom:62px; /* room for absolute-positioned percentage */
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.left,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.left{
-    grid-column:1;
-    grid-row:1;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score.right,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score.right{
-    grid-column:2;
-    grid-row:1;
-    order:0;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena{
-    grid-column:1/-1;
-    grid-row:2;
-    order:0;
-    width:100%;
-    height:112px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count{
-    grid-column:1/-1;
-    grid-row:3;
-    order:0;
-    margin:0;
-  }
-}
-@media(max-width:640px){
-  .live-stance-projection-overlay{
-    overflow-y:auto;
-    align-items:start;
-    padding:65px 12px 16px;
-  }
-  .live-stance-projection-shell{
-    width:100%;
-    gap:10px;
-  }
-  .live-stance-projection-shell h2{
-    font-size:clamp(27px,7.2vw,42px);
-  }
-  .live-stance-projection-shell .subtle{
-    font-size:14px;
-    margin-top:0;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection,
-  .live-stance-projection-overlay .live-stance-tug-board.projection.large,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection.large{
-    gap:10px;
-    padding:18px 12px 18px;
-    border-radius:22px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score{
-    width:min(100%,158px);
-    padding:10px;
-    border-width:5px;
-    margin-bottom:43px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score span,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score span{
-    font-size:14px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score strong,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score strong{
-    font-size:clamp(48px,13vw,68px);
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score::after,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score::after{
-    font-size:14px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-score small,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-score small{
-    font-size:clamp(27px,7vw,36px);
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-tug-arena,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-tug-arena{
-    height:96px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-rope,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-rope{
-    left:4%;
-    right:4%;
-    height:11px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-knot,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-knot{
-    width:42px;
-    height:42px;
-    border-width:6px;
-  }
-  .live-stance-projection-overlay .live-stance-tug-board.projection .live-stance-undecided-count,
-  #presentationLiveStanceBoard.live-stance-tug-board.projection .live-stance-undecided-count{
-    font-size:14px;
-    padding:9px 12px;
-  }
-  .live-stance-projection-close{
-    right:12px;
-    top:10px;
-  }
 }
