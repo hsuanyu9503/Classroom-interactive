@@ -1,0 +1,120 @@
+/* Classroom Interactive v2.36.6 — composited live-stance animation & projection knot.
+   Loaded after app.css and theme-v2.36.5.css. Scoped to the live-stance board only.
+   The pre-existing projection panels, vote circles, track thickness and glow remain unchanged. */
+
+/* Hide the legacy width-changing pseudo bands only when new DOM is present.
+   Without the new nodes the old v2.36.5 template still displays normally. */
+.live-stance-tug-board.motion-composited .live-stance-rope::before,
+.live-stance-tug-board.motion-composited .live-stance-rope::after {
+  content:none !important;
+  display:none !important;
+}
+.live-stance-tug-board.motion-composited .live-stance-rope {
+  overflow:hidden;
+  isolation:isolate;
+}
+.live-stance-tug-board.motion-composited .live-stance-band {
+  position:absolute;
+  top:0;
+  bottom:0;
+  width:100%;
+  border-radius:inherit;
+  pointer-events:none;
+  backface-visibility:hidden;
+  will-change:transform;
+  transform:scaleX(.5);
+}
+.live-stance-tug-board.motion-composited .live-stance-band.left {
+  left:0;
+  transform-origin:left center;
+  background:var(--stance-left,#3b82f6);
+}
+.live-stance-tug-board.motion-composited .live-stance-band.right {
+  right:0;
+  transform-origin:right center;
+  background:var(--stance-right,#ef476f);
+}
+/* No votes: do not display a misleading 50/50 green/red split. */
+.live-stance-tug-board.motion-composited[data-live-stance-empty="true"] .live-stance-band {
+  opacity:0;
+}
+.live-stance-tug-board.motion-composited.projection .live-stance-band.left {
+  background:linear-gradient(90deg,rgba(95,255,194,.92),rgba(71,243,160,1) 44%,rgba(115,255,205,.92));
+  box-shadow:inset 0 0 9px rgba(255,255,255,.09);
+}
+.live-stance-tug-board.motion-composited.projection .live-stance-band.right {
+  background:linear-gradient(90deg,rgba(255,125,158,.92),rgba(255,101,142,1) 58%,rgba(255,142,171,.88));
+  box-shadow:inset 0 0 9px rgba(255,255,255,.09);
+}
+/* Match existing 4%–96% rope endpoints without per-frame layout reads. */
+.live-stance-tug-board.motion-composited .live-stance-motion-track {
+  position:absolute;
+  top:50%;
+  left:4%;
+  right:4%;
+  height:0;
+  z-index:3;
+  pointer-events:none;
+}
+.live-stance-tug-board.motion-composited .live-stance-motion-track .live-stance-knot,
+.live-stance-tug-board.motion-composited .live-stance-motion-track .live-stance-tension-wave {
+  position:absolute;
+  left:0 !important;
+  top:0 !important;
+  transform:translate3d(-50%,-50%,0);
+  will-change:transform;
+  backface-visibility:hidden;
+}
+.live-stance-tug-board.motion-composited .live-stance-motion-track .live-stance-knot {
+  transition:box-shadow .25s ease;
+}
+.live-stance-tug-board.motion-composited .live-stance-motion-track .live-stance-tension-wave {
+  transition:none;
+  opacity:0;
+  will-change:transform,opacity;
+}
+/* Projection-specific 22% reduction, green-white-red meeting point. */
+.live-stance-projection-overlay .live-stance-tug-board.motion-composited.projection .live-stance-knot,
+#presentationLiveStanceBoard.live-stance-tug-board.motion-composited.projection .live-stance-knot {
+  width:38px;
+  height:38px;
+  border:2px solid rgba(239,251,255,.8);
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 36% 25%,rgba(255,255,255,.70) 0%,rgba(255,255,255,.16) 28%,transparent 58%),
+    linear-gradient(94deg, #2be698 0%, #77edbe 29%, #eef8fb 50%, #ffb4c4 70%, #f65f89 100%);
+  box-shadow:0 0 0 3px rgba(255,255,255,.13),0 0 16px rgba(186,223,255,.28),0 10px 21px rgba(2,8,22,.26);
+}
+.live-stance-projection-overlay .live-stance-tug-board.motion-composited.projection .live-stance-knot span,
+#presentationLiveStanceBoard.live-stance-tug-board.motion-composited.projection .live-stance-knot span {
+  width:9px;
+  height:9px;
+  border:0;
+  background:radial-gradient(circle at 35% 30%,#fff 0%,rgba(245,249,255,.88) 60%,rgba(220,232,252,.7));
+  box-shadow:0 0 7px rgba(255,255,255,.37);
+}
+.live-stance-projection-overlay .live-stance-tug-board.motion-composited.projection.is-pulling .live-stance-knot,
+#presentationLiveStanceBoard.live-stance-tug-board.motion-composited.projection.is-pulling .live-stance-knot {
+  box-shadow:0 0 0 3px rgba(255,255,255,.15),0 0 19px rgba(186,223,255,.36),0 11px 22px rgba(2,8,22,.28);
+}
+@media(max-width:980px) {
+  .live-stance-projection-overlay .live-stance-tug-board.motion-composited.projection .live-stance-knot,
+  #presentationLiveStanceBoard.live-stance-tug-board.motion-composited.projection .live-stance-knot {
+    width:34px;
+    height:34px;
+  }
+}
+@media(max-width:520px) {
+  .live-stance-projection-overlay .live-stance-tug-board.motion-composited.projection .live-stance-knot,
+  #presentationLiveStanceBoard.live-stance-tug-board.motion-composited.projection .live-stance-knot {
+    width:30px;
+    height:30px;
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  .live-stance-tug-board.motion-composited .live-stance-knot,
+  .live-stance-tug-board.motion-composited .live-stance-band,
+  .live-stance-tug-board.motion-composited .live-stance-tension-wave {
+    transition:none !important;
+  }
+}

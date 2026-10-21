@@ -101,7 +101,7 @@ function ensurePresentationLiveStanceBoard(container,liveStance) {
   container.innerHTML=`
     <div class="live-stance-tug-score left"><span data-live-stance-role="left-label"></span><strong data-live-stance-role="left-count">0</strong><small data-live-stance-role="left-pct">—</small></div>
     <div class="live-stance-tug-arena" aria-label="左右立場拉鋸"><span class="live-stance-center-flag" aria-hidden="true"></span><span class="live-stance-tug-caption" aria-hidden="true">FRIENDLY MATCH · 即時拉鋸</span>
-        <div class="live-stance-rope" aria-hidden="true"></div><span class="live-stance-tension-wave" aria-hidden="true"></span><div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置" aria-hidden="true"><span></span></div></div>
+        <div class="live-stance-rope" aria-hidden="true"><span class="live-stance-band left"></span><span class="live-stance-band right"></span></div><div class="live-stance-motion-track" aria-hidden="true"><span class="live-stance-tension-wave"></span><div class="live-stance-knot" data-live-stance-role="knot" title="目前拉鋸位置"><span></span></div></div></div>
     <div class="live-stance-tug-score right"><span data-live-stance-role="right-label"></span><strong data-live-stance-role="right-count">0</strong><small data-live-stance-role="right-pct">—</small></div>
     ${allowUndecided?`<div class="live-stance-undecided-count"><span data-live-stance-role="undecided-label"></span><strong data-live-stance-role="undecided-count">0</strong></div>`:""}
   `;

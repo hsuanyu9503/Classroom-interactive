@@ -1,3 +1,17 @@
+# Classroom Interactive v2.36.6｜即時立場拉鋸動畫更新
+
+**以 v2.36.5 QA1 為唯一基礎。** 保留教師清新教育風格、學生活潑 UI、深色統計與霓虹投影。
+
+本版僅優化投影中心節點與動畫效能：桌機 38px（較先前 50px 減少約 24%）、平板 34px、手機 30px；節點採用綠→白→紅漸層。
+拉鋸由原有 RAF 阻尼動畫改為透過 `translate3d` / `scaleX` 呈現，比例仍隨原始投票結果變動。
+
+- **網站上線：** 將 GitHub ZIP 解壓縮，所有檔案放在 repository 根目錄（含新 `live-stance-v2.36.6.css`）。
+- **既有正式 Supabase：** 不需要執行 SQL，不得執行 `sql/NEW-PROJECT-ONLY-*`。
+- **版本確認：** 教師頁面右上方應顯示 `V2.36.6`；瀏覽器應載入 `?v=2.36.6-motion`。
+- **測試：** 參閱 `tests/QA-V2.36.6-MOTION.md`。
+
+---
+
 # Classroom Interactive v2.36.5 — 視覺系統整合版
 
 > 基底為使用者確認保留的 **v2.36.4 NEON-QA-FIXED**，**不是**已取消的 STYLE-REFINED 版本。
